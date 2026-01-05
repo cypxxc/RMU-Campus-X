@@ -1,5 +1,7 @@
 "use client"
 
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs, onSnapshot, orderBy } from "firebase/firestore"
@@ -242,7 +244,7 @@ export default function AdminItemsPage() {
       </div>
 
       {/* Search */}
-      <div className="relative">
+      <BounceWrapper className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="ค้นหาสิ่งของ..."
@@ -250,7 +252,7 @@ export default function AdminItemsPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10"
         />
-      </div>
+      </BounceWrapper>
 
       {/* Items Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 contain-paint">

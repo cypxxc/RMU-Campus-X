@@ -13,6 +13,7 @@ import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
 import { useToast } from "@/hooks/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
@@ -174,13 +175,16 @@ export default function NotificationsPage() {
           <TabsContent value={activeTab} className="space-y-3 mt-4">
             {filteredNotifications.length > 0 ? (
               filteredNotifications.map((n, index) => (
-                <Card 
-                  key={n.id} 
-                  className={`cursor-pointer transition-all hover:shadow-md animate-bounce-up border-border/60 ${
-                    !n.isRead ? "border-l-4 border-l-primary" : ""
-                  }`}
-                  style={{ animationDelay: `${index * 30}ms` }}
-                  onClick={() => handleMarkAsRead(n)}
+                <BounceWrapper 
+                  key={n.id}
+                  variant="bounce-up"
+                  delay={index * 0.03}
+                >
+                  <Card 
+                    className={`cursor-pointer transition-all hover:shadow-md border-border/60 ${
+                      !n.isRead ? "border-l-4 border-l-primary" : ""
+                    }`}
+                    onClick={() => handleMarkAsRead(n)}
                 >
                   <CardContent className="p-4 flex gap-4 relative group/item">
                     {/* Delete button shown on hover */}
@@ -224,6 +228,7 @@ export default function NotificationsPage() {
                     </div>
                   </CardContent>
                 </Card>
+                </BounceWrapper>
               ))
             ) : (
               /* Empty State */

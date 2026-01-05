@@ -1,5 +1,7 @@
 "use client"
 
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs } from "firebase/firestore"
@@ -177,7 +179,7 @@ export default function AdminLogsPage() {
         </div>
 
         {/* Filters */}
-        <Card className="p-6 mb-6 bg-gradient-to-br from-card via-card to-muted/30 border-t-4 border-t-primary/60 shadow-lg">
+        <Card className="p-6 mb-6 bg-linear-to-br from-card via-card to-muted/30 border-t-4 border-t-primary/60 shadow-lg">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-primary/10">
               <ClipboardList className="h-4 w-4 text-primary" />
@@ -195,9 +197,11 @@ export default function AdminLogsPage() {
                 ประเภทการกระทำ
               </label>
               <Select value={filterAction} onValueChange={setFilterAction}>
-                <SelectTrigger className="bg-background border-border/60 hover:border-primary/50 transition-colors">
-                  <SelectValue placeholder="ประเภทการกระทำ" />
-                </SelectTrigger>
+                <BounceWrapper>
+                  <SelectTrigger className="bg-background border-border/60 hover:border-primary/50 transition-colors">
+                    <SelectValue placeholder="ประเภทการกระทำ" />
+                  </SelectTrigger>
+                </BounceWrapper>
                 <SelectContent className="bg-popover/95 backdrop-blur-sm">
                   <SelectItem value="all">ทั้งหมด</SelectItem>
                   {Object.entries(ACTION_TYPE_LABELS).map(([key, val]) => (
@@ -218,9 +222,11 @@ export default function AdminLogsPage() {
                 ประเภทเป้าหมาย
               </label>
               <Select value={filterTarget} onValueChange={setFilterTarget}>
-                <SelectTrigger className="bg-background border-border/60 hover:border-primary/50 transition-colors">
-                  <SelectValue placeholder="ประเภทเป้าหมาย" />
-                </SelectTrigger>
+                <BounceWrapper>
+                  <SelectTrigger className="bg-background border-border/60 hover:border-primary/50 transition-colors">
+                    <SelectValue placeholder="ประเภทเป้าหมาย" />
+                  </SelectTrigger>
+                </BounceWrapper>
                 <SelectContent className="bg-popover/95 backdrop-blur-sm">
                   <SelectItem value="all">ทั้งหมด</SelectItem>
                   {Object.entries(TARGET_TYPE_LABELS).map(([key, val]) => (
@@ -248,7 +254,7 @@ export default function AdminLogsPage() {
 
         {/* Logs Table */}
         <Card className="overflow-hidden border-0 shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-muted/50 to-transparent border-b">
+          <CardHeader className="bg-linear-to-r from-muted/50 to-transparent border-b">
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <ClipboardList className="h-5 w-5 text-primary" />
@@ -261,7 +267,7 @@ export default function AdminLogsPage() {
           </CardHeader>
           <CardContent className="p-0">
             {logs.length === 0 ? (
-              <div className="text-center py-16 px-4 bg-gradient-to-b from-transparent to-muted/20">
+              <div className="text-center py-16 px-4 bg-linear-to-b from-transparent to-muted/20">
                 <div className="p-4 rounded-full bg-muted/50 w-fit mx-auto mb-4">
                   <ClipboardList className="h-12 w-12 text-muted-foreground/50" />
                 </div>

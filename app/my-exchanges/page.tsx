@@ -17,6 +17,7 @@ import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { ReportModal } from "@/components/report-modal"
 import { CancelExchangeDialog, DeleteExchangeDialog } from "@/components/exchange/exchange-action-dialogs"
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 export default function MyExchangesPage() {
   const [exchanges, setExchanges] = useState<Exchange[]>([])
@@ -270,10 +271,13 @@ export default function MyExchangesPage() {
               const isRequester = user?.uid === exchange.requesterId
 
               return (
-                <Card 
+                <BounceWrapper 
                   key={exchange.id} 
-                  className="border-border/60 hover:border-border transition-colors animate-bounce-up"
-                  style={{ animationDelay: `${index * 50}ms` }}
+                  variant="bounce-up"
+                  delay={index * 0.05}
+                >
+                  <Card 
+                    className="border-border/60 hover:border-border transition-colors"
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-3">
@@ -355,6 +359,7 @@ export default function MyExchangesPage() {
                     </div>
                   </CardContent>
                 </Card>
+                </BounceWrapper>
               )
             })}
           </div>

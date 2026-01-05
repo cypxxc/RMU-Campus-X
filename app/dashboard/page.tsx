@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { ItemDetailView } from "@/components/item-detail-view"
 import { AccountStatusBanner } from "@/components/account-status-banner"
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 // Memoized Item Card เพื่อป้องกัน re-render
 const MemoizedItemCard = memo(ItemCard)
@@ -90,7 +91,7 @@ export default function DashboardPage() {
       {/* Hero Section */}
       <div className="border-b bg-linear-to-b from-primary/5 to-background">
         <div className="container mx-auto px-4 py-8 sm:py-12">
-          <div className="space-y-2 animate-bounce-in">
+          <BounceWrapper variant="bounce-in" className="space-y-2">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               <span className="text-sm font-medium text-primary">แพลตฟอร์มแลกเปลี่ยน</span>
@@ -102,7 +103,7 @@ export default function DashboardPage() {
               แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของสำหรับนักศึกษา
               <span className="hidden sm:inline"> มหาวิทยาลัยราชภัฏมหาสารคาม</span>
             </p>
-          </div>
+          </BounceWrapper>
         </div>
       </div>
 
@@ -182,17 +183,17 @@ export default function DashboardPage() {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                   {paginatedItems.map((item, index) => (
-                    <div 
+                    <BounceWrapper 
                       key={item.id} 
-                      className="animate-bounce-up"
-                      style={{ animationDelay: `${Math.min(index, 4) * 30}ms`, animationFillMode: 'backwards' }}
+                      variant="bounce-up"
+                      delay={Math.min(index, 4) * 0.03}
                     >
                       <MemoizedItemCard 
                         item={item} 
                         showRequestButton={!!user} 
                         onViewDetails={(item) => setSelectedItem(item)}
                       />
-                    </div>
+                    </BounceWrapper>
                   ))}
                 </div>
 

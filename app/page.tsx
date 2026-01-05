@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Package, MessageSquare, Shield, Users, Sparkles } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { Logo } from "@/components/logo"
 import dynamic from "next/dynamic"
 
@@ -74,7 +75,7 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 relative z-10">
-        <div className="container mx-auto text-center max-w-3xl animate-bounce-in">
+        <BounceWrapper variant="bounce-in" className="container mx-auto text-center max-w-3xl">
           <Badge variant="outline" className="mb-6 px-4 py-1.5 text-sm font-medium">
             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
             แพลตฟอร์มใหม่สำหรับนักศึกษา มรม.
@@ -113,7 +114,7 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-        </div>
+        </BounceWrapper>
       </section>
 
       {/* Features Section */}

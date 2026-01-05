@@ -8,28 +8,26 @@
 
 ## 📖 รายละเอียดโปรเจค
 
-**RMU Exchange** เป็นแพลตฟอร์มเว็บแอปพลิเคชันที่ออกแบบมาเพื่ออำนวยความสะดวกในการแลกเปลี่ยนและบริจาคสิ่งของระหว่างนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม ระบบนี้ช่วยให้นักศึกษาสามารถ:
+**RMU Exchange** เป็นเว็บแอปพลิเคชันสำหรับแลกเปลี่ยนและบริจาคสิ่งของระหว่างนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม
 
+### ความสามารถหลัก
 - 📦 โพสต์สิ่งของที่ไม่ต้องการแล้ว
 - 🤝 ขอรับสิ่งของจากผู้อื่น
-- 💬 สื่อสารผ่านระบบแชทในตัว
+- 💬 สื่อสารผ่านระบบแชทเรียลไทม์
 - 📱 รับการแจ้งเตือนผ่าน LINE
 - 🚨 รายงานปัญหา
 
 ---
 
-## ✨ ฟีเจอร์หลัก
+## ✨ ฟีเจอร์
 
 ### 🔐 ระบบยืนยันตัวตน
-
 - Firebase Authentication (email/password)
-- ตรวจสอบอีเมล RMU เท่านั้น (`@rmu.ac.th`)
-- ต้องยืนยันอีเมลก่อนใช้งาน
-- Modal ยอมรับข้อกำหนดและเงื่อนไข
+- ตรวจสอบอีเมล RMU (`@rmu.ac.th`) เท่านั้น
+- ยืนยันอีเมลก่อนใช้งาน
 
 ### 📦 การจัดการสิ่งของ
-
-- สร้าง แก้ไข และลบโพสต์สิ่งของ
+- สร้าง แก้ไข และลบโพสต์
 - อัพโหลดรูปภาพหลายรูป
 - หมวดหมู่: อิเล็กทรอนิกส์ หนังสือ เฟอร์นิเจอร์ เสื้อผ้า กีฬา อื่นๆ
 - สถานะ: พร้อมให้ → รอดำเนินการ → เสร็จสิ้น
@@ -47,96 +45,99 @@
 | Rejected    | เจ้าของปฏิเสธคำขอ                    |
 
 ### 💬 ระบบแชท
-
-- แชทแบบเรียลไทม์ระหว่างผู้แลกเปลี่ยน
+- แชทเรียลไทม์ระหว่างผู้แลกเปลี่ยน
 - ปุ่มยืนยันการรับ/ส่งสิ่งของในแชท
-- ประวัติข้อความทั้งหมด
+- แสดงข้อมูลสิ่งของที่แลกเปลี่ยนในแชท
 
-### 📱 LINE Notification (ใหม่!)
-
+### 📱 LINE Notification
 - เชื่อมบัญชีอัตโนมัติผ่านอีเมล
-- รับแจ้งเตือนเมื่อมีคนขอรับสิ่งของ
-- รับแจ้งเตือนเมื่อสถานะเปลี่ยน
-- รับแจ้งเตือนเมื่อแลกเปลี่ยนสำเร็จ
-
-**LINE Bot ID**: `@799kugvk`
-
-**วิธีเชื่อม LINE**:
-
-1. เพิ่มเพื่อน LINE Bot: `@799kugvk`
-2. พิมพ์อีเมล RMU ของคุณในแชท
-3. ระบบจะเชื่อมบัญชีอัตโนมัติ
+- แจ้งเตือนคำขอสิ่งของ, สถานะเปลี่ยน, แลกเปลี่ยนสำเร็จ
+- **LINE Bot ID**: `@799kugvk`
 
 ### 🔔 การแจ้งเตือนในแอป
-
-- การแลกเปลี่ยน แชท รายงาน คำเตือน ระบบ
+- แจ้งเตือน: การแลกเปลี่ยน, แชท, รายงาน, คำเตือน
 - ทำเครื่องหมายอ่านแล้ว/ยังไม่อ่าน
-- ตัวนับตราสำหรับการแจ้งเตือนที่ยังไม่อ่าน
+- Badge แสดงจำนวนที่ยังไม่อ่าน
 
 ### 🚨 ระบบรายงาน
-
-- รายงาน: สิ่งของ การแลกเปลี่ยน แชท ผู้ใช้
+- รายงาน: สิ่งของ, การแลกเปลี่ยน, แชท, ผู้ใช้
 - อัพโหลดหลักฐาน
 - ติดตามสถานะรายงาน
 
-### 🛡️ แผงควบคุมผู้ดูแลระบบ
-
+### 🛡️ ระบบผู้ดูแล (Admin)
 - Dashboard สถิติภาพรวม
 - จัดการผู้ใช้ (เตือน/ระงับ/แบน/ลบถาวร)
-- ล้างข้อมูลขยะ (Ghost Users cleanup)
-- จัดการรายงานและตั๋วสนับสนุน (Support Tickets)
+- จัดการสิ่งของ
+- จัดการรายงานและตั๋วสนับสนุน
 - บันทึกกิจกรรมผู้ดูแล (Admin Logs)
 
-### 🎨 รองรับธีม
-
+### 🎨 UI/UX
 - โหมดสว่าง / โหมดมืด / ตามระบบ
+- 3D Background ด้วย Three.js
+- Bounce Animation ด้วย Framer Motion
+- Responsive Design
 
 ---
 
 ## 🛠️ เทคโนโลยีที่ใช้
 
-| หมวด           | เทคโนโลยี                                             |
-| -------------- | ----------------------------------------------------- |
+| หมวด           | เทคโนโลยี                                      |
+| -------------- | ---------------------------------------------- |
 | **Framework**  | Next.js 16.1.1 (App Router), React 18.3, TypeScript 5 |
-| **Styling**    | Tailwind CSS 4.1.9, shadcn/ui, Lucide Icons           |
-| **Backend**    | Firebase (Auth, Firestore, Storage)                   |
-| **LINE**       | LINE Messaging API                                    |
-| **Forms**      | React Hook Form, Zod                                  |
-| **Deployment** | Vercel                                                |
+| **Styling**    | Tailwind CSS 4.1.9, shadcn/ui, Lucide Icons    |
+| **Animation**  | Framer Motion 12.x, Three.js (@react-three/fiber) |
+| **Backend**    | Firebase (Auth, Firestore, Storage)            |
+| **LINE**       | LINE Messaging API                             |
+| **Forms**      | React Hook Form, Zod                           |
+| **Data**       | TanStack React Query, React Table              |
+| **Charts**     | Recharts                                       |
+| **Deployment** | Vercel                                         |
 
 ---
 
-## 📁 โครงสร้างโฟลเดอร์หลัก
+## 📁 โครงสร้างโฟลเดอร์
 
 ```
-RMU_EXCHANGE_APP/
+rmu-exchange/
 ├── app/                          # Next.js App Router
-│   ├── (auth)/                   # หน้ายืนยันตัวตน (login, register)
-│   ├── admin/                    # แผงควบคุมผู้ดูแลระบบ
+│   ├── (auth)/                   # หน้า Login, Register, Verify Email
+│   ├── admin/                    # ระบบผู้ดูแล
+│   │   ├── items/                # จัดการสิ่งของ
+│   │   ├── users/                # จัดการผู้ใช้
+│   │   ├── reports/              # จัดการรายงาน
+│   │   ├── support/              # ตั๋วสนับสนุน
+│   │   └── logs/                 # ประวัติกิจกรรม
 │   ├── api/                      # API Routes
-│   │   ├── line/                 # LINE API
-│   │   │   ├── webhook/          # LINE webhook endpoint
-│   │   │   └── notify-exchange/  # แจ้งเตือนการแลกเปลี่ยน
-│   │   └── admin/                # Admin API endpoints
+│   │   ├── admin/                # Admin API (items, users, reports, stats)
+│   │   ├── exchanges/            # Exchanges API
+│   │   ├── line/                 # LINE API (webhook, notifications)
+│   │   ├── reports/              # Reports API
+│   │   └── support/              # Support API
 │   ├── chat/[exchangeId]/        # หน้าแชท
 │   ├── dashboard/                # Dashboard หลัก
 │   ├── item/[id]/                # รายละเอียดสิ่งของ
 │   ├── my-exchanges/             # การแลกเปลี่ยนของฉัน
 │   ├── notifications/            # การแจ้งเตือน
-│   ├── post-item/                # โพสต์สิ่งของใหม่
 │   ├── profile/                  # โปรไฟล์ผู้ใช้
-│   ├── support/                  # แจ้งปัญหา/ติดต่อทีมงาน
-│   └── verify-email/             # หน้าตรวจสอบอีเมล
+│   ├── report/                   # หน้ารายงาน
+│   ├── support/                  # หน้าติดต่อทีมงาน
+│   ├── globals.css               # Global styles
+│   └── layout.tsx                # Root layout
 ├── components/                   # React components
-│   ├── ui/                       # shadcn/ui components
-│   ├── admin/                    # Admin components
-│   ├── line-status-badge.tsx     # Badge แสดงสถานะ LINE
-│   ├── line-notification-settings.tsx # ตั้งค่า LINE
-│   └── ...
+│   ├── ui/                       # shadcn/ui (57 components)
+│   │   ├── bounce-wrapper.tsx    # Animation wrapper (Framer Motion)
+│   │   └── ...
+│   ├── admin/                    # Admin components (17 files)
+│   ├── exchange/                 # Exchange action dialogs
+│   └── ...                       # Feature components
 ├── lib/                          # Utility libraries
-│   ├── firebase.ts               # Firebase init
-│   ├── firestore.ts              # Firestore CRUD
+│   ├── firebase.ts               # Firebase initialization
+│   ├── firestore.ts              # Firestore CRUD operations
 │   ├── line.ts                   # LINE API functions
+│   ├── auth.ts                   # Authentication utilities
+│   ├── storage.ts                # Firebase Storage utilities
+│   ├── admin.ts                  # Admin utilities
+│   ├── validations.ts            # Zod schemas
 │   └── ...
 ├── hooks/                        # Custom React hooks
 ├── types/                        # TypeScript types
@@ -145,7 +146,7 @@ RMU_EXCHANGE_APP/
 
 ---
 
-## 🔧 การตั้งค่าตัวแปรสภาพแวดล้อม
+## 🔧 Environment Variables
 
 สร้างไฟล์ `.env.local`:
 
@@ -162,7 +163,7 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
 LINE_CHANNEL_SECRET=your_line_channel_secret
 
-# Base URL (สำหรับ production)
+# Base URL
 NEXT_PUBLIC_BASE_URL=https://your-domain.vercel.app
 ```
 
@@ -170,20 +171,19 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.vercel.app
 
 ---
 
-## 🚀 การติดตั้งและรัน
+## 🚀 การติดตั้ง
 
-### ข้อกำหนดเบื้องต้น
-
+### ข้อกำหนด
 - Node.js 18.x หรือสูงกว่า
 - npm หรือ yarn
 - บัญชีอีเมล RMU (`@rmu.ac.th`)
 
-### ขั้นตอนการติดตั้ง
+### ขั้นตอน
 
 ```bash
 # 1. Clone repository
 git clone <repository-url>
-cd RMU_EXCHANGE_APP
+cd rmu-exchange
 
 # 2. ติดตั้ง dependencies
 npm install
@@ -200,88 +200,66 @@ npm run dev
 
 ---
 
-## 📜 คำสั่งที่ใช้บ่อย
+## 📜 คำสั่ง NPM
 
-| คำสั่ง          | คำอธิบาย                       |
-| --------------- | ------------------------------ |
-| `npm run dev`   | Development server (port 3000) |
-| `npm run build` | Build production               |
-| `npm run start` | Production server              |
-| `npm run lint`  | ESLint                         |
-| `npm run test`  | Unit tests                     |
-
----
-
-## 🔒 Firestore Security Rules
-
-กฎความปลอดภัยหลัก:
-
-- เฉพาะอีเมล `@rmu.ac.th` สร้างบัญชีได้
-- ต้องยืนยันอีเมลก่อนโพสต์/แลกเปลี่ยน
-- ผู้ใช้ที่ถูกระงับ/แบนไม่สามารถสร้างเนื้อหา
-- ผู้ดูแลมีสิทธิ์พิเศษ
-
-**หมายเหตุ**: สำหรับ LINE webhook ต้องเปิด `allow read/update: if true` ที่ collection `users`
+| คำสั่ง                | คำอธิบาย                       |
+| --------------------- | ------------------------------ |
+| `npm run dev`         | Development server (port 3000) |
+| `npm run build`       | Build production               |
+| `npm run start`       | Production server              |
+| `npm run lint`        | ESLint                         |
+| `npm run test`        | Unit tests                     |
+| `npm run test:watch`  | Watch mode tests               |
+| `npm run test:coverage` | Tests with coverage          |
 
 ---
 
 ## 📱 LINE Bot Integration
 
-### การตั้งค่า LINE Developers Console
+### ตั้งค่า LINE Developers Console
 
 1. สร้าง LINE Messaging API Channel
 2. ตั้งค่า Webhook URL: `https://your-domain.vercel.app/api/line/webhook`
 3. เปิดใช้งาน Webhook
 4. ปิด Auto-reply messages
-5. คัดลอก Channel Access Token และ Channel Secret ไปใส่ใน Vercel Environment Variables
+5. เพิ่ม Environment Variables ใน Vercel
 
-### Webhook Events ที่รองรับ
+### Webhook Events
 
 | Event                | การทำงาน                             |
 | -------------------- | ------------------------------------ |
-| `follow`             | ส่งข้อความต้อนรับ แนะนำให้พิมพ์อีเมล |
+| `follow`             | ส่งข้อความต้อนรับ                    |
 | `message` (email)    | เชื่อมบัญชีอัตโนมัติ                 |
 | `message` ("สถานะ")  | ตรวจสอบสถานะการเชื่อม                |
 | `message` ("ยกเลิก") | ยกเลิกการเชื่อมบัญชี                 |
-
-### Environment Variables (Vercel)
-
-ต้องตั้งค่าใน Vercel Project Settings → Environment Variables:
-
-- `LINE_CHANNEL_ACCESS_TOKEN`
-- `LINE_CHANNEL_SECRET`
 
 ---
 
 ## 👥 บทบาทผู้ใช้
 
 ### ผู้ใช้ทั่วไป
-
 - ค้นหา/โพสต์สิ่งของ
 - ขอแลกเปลี่ยน + แชท
 - รับแจ้งเตือน (ในแอป + LINE)
 - ส่งรายงาน
 
-### ผู้ดูแลระบบ
-
+### ผู้ดูแลระบบ (Admin)
 - ทุกอย่างของผู้ใช้ทั่วไป
 - เข้าถึง `/admin`
-- จัดการผู้ใช้/รายงาน
+- จัดการผู้ใช้/สิ่งของ/รายงาน
 - ดูสถิติระบบ
+- บันทึกกิจกรรม
 
 **การตั้งค่าผู้ดูแล**: เพิ่ม document ใน Firestore collection `admins` โดยใช้ user UID เป็น document ID
 
 ---
 
-## 📝 หมายเหตุการพัฒนา
+## 🔒 Firestore Security Rules
 
-- สร้างด้วย **Next.js App Router**
-- ใช้ **TypeScript strict mode**
-- **shadcn/ui** (new-york style)
-- **Firestore** สำหรับข้อมูลทั้งหมด
-- **Firebase Storage** สำหรับรูปภาพ
-- **LINE Messaging API** สำหรับแจ้งเตือน
-- Deploy บน **Vercel**
+- เฉพาะอีเมล `@rmu.ac.th` สร้างบัญชีได้
+- ต้องยืนยันอีเมลก่อนโพสต์/แลกเปลี่ยน
+- ผู้ใช้ที่ถูกระงับ/แบนไม่สามารถสร้างเนื้อหา
+- ผู้ดูแลมีสิทธิ์พิเศษ
 
 ---
 

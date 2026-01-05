@@ -40,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Camera, Settings } from "lucide-react"
 import { LineNotificationSettings } from "@/components/line-notification-settings"
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
@@ -380,10 +381,14 @@ export default function ProfilePage() {
                     {myItems.map((item, index) => {
                       const postedDate = (item.postedAt as any)?.toDate?.() || new Date()
                       return (
-                        <Card 
+                        <BounceWrapper 
                           key={item.id} 
-                          className="group border-none shadow-soft hover:shadow-md transition-all animate-bounce-up overflow-hidden"
-                          style={{ animationDelay: `${index * 50}ms` }}
+                          variant="bounce-up"
+                          delay={index * 0.05}
+                          className="group"
+                        >
+                          <Card 
+                            className="border-none shadow-soft hover:shadow-md transition-all overflow-hidden"
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center">
                             {/* Image Part */}
@@ -435,6 +440,7 @@ export default function ProfilePage() {
                             </div>
                           </div>
                         </Card>
+                        </BounceWrapper>
                       )
                     })}
                   </div>
@@ -467,10 +473,13 @@ export default function ProfilePage() {
                       const createdAt = (exchange.createdAt as any)?.toDate?.() || new Date()
                       const isOwner = exchange.ownerId === user?.uid
                       return (
-                        <Card 
+                        <BounceWrapper 
                           key={exchange.id} 
-                          className="border-none shadow-soft hover:shadow-md transition-all animate-bounce-up overflow-hidden"
-                          style={{ animationDelay: `${index * 50}ms` }}
+                          variant="bounce-up"
+                          delay={index * 0.05}
+                        >
+                          <Card 
+                            className="border-none shadow-soft hover:shadow-md transition-all overflow-hidden"
                         >
                           <CardContent className="p-4 sm:p-5">
                             <div className="flex items-center gap-4">
@@ -494,6 +503,7 @@ export default function ProfilePage() {
                             </div>
                           </CardContent>
                         </Card>
+                        </BounceWrapper>
                       )
                     })}
                   </div>

@@ -10,6 +10,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
  
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -103,11 +104,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                    <SheetTitle className="sr-only">Admin Navigation</SheetTitle>
                    <div className="p-6 bg-primary/5 h-16 border-b flex items-center animate-fade-in">
                       <div className="flex items-center gap-2">
-                         <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center animate-bounce-scale">
-                            <Shield className="h-4 w-4 text-primary-foreground" />
-                         </div>
-                         <span className="font-black text-lg">Admin Center</span>
-                      </div>
+                          <BounceWrapper variant="bounce-scale">
+                            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                              <Shield className="h-4 w-4 text-primary-foreground" />
+                            </div>
+                          </BounceWrapper>
+                          <span className="font-black text-lg">Admin Center</span>
+                       </div>
                    </div>
                    <nav className="p-4 space-y-2">
                       {navItems.map((item, index) => (

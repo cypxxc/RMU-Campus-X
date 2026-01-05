@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Mail, RefreshCw } from "lucide-react"
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import dynamic from "next/dynamic"
 
 // Dynamic import for Three.js (client-only)
@@ -95,31 +96,33 @@ export default function VerifyEmailPage() {
       {/* 3D Background */}
       <ThreeBackground />
       
-      <Card className="w-full max-w-md relative z-10 animate-bounce-in shadow-soft border-border/60">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <Mail className="h-8 w-8 text-primary" />
+      <BounceWrapper variant="bounce-in">
+        <Card className="w-full max-w-md relative z-10 shadow-soft border-border/60">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <Mail className="h-8 w-8 text-primary" />
+              </div>
             </div>
-          </div>
-          <CardTitle className="text-2xl">ยืนยันอีเมล</CardTitle>
-          <CardDescription>เราได้ส่งลิงก์ยืนยันไปยังอีเมลของคุณแล้ว</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-center text-muted-foreground leading-relaxed">
-            กรุณาตรวจสอบอีเมลและคลิกลิงก์ยืนยันเพื่อเริ่มใช้งาน RMU Exchange ถ้าไม่พบอีเมล กรุณาตรวจสอบในโฟลเดอร์ Spam
-          </p>
-          <div className="space-y-2">
-            <Button onClick={handleCheckVerification} className="w-full" disabled={checking}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {checking ? "กำลังตรวจสอบ..." : "ตรวจสอบการยืนยัน"}
-            </Button>
-            <Button onClick={handleResend} variant="outline" className="w-full bg-transparent" disabled={loading}>
-              {loading ? "กำลังส่ง..." : "ส่งอีเมลยืนยันอีกครั้ง"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <CardTitle className="text-2xl">ยืนยันอีเมล</CardTitle>
+            <CardDescription>เราได้ส่งลิงก์ยืนยันไปยังอีเมลของคุณแล้ว</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-center text-muted-foreground leading-relaxed">
+              กรุณาตรวจสอบอีเมลและคลิกลิงก์ยืนยันเพื่อเริ่มใช้งาน RMU Exchange ถ้าไม่พบอีเมล กรุณาตรวจสอบในโฟลเดอร์ Spam
+            </p>
+            <div className="space-y-2">
+              <Button onClick={handleCheckVerification} className="w-full" disabled={checking}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {checking ? "กำลังตรวจสอบ..." : "ตรวจสอบการยืนยัน"}
+              </Button>
+              <Button onClick={handleResend} variant="outline" className="w-full bg-transparent" disabled={loading}>
+                {loading ? "กำลังส่ง..." : "ส่งอีเมลยืนยันอีกครั้ง"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </BounceWrapper>
     </div>
   )
 }

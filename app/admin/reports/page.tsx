@@ -1,5 +1,7 @@
 "use client"
 
+import { BounceWrapper } from '@/components/ui/bounce-wrapper'
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
@@ -280,8 +282,12 @@ export default function AdminReportsPage() {
       {/* Reports List */}
       <Tabs defaultValue="pending" className="w-full">
         <TabsList>
-          <TabsTrigger value="pending">รอดำเนินการ ({pendingReports.length})</TabsTrigger>
-          <TabsTrigger value="history">ประวัติ ({historyReports.length})</TabsTrigger>
+          <BounceWrapper>
+            <TabsTrigger value="pending">รอดำเนินการ ({pendingReports.length})</TabsTrigger>
+          </BounceWrapper>
+          <BounceWrapper>
+            <TabsTrigger value="history">ประวัติ ({historyReports.length})</TabsTrigger>
+          </BounceWrapper>
         </TabsList>
 
         <TabsContent value="pending" className="mt-4">
