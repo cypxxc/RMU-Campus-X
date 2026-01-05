@@ -1,0 +1,534 @@
+"use client"
+
+import * as React from "react"
+import { UnifiedModal } from "@/components/ui/unified-modal"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, Loader2, User, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+// ============ Admin Action Modal ============
+
+type ActionType = "warn" | "suspend" | "ban" | "activate" | "delete" | "confirm"
+
+interface AdminActionModalProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  type: ActionType
+  title?: string
+  description?: string
+  targetName?: string
+  onConfirm: (data: { reason: string; days?: number }) => Promise<void>
+  processing?: boolean
+  requireReason?: boolean
+  showDaysInput?: boolean
+  defaultDays?: number
+}
+
+const actionConfig = {
+  warn: {
+    icon: AlertTriangle,
+    color: "text-amber-500",
+    bgColor: "bg-amber-500/10",
+    borderColor: "border-amber-500/30",
+    buttonVariant: "outline" as const,
+    buttonClass: "border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950",
+    title: "ออกคำเตือน",
+    description: "ผู้ใช้จะได้รับการแจ้งเตือนคำเตือนนี้",
+    confirmText: "ออกคำเตือน",
+  },
+  suspend: {
+    icon: ShieldAlert,
+    color: "text-orange-500",
+    bgColor: "bg-orange-500/10",
+    borderColor: "border-orange-500/30",
+    buttonVariant: "outline" as const,
+    buttonClass: "border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950",
+    title: "ระงับการใช้งานชั่วคราว",
+    description: "ผู้ใช้จะไม่สามารถใช้งานระบบได้ตามระยะเวลาที่กำหนด",
+    confirmText: "ระงับผู้ใช้",
+  },
+  ban: {
+    icon: Ban,
+    color: "text-red-500",
+    bgColor: "bg-red-500/10",
+    borderColor: "border-red-500/30",
+    buttonVariant: "destructive" as const,
+    buttonClass: "",
+    title: "แบนถาวร",
+    description: "ผู้ใช้จะถูกระงับการใช้งานอย่างถาวร",
+    confirmText: "แบนถาวร",
+  },
+  activate: {
+    icon: CheckCircle2,
+    color: "text-green-500",
+    bgColor: "bg-green-500/10",
+    borderColor: "border-green-500/30",
+    buttonVariant: "default" as const,
+    buttonClass: "bg-green-600 hover:bg-green-700",
+    title: "ปลดล็อคบัญชี",
+    description: "ผู้ใช้จะสามารถกลับมาใช้งานได้ตามปกติ",
+    confirmText: "ปลดล็อค",
+  },
+  delete: {
+    icon: X,
+    color: "text-red-500",
+    bgColor: "bg-red-500/10",
+    borderColor: "border-red-500/30",
+    buttonVariant: "destructive" as const,
+    buttonClass: "",
+    title: "ลบข้อมูล",
+    description: "การกระทำนี้ไม่สามารถย้อนกลับได้",
+    confirmText: "ยืนยันลบ",
+  },
+  confirm: {
+    icon: CheckCircle2,
+    color: "text-primary",
+    bgColor: "bg-primary/10",
+    borderColor: "border-primary/30",
+    buttonVariant: "default" as const,
+    buttonClass: "",
+    title: "ยืนยันการดำเนินการ",
+    description: "กรุณายืนยันการดำเนินการนี้",
+    confirmText: "ยืนยัน",
+  },
+}
+
+export function AdminActionModal({
+  open,
+  onOpenChange,
+  type,
+  title,
+  description,
+  targetName,
+  onConfirm,
+  processing = false,
+  requireReason = true,
+  showDaysInput = false,
+  defaultDays = 7,
+}: AdminActionModalProps) {
+  const [reason, setReason] = React.useState("")
+  const [days, setDays] = React.useState(defaultDays.toString())
+
+  const config = actionConfig[type]
+  const Icon = config.icon
+
+  const handleConfirm = async () => {
+    await onConfirm({ reason, days: showDaysInput ? parseInt(days) : undefined })
+    setReason("")
+    setDays(defaultDays.toString())
+  }
+
+  const isValid = !requireReason || reason.trim().length > 0
+
+  return (
+    <UnifiedModal
+      open={open}
+      onOpenChange={onOpenChange}
+      size="lg"
+      title={title || config.title}
+      description={
+        targetName ? (
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-muted-foreground font-medium">เป้าหมาย:</span>
+            <Badge
+              variant="outline"
+             className="font-mono text-xs font-normal border-primary/20 bg-primary/5 text-primary"
+            >
+              {targetName}
+            </Badge>
+          </div>
+        ) : (
+          "ดำเนินการจัดการระบบ"
+        )
+      }
+      icon={<Icon className={cn("h-6 w-6", config.color)} />}
+      headerClassName={cn(config.bgColor, config.borderColor, "border-b")}
+      footer={
+        <div className="flex items-center justify-end gap-3 w-full">
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={processing}
+            className="h-11 px-6"
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            variant={config.buttonVariant}
+            onClick={handleConfirm}
+            disabled={processing || !isValid}
+            className={cn(
+              config.buttonClass,
+              "h-11 px-8 min-w-[140px] font-semibold"
+            )}
+          >
+            {processing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                กำลังบันทึก...
+              </>
+            ) : (
+              <>{config.confirmText}</>
+            )}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
+        {/* Info Alert */}
+        <div
+          className={cn(
+            "p-5 rounded-xl border flex gap-4 items-start",
+            config.bgColor,
+            config.borderColor
+          )}
+        >
+          <Icon className={cn("h-5 w-5 shrink-0 mt-0.5", config.color)} />
+          <div className="space-y-1">
+            <p className={cn("font-medium", config.color)}>{config.title}</p>
+            <p className="text-sm text-foreground/80 leading-relaxed">
+              {description || config.description}
+            </p>
+          </div>
+        </div>
+
+        {/* Days Input */}
+        {showDaysInput && (
+          <div className="space-y-3">
+            <Label
+              htmlFor="days"
+              className="text-base font-semibold flex items-center justify-between"
+            >
+              <span>ระยะเวลาการระงับ</span>
+              <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-1 rounded-md">
+                หน่วย: วัน
+              </span>
+            </Label>
+            <div className="relative">
+              <Input
+                id="days"
+                type="number"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                min="1"
+                max="365"
+                className="h-12 pl-4 pr-12 font-mono text-lg"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">
+                วัน
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              กำหนดจำนวนวันที่ต้องการระงับการใช้งาน หลังจากครบกำหนดระบบจะปลดล็อคให้อัตโนมัติ
+            </p>
+          </div>
+        )}
+
+        {/* Reason Input */}
+        {requireReason && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="reason" className="text-sm font-semibold">
+                เหตุผลการดำเนินการ <span className="text-destructive">*</span>
+              </Label>
+              <span className="text-xs text-muted-foreground">{reason.length} ตัวอักษร</span>
+            </div>
+
+            <Textarea
+              id="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="อธิบายเหตุผลอย่างละเอียด..."
+              rows={4}
+              className="resize-y min-h-[120px]"
+            />
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <ShieldAlert className="h-3 w-3" />
+              ข้อมูลนี้จะถูกบันทึกใน Admin Logs และแจ้งเตือนไปยังผู้ใช้
+            </p>
+          </div>
+        )}
+      </div>
+    </UnifiedModal>
+  )
+}
+
+// ============ User Detail Modal ============
+
+interface UserStats {
+  status: string
+  warningCount: number
+  reportsReceived: number
+  reportsFiled: number
+}
+
+interface Warning {
+  id: string
+  reason: string
+  action: string
+  issuedByEmail: string
+  issuedAt: any
+}
+
+interface UserDetailModalProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  email: string
+  stats: UserStats
+  user: any
+  warnings?: Warning[]
+  onAction: (type: ActionType) => void
+  getStatusBadge: (user: any) => React.ReactNode
+  formatDate?: (date: any) => string
+}
+
+export function UserDetailModal({
+  open,
+  onOpenChange,
+  email,
+  stats,
+  user,
+  warnings = [],
+  onAction,
+  getStatusBadge,
+  formatDate,
+}: UserDetailModalProps) {
+  return (
+    <UnifiedModal
+      open={open}
+      onOpenChange={onOpenChange}
+      size="xl"
+      title="จัดการผู้ใช้"
+      description={
+        <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded-md inline-block mt-1">
+          {email}
+        </span>
+      }
+      icon={<User className="h-6 w-6" />}
+      footer={
+        <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
+          {/* Left group: Warn + Suspend */}
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onAction("warn")}
+              className="gap-2 border-amber-500/30 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-500/50 dark:hover:bg-amber-950/50 dark:hover:text-amber-400"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              ออกคำเตือน
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => onAction("suspend")}
+              disabled={stats.status === "SUSPENDED"}
+              className="gap-2 border-orange-500/30 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-500/50 dark:hover:bg-orange-950/50 dark:hover:text-orange-400"
+            >
+              <ShieldAlert className="h-4 w-4" />
+              ระงับชั่วคราว
+            </Button>
+          </div>
+
+          <div className="w-full h-px bg-border sm:hidden" />
+
+          {/* Right group: Ban + Activate */}
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex gap-2">
+            <Button
+              variant="destructive"
+              onClick={() => onAction("ban")}
+              disabled={stats.status === "BANNED"}
+              className="gap-2"
+            >
+              <Ban className="h-4 w-4" />
+              แบนถาวร
+            </Button>
+             <Button
+              variant="destructive"
+              onClick={() => onAction("delete")}
+              className="gap-2 bg-red-800 hover:bg-red-900 border-2 border-red-900/50"
+            >
+              <X className="h-4 w-4" />
+              ลบข้อมูล
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => onAction("activate")}
+              disabled={stats.status === "ACTIVE"}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              ปลดล็อค
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-6">
+        {/* Stats Grid */}
+        <div>
+          <h3 className="font-semibold text-sm text-foreground/80 mb-3 flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            ภาพรวมบัญชี
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 text-center bg-card border hover:shadow-md transition-shadow">
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
+                สถานะ
+              </p>
+              <div className="flex justify-center scale-110">{getStatusBadge(user)}</div>
+            </Card>
+            <Card className="p-4 text-center bg-card border hover:shadow-md transition-shadow">
+              <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                คำเตือนสะสม
+              </p>
+              <p
+                className={cn(
+                  "text-3xl font-extrabold",
+                  stats.warningCount > 0 ? "text-amber-500" : "text-foreground"
+                )}
+              >
+                {stats.warningCount}
+              </p>
+            </Card>
+            <Card className="p-4 text-center bg-card border hover:shadow-md transition-shadow">
+              <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                ถูกรายงาน
+              </p>
+              <p
+                className={cn(
+                  "text-3xl font-extrabold",
+                  stats.reportsReceived > 0 ? "text-destructive" : "text-foreground"
+                )}
+              >
+                {stats.reportsReceived}
+              </p>
+            </Card>
+            <Card className="p-4 text-center bg-card border hover:shadow-md transition-shadow">
+              <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                แจ้งรายงาน
+              </p>
+              <p className="text-3xl font-extrabold text-foreground">{stats.reportsFiled}</p>
+            </Card>
+          </div>
+        </div>
+
+        <Separator className="opacity-50" />
+
+        {/* Warning History */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-sm text-foreground/80 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              ประวัติการถูกแจ้งเตือน ({warnings.length})
+            </h3>
+          </div>
+
+          {warnings.length > 0 ? (
+            <div className="border rounded-lg bg-muted/20 overflow-hidden">
+              <div className="max-h-[250px] overflow-y-auto p-1 space-y-1">
+                {warnings.map((warning) => (
+                  <div
+                    key={warning.id}
+                    className="p-3 bg-card border rounded-md hover:bg-muted/50 transition-colors flex items-start gap-3 group"
+                  >
+                    <div className="mt-1">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 opacity-70 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-bold h-5 px-1.5 border-amber-200 text-amber-700 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400"
+                        >
+                          {warning.action}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {formatDate && formatDate(warning.issuedAt)}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-foreground leading-relaxed">
+                        "{warning.reason}"
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        โดย {warning.issuedByEmail}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/10 text-muted-foreground">
+              <CheckCircle2 className="h-8 w-8 text-green-500/50 mb-2" />
+              <p className="text-sm">ไม่มีประวัติคำเตือน</p>
+              <p className="text-xs opacity-70">ผู้ใช้นี้มีพฤติกรรมดีเยี่ยม</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </UnifiedModal>
+  )
+}
+
+// ============ Info Card (for modals) ============
+
+interface InfoCardProps {
+  icon: React.ReactNode
+  label: string
+  value: React.ReactNode
+  variant?: "default" | "success" | "warning" | "danger" | "info"
+}
+
+const variantStyles = {
+  default: "bg-muted/50",
+  success: "bg-green-500/10 border-green-500/30",
+  warning: "bg-amber-500/10 border-amber-500/30",
+  danger: "bg-red-500/10 border-red-500/30",
+  info: "bg-blue-500/10 border-blue-500/30",
+}
+
+export function InfoCard({ icon, label, value, variant = "default" }: InfoCardProps) {
+  return (
+    <Card className={cn("p-3 border", variantStyles[variant])}>
+      <div className="flex items-center gap-3">
+        <div className="shrink-0 opacity-70">{icon}</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground truncate">{label}</p>
+          <div className="font-medium truncate">{value}</div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// ============ Empty State ============
+
+interface EmptyStateProps {
+  icon?: React.ReactNode
+  title: string
+  description?: string
+  action?: React.ReactNode
+}
+
+export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+      {icon && (
+        <div className="p-4 rounded-full bg-muted/50 mb-4">
+          {React.cloneElement(icon as React.ReactElement, {
+            className: "h-10 w-10 text-muted-foreground/50",
+          })}
+        </div>
+      )}
+      <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
+      {description && <p className="text-sm text-muted-foreground max-w-sm">{description}</p>}
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  )
+}

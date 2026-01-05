@@ -1,0 +1,224 @@
+"use client"
+
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
+import { LogOut, Shield, Menu, User, Package, Home, Plus } from "lucide-react"
+import { useAuth } from "./auth-provider"
+import { signOut } from "@/lib/auth"
+import { useToast } from "@/hooks/use-toast"
+import { NotificationBell } from "./notification-bell"
+import { AccountStatusBanner } from "./account-status-banner"
+import { ModeToggle } from "./mode-toggle"
+import { Logo } from "./logo"
+import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
+
+// Lazy load heavy modals - only loaded when opened
+const PostItemModal = dynamic(
+  () => import("./post-item-modal").then(m => ({ default: m.PostItemModal })),
+  { ssr: false }
+)
+
+export function Navbar() {
+  const pathname = usePathname()
+  const router = useRouter()
+  const { user, isAdmin } = useAuth()
+  const { toast } = useToast()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [postModalOpen, setPostModalOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      toast({
+        title: "ออกจากระบบสำเร็จ",
+      })
+      router.push("/login")
+    } catch (error: any) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: error.message,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const navItems = [
+    { href: "/dashboard", label: "หน้าหลัก", icon: Home },
+    { href: "/profile", label: "โปรไฟล์", icon: User },
+    { href: "/my-exchanges", label: "การแลกเปลี่ยน", icon: Package },
+    ...(isAdmin ? [{ href: "/admin", label: "Admin Panel", icon: Shield }] : []),
+  ]
+
+  const isActive = (href: string) => pathname === href
+
+  return (
+    <>
+      <nav className="sticky top-0 z-50 border-b glass">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          {/* Logo */}
+          <Logo size="md" href="/dashboard" className="shrink-0" />
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-1">
+            {user && navItems.map((item) => (
+              <Button
+                key={item.href}
+                variant={isActive(item.href) ? "secondary" : "ghost"}
+                size="sm"
+                asChild
+                className="gap-2"
+              >
+                <Link href={item.href}>
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              </Button>
+            ))}
+          </div>
+
+          {/* Right Side Actions */}
+          <div className="flex items-center gap-2">
+            
+            {user ? (
+              <>
+                {/* Post Item Button - Desktop (Opens Modal) */}
+                <Button 
+                  size="sm" 
+                  className="hidden sm:flex gap-2"
+                  onClick={() => setPostModalOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  โพสต์สิ่งของ
+                </Button>
+
+
+
+                {/* Notification Bell */}
+                <NotificationBell />
+
+                {/* Theme Toggle */}
+                <ModeToggle />
+
+                {/* User Email - Desktop only */}
+                <span className="text-sm text-muted-foreground hidden lg:inline max-w-[150px] truncate">
+                  {user.email}
+                </span>
+
+                {/* Logout Button - Desktop */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleSignOut}
+                  className="hidden sm:flex gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden lg:inline">ออกจากระบบ</span>
+                </Button>
+
+                {/* Mobile Menu */}
+                {mounted && (
+                  <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                    <SheetTrigger asChild>
+                      <Button variant="ghost" size="icon" className="md:hidden">
+                        <Menu className="h-5 w-5" />
+                        <span className="sr-only">เมนู</span>
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="right" className="w-[280px] sm:w-[320px]">
+                      <SheetTitle className="sr-only">เมนูหลัก</SheetTitle>
+                      <div className="flex flex-col h-full">
+                        {/* Mobile Header */}
+                        <div className="flex items-center gap-3 pb-6 border-b">
+                          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <User className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{user.email}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {isAdmin ? "ผู้ดูแลระบบ" : "สมาชิก"}
+                            </p>
+                          </div>
+                          <ModeToggle />
+                        </div>
+
+                        {/* Mobile Navigation */}
+                        <div className="flex-1 py-6 space-y-1">
+                          {navItems.map((item) => (
+                            <Button
+                              key={item.href}
+                              variant={isActive(item.href) ? "secondary" : "ghost"}
+                              className="w-full justify-start gap-3"
+                              asChild
+                              onClick={() => setMobileMenuOpen(false)}
+                            >
+                              <Link href={item.href}>
+                                <item.icon className="h-4 w-4" />
+                                {item.label}
+                              </Link>
+                            </Button>
+                          ))}
+
+                          <div className="pt-2 space-y-2">
+                            <Button
+                              variant="default"
+                              className="w-full justify-start gap-3"
+                              onClick={() => {
+                                setMobileMenuOpen(false)
+                                setPostModalOpen(true)
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                              โพสต์สิ่งของ
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Mobile Footer */}
+                        <div className="pt-4 border-t">
+                          <Button 
+                            variant="outline" 
+                            className="w-full justify-start gap-3"
+                            onClick={() => {
+                              handleSignOut()
+                              setMobileMenuOpen(false)
+                            }}
+                          >
+                            <LogOut className="h-4 w-4" />
+                            ออกจากระบบ
+                          </Button>
+                        </div>
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                )}
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/login">เข้าสู่ระบบ</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link href="/register">สมัครสมาชิก</Link>
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* Post Item Modal */}
+      <PostItemModal open={postModalOpen} onOpenChange={setPostModalOpen} />
+
+      {/* Account Status Banner */}
+      <AccountStatusBanner />
+    </>
+  )
+}

@@ -1,0 +1,32 @@
+# Dependencies
+node_modules
+
+# Environment Files (IMPORTANT: Keep secrets out of git)
+.env
+.env.local
+.env.production
+.env.development
+
+
+# Build
+.next
+out
+build
+dist
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage
+.jest
+
+# OS
+.DS_Store
+Thumbs.db

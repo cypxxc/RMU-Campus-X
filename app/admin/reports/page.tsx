@@ -1,0 +1,536 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
+import { getFirebaseDb } from "@/lib/firebase"
+import { getReports, updateReportStatus } from "@/lib/firestore"
+import type { Report, ReportStatus } from "@/types"
+import { useAuth } from "@/components/auth-provider"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+
+import { useToast } from "@/hooks/use-toast"
+import { 
+  Loader2, 
+  Flag, 
+  CheckCircle2, 
+  XCircle, 
+  Eye, 
+  AlertTriangle,
+  User as UserIcon, 
+  Package,
+  Clock
+} from "lucide-react"
+import { formatDistanceToNow } from "date-fns"
+import { th } from "date-fns/locale"
+import Image from "next/image"
+
+
+const reportReasonLabels: Record<string, string> = {
+  spam: "สแปม / โฆษณา",
+  inappropriate: "เนื้อหาไม่เหมาะสม",
+  harassment: "การคุกคาม / รังแก",
+  scam: "ฉ้อโกง / หลอกลวง",
+  other: "อื่นๆ",
+}
+
+const statusBadgeStyles: Record<string, string> = {
+  new: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  under_review: "bg-blue-100 text-blue-800 border-blue-200",
+  waiting_user: "bg-orange-100 text-orange-800 border-orange-200",
+  action_taken: "bg-green-100 text-green-800 border-green-200",
+  resolved: "bg-green-100 text-green-800 border-green-200",
+  closed: "bg-gray-100 text-gray-800 border-gray-200",
+  rejected: "bg-red-100 text-red-800 border-red-200",
+}
+
+const statusLabels: Record<string, string> = {
+  new: "ใหม่",
+  under_review: "กำลังตรวจสอบ",
+  waiting_user: "รอข้อมูลเพิ่มเติม",
+  action_taken: "ดำเนินการแล้ว",
+  resolved: "แก้ไขแล้ว",
+  closed: "ปิดเคส",
+  rejected: "ปฏิเสธ",
+}
+
+// Report type labels (using reportType like item_report, user_report)
+const reportTypeLabels: Record<string, string> = {
+  item_report: "สิ่งของ",
+  exchange_report: "การแลกเปลี่ยน",
+  chat_report: "แชท",
+  user_report: "ผู้ใช้",
+}
+
+// Target type labels (using targetType like item, user)
+const targetTypeLabels: Record<string, string> = {
+  item: "สิ่งของ",
+  exchange: "การแลกเปลี่ยน",
+  chat: "แชท",
+  user: "ผู้ใช้",
+}
+
+interface ReportWithDetails extends Report {
+  targetData?: any
+}
+
+export default function AdminReportsPage() {
+  const [reports, setReports] = useState<ReportWithDetails[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [selectedReport, setSelectedReport] = useState<ReportWithDetails | null>(null)
+
+  const [processing, setProcessing] = useState(false)
+
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+  const { toast } = useToast()
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    checkAdmin()
+  }, [user, authLoading])
+
+  const checkAdmin = async () => {
+    if (!user) return
+
+    try {
+      const db = getFirebaseDb()
+      const adminsRef = collection(db, "admins")
+      const q = query(adminsRef, where("email", "==", user.email))
+      const snapshot = await getDocs(q)
+
+      if (snapshot.empty) {
+        toast({
+          title: "ไม่มีสิทธิ์เข้าถึง",
+          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+          variant: "destructive",
+        })
+        router.push("/dashboard")
+        return
+      }
+
+      setIsAdmin(true)
+      loadData()
+    } catch (error) {
+      console.error("[AdminReports] Error checking admin:", error)
+      router.push("/dashboard")
+    }
+  }
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const reportsData = await getReports()
+      
+      // Fetch details for each report target
+      const reportsWithDetails = await Promise.all(reportsData.map(async (report) => {
+        try {
+          const db = getFirebaseDb()
+          let targetData = null
+          
+          // Determine collection from targetType or reportType
+          const targetType = report.targetType || (
+            report.reportType === 'user_report' ? 'user' :
+            report.reportType === 'item_report' ? 'item' :
+            report.reportType === 'exchange_report' ? 'exchange' :
+            report.reportType === 'chat_report' ? 'exchange' : // chat uses exchange collection
+            null
+          )
+          
+          if (targetType === 'user') {
+            const userDoc = await getDoc(doc(db, "users", report.targetId))
+            if (userDoc.exists()) targetData = userDoc.data()
+          } else if (targetType === 'item') {
+            const itemDoc = await getDoc(doc(db, "items", report.targetId))
+            if (itemDoc.exists()) targetData = itemDoc.data()
+          } else if (targetType === 'exchange' || targetType === 'chat') {
+            const exchangeDoc = await getDoc(doc(db, "exchanges", report.targetId))
+            if (exchangeDoc.exists()) {
+              const data = exchangeDoc.data()
+              // Use itemTitle as title for exchanges
+              targetData = { ...data, title: data.itemTitle || 'แชท/การแลกเปลี่ยน' }
+            }
+          }
+          
+          // If still no targetData but we have targetTitle from report, use it
+          if (!targetData && report.targetTitle) {
+            targetData = { title: report.targetTitle, email: report.targetTitle }
+          }
+          
+          return { ...report, targetData }
+        } catch (e) {
+          console.error(`[AdminReports] Error fetching target for report ${report.id}:`, e)
+          // Use targetTitle as fallback
+          if (report.targetTitle) {
+            return { ...report, targetData: { title: report.targetTitle, email: report.targetTitle } }
+          }
+          return report
+        }
+      }))
+      
+      setReports(reportsWithDetails)
+    } catch (error) {
+      console.error("[AdminReports] Error loading data:", error)
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถโหลดข้อมูลรายงานได้",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateStatus = async (status: ReportStatus) => {
+    if (!selectedReport || !user) return
+
+    setProcessing(true)
+    try {
+      await updateReportStatus(
+        selectedReport.id,
+        status,
+        user.uid,
+        user.email || ""
+      )
+      
+      toast({ title: "อัปเดตสถานะสำเร็จ" })
+      setSelectedReport(null)
+      loadData()
+    } catch (error: any) {
+      toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  if (loading || !isAdmin) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  const pendingReports = reports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status))
+  const historyReports = reports.filter(r => !['new', 'under_review', 'waiting_user'].includes(r.status))
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold mb-1">จัดการรายงาน</h1>
+        <p className="text-muted-foreground text-sm">ตรวจสอบและจัดการรายงานความไม่เหมาะสม</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold">{reports.length}</div>
+            <p className="text-sm text-muted-foreground">ทั้งหมด</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-yellow-600">{pendingReports.length}</div>
+            <p className="text-sm text-muted-foreground">รอดำเนินการ</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-green-600">
+              {reports.filter(r => ['resolved', 'action_taken'].includes(r.status)).length}
+            </div>
+            <p className="text-sm text-muted-foreground">ดำเนินการแล้ว</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-gray-600">
+              {reports.filter(r => ['rejected', 'closed'].includes(r.status)).length}
+            </div>
+            <p className="text-sm text-muted-foreground">ปิด/ปฏิเสธ</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Reports List */}
+      <Tabs defaultValue="pending" className="w-full">
+        <TabsList>
+          <TabsTrigger value="pending">รอดำเนินการ ({pendingReports.length})</TabsTrigger>
+          <TabsTrigger value="history">ประวัติ ({historyReports.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pending" className="mt-4">
+          <ReportsTable 
+            data={pendingReports} 
+            onView={(r) => setSelectedReport(r)} 
+            emptyMessage="ไม่มีรายการที่รอดำเนินการ"
+          />
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4">
+           <ReportsTable 
+            data={historyReports} 
+            onView={(r) => setSelectedReport(r)} 
+            emptyMessage="ไม่มีประวัติการรายงาน"
+          />
+        </TabsContent>
+      </Tabs>
+
+      {/* Report Detail Modal */}
+      <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[85vh]">
+          <DialogHeader className="p-6 pb-4 pr-24 border-b bg-muted/10 shrink-0">
+             <div className="flex items-start justify-between gap-4">
+               <div className="space-y-1">
+                 <div className="flex items-center gap-2">
+                    <Flag className="h-5 w-5 text-destructive" />
+                    <DialogTitle className="text-xl font-bold tracking-tight">รายละเอียดการรายงาน</DialogTitle>
+                 </div>
+                 <div className="flex items-center gap-2 text-sm text-muted-foreground pl-7">
+                    <span>ID: {selectedReport?.id}</span>
+                    <span className="text-border">•</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {selectedReport && formatDistanceToNow((selectedReport.createdAt as any)?.toDate?.() || new Date(), { addSuffix: true, locale: th })}
+                    </span>
+                 </div>
+               </div>
+               {selectedReport && (
+                 <Badge className={statusBadgeStyles[selectedReport.status]}>
+                   {statusLabels[selectedReport.status]}
+                 </Badge>
+               )}
+             </div>
+          </DialogHeader>
+          
+          {selectedReport && (
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Type and Target Info */}
+              <div className="grid md:grid-cols-2 gap-6">
+                 {/* Report Info */}
+                 <div className="space-y-4">
+                    <div className="p-4 rounded-lg bg-muted/30 border">
+                       <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-500" />
+                          ข้อมูลการแจ้ง
+                       </h3>
+                       <div className="space-y-3 text-sm">
+                          <div className="grid grid-cols-3 gap-2">
+                             <span className="text-muted-foreground">หัวข้อ:</span>
+                             <span className="col-span-2 font-medium">{reportReasonLabels[selectedReport.reason] || selectedReport.reason}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                             <span className="text-muted-foreground">รายละเอียด:</span>
+                             <span className="col-span-2">{selectedReport.description || "-"}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                             <span className="text-muted-foreground">ผู้แจ้ง:</span>
+                             <span className="col-span-2">{selectedReport.reporterEmail}</span>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+
+                 {/* Target Info */}
+                 <div className="space-y-4">
+                    <div className="p-4 rounded-lg bg-muted/30 border h-full">
+                       <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                          {selectedReport.targetType === 'user' ? (
+                             <UserIcon className="h-4 w-4 text-blue-500" />
+                          ) : (
+                             <Package className="h-4 w-4 text-blue-500" />
+                          )}
+                          เป้าหมาย ({selectedReport.targetType === 'user' ? 'ผู้ใช้' : 'สิ่งของ'})
+                       </h3>
+                       <div className="space-y-3 text-sm">
+                          <div className="grid grid-cols-3 gap-2">
+                             <span className="text-muted-foreground">ID:</span>
+                             <span className="col-span-2 font-mono text-xs">{selectedReport.targetId}</span>
+                          </div>
+                          {selectedReport.targetData ? (
+                             <>
+                                {selectedReport.targetType === 'user' ? (
+                                   <div className="grid grid-cols-3 gap-2">
+                                      <span className="text-muted-foreground">อีเมล:</span>
+                                      <span className="col-span-2 font-medium">{selectedReport.targetData.email}</span>
+                                   </div>
+                                ) : (
+                                   <>
+                                      <div className="grid grid-cols-3 gap-2">
+                                         <span className="text-muted-foreground">ชื่อ:</span>
+                                         <span className="col-span-2 font-medium">{selectedReport.targetData.title}</span>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2">
+                                         <span className="text-muted-foreground">ผู้ลง:</span>
+                                         <span className="col-span-2">{selectedReport.targetData.postedByEmail}</span>
+                                      </div>
+                                   </>
+                                )}
+                             </>
+                          ) : (
+                             <div className="col-span-3 text-destructive italic">ไมพบข้อมูล (อาจถูกลบไปแล้ว)</div>
+                          )}
+                       </div>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Evidence Image */}
+              {selectedReport.evidenceUrls && selectedReport.evidenceUrls.length > 0 && (
+                 <div>
+                    <h3 className="text-sm font-semibold mb-2">หลักฐานรูปภาพ</h3>
+                    <div className="relative aspect-video w-full max-w-md rounded-lg overflow-hidden border bg-muted">
+                       <Image 
+                          src={selectedReport.evidenceUrls?.[0] || ""} 
+                          alt="Report evidence" 
+                          fill  
+                          className="object-contain" 
+                          unoptimized 
+                       />
+                    </div>
+                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Footer Actions */}
+          <DialogFooter className="p-4 border-t bg-muted/10 shrink-0 gap-2 sm:gap-0">
+             <div className="flex gap-2 w-full justify-end">
+                <Button variant="ghost" onClick={() => setSelectedReport(null)}>
+                   ปิด
+                </Button>
+                {selectedReport && ['new', 'under_review', 'waiting_user'].includes(selectedReport.status) && (
+                   <>
+                      <Button 
+                         variant="outline" 
+                         className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                         onClick={() => handleUpdateStatus('rejected')}
+                         disabled={processing}
+                      >
+                         <XCircle className="h-4 w-4 mr-2" />
+                         ปฏิเสธ
+                      </Button>
+                      <Button 
+                         variant="default"
+                         className="bg-green-600 hover:bg-green-700"
+                         onClick={() => handleUpdateStatus('resolved')}
+                         disabled={processing}
+                      >
+                         <CheckCircle2 className="h-4 w-4 mr-2" />
+                         ดำเนินการแล้ว
+                      </Button>
+                   </>
+                )}
+             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function ReportsTable({ 
+  data, 
+  onView, 
+  emptyMessage 
+}: { 
+  data: ReportWithDetails[], 
+  onView: (report: ReportWithDetails) => void, 
+  emptyMessage: string 
+}) {
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>วันที่แจ้ง</TableHead>
+            <TableHead>ประเภท</TableHead>
+            <TableHead>เป้าหมาย</TableHead>
+            <TableHead>ข้อหา</TableHead>
+            <TableHead>ผู้แจ้ง</TableHead>
+            <TableHead>สถานะ</TableHead>
+            <TableHead className="text-right">จัดการ</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                <Flag className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                <p>{emptyMessage}</p>
+              </TableCell>
+            </TableRow>
+          ) : (
+            data.map((report) => (
+              <TableRow key={report.id}>
+                <TableCell className="text-nowrap text-muted-foreground">
+                  {formatDistanceToNow((report.createdAt as any)?.toDate?.() || new Date(), { addSuffix: true, locale: th })}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="capitalize">
+                    {(report.reportType && reportTypeLabels[report.reportType]) || 
+                     (report.targetType && targetTypeLabels[report.targetType]) || 
+                     report.reportType || report.targetType || '-'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="max-w-[200px]">
+                  <div className="truncate font-medium">
+                    {report.targetData 
+                      ? (report.targetType === 'user' ? report.targetData.email : report.targetData.title)
+                      : <span className="text-muted-foreground italic">Unknown ID: {report.targetId}</span>
+                    }
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <span className="font-medium text-destructive">
+                    {reportReasonLabels[report.reason] || report.reason}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <div className="truncate max-w-[150px] text-muted-foreground">
+                    {report.reporterEmail}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge className={statusBadgeStyles[report.status]}>
+                    {statusLabels[report.status]}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" onClick={() => onView(report)}>
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}

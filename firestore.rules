@@ -1,0 +1,227 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+    
+    function isRMUEmail() {
+      return isSignedIn() && request.auth.token.email.matches('.*@rmu[.]ac[.]th$');
+    }
+    
+    function canCreateContent() {
+      return isSignedIn() && isVerified() && isRMUEmail() && (
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status in ['ACTIVE', 'WARNING']
+      );
+    }
+    
+    function validItemData() {
+      return request.resource.data.keys().hasAll(['title', 'description', 'category', 'status', 'postedBy', 'postedByEmail']) &&
+             request.resource.data.title is string &&
+             request.resource.data.title.size() > 0 &&
+             request.resource.data.title.size() <= 100 &&
+             request.resource.data.description is string &&
+             request.resource.data.description.size() > 0 &&
+             request.resource.data.description.size() <= 1000 &&
+             request.resource.data.category in ['electronics', 'books', 'furniture', 'clothing', 'sports', 'other'] &&
+             request.resource.data.status in ['available', 'pending', 'completed'];
+    }
+    
+    function validExchangeData() {
+      return request.resource.data.keys().hasAll(['itemId', 'itemTitle', 'ownerId', 'ownerEmail', 'requesterId', 'requesterEmail', 'status', 'ownerConfirmed', 'requesterConfirmed']) &&
+             request.resource.data.status in ['pending', 'accepted', 'in_progress', 'completed', 'cancelled', 'rejected'] &&
+             request.resource.data.ownerConfirmed is bool &&
+             request.resource.data.requesterConfirmed is bool;
+    }
+    
+    function validChatMessage() {
+      return request.resource.data.keys().hasAll(['exchangeId', 'senderId', 'senderEmail', 'message']) &&
+             request.resource.data.message is string &&
+             request.resource.data.message.size() > 0 &&
+             request.resource.data.message.size() <= 1000;
+    }
+    
+    // Users collection
+    // NOTE: Allow public read for LINE webhook (uses REST API runQuery without auth)
+    match /users/{userId} {
+      allow get: if true;   // Public read for individual user profiles
+      allow list: if true;  // Public query - needed for LINE webhook to find users by email
+      allow create: if isSignedIn() && isOwner(userId) && isRMUEmail() &&
+                      request.resource.data.uid == userId &&
+                      request.resource.data.email == request.auth.token.email &&
+                      request.resource.data.email.matches('.*@rmu[.]ac[.]th$');
+      allow update: if (isOwner(userId) && 
+                        (isVerified() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt', 'lineUserId', 'lineNotifications'])) &&
+                        request.resource.data.uid == userId &&
+                        request.resource.data.email == resource.data.email) ||
+                       isAdmin() ||
+                       // Allow LINE webhook to update ONLY lineUserId and lineNotifications (no auth)
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lineUserId', 'lineNotifications']);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // Items collection
+    match /items/{itemId} {
+      allow read: if true;
+      // Verified RMU users can create items
+      allow create: if isVerified() && isRMUEmail() &&
+                      request.resource.data.postedBy == request.auth.uid &&
+                      request.resource.data.postedByEmail == request.auth.token.email;
+      
+      // Allow updates in these cases:
+      // 1. Item owner can update anything
+      // 2. Admin can update anything  
+      // 3. Verified users can ONLY update status (available <-> pending) during exchange flow
+      //    This is needed for cancelExchange transaction
+      allow update: if isVerified() && (
+        isOwner(resource.data.postedBy) || 
+        isAdmin() ||
+        // Allow status-only updates for exchange flow (cancel/complete)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+         request.resource.data.status in ['available', 'pending'] &&
+         resource.data.status in ['available', 'pending'])
+      );
+      allow delete: if isOwner(resource.data.postedBy) || isAdmin();
+    }
+    
+    // Exchanges collection
+    match /exchanges/{exchangeId} {
+      allow get: if isSignedIn() && (
+        resource.data.requesterId == request.auth.uid ||
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      // ✅ FIXED: Simplified list permission - verified users can list exchanges
+      allow list: if isVerified();
+      
+      allow create: if (canCreateContent() &&
+                        request.resource.data.requesterId == request.auth.uid &&
+                        request.resource.data.requesterEmail == request.auth.token.email &&
+                        validExchangeData()) || isAdmin();
+      allow update: if isSignedIn() && (
+        resource.data.requesterId == request.auth.uid ||
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin() || (isSignedIn() && (
+        resource.data.requesterId == request.auth.uid ||
+        resource.data.ownerId == request.auth.uid
+      ) && resource.data.status in ['cancelled', 'completed', 'rejected']);
+    }
+    
+    // Chat messages
+    match /chatMessages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isVerified() && isRMUEmail() &&
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.resource.data.senderEmail == request.auth.token.email &&
+                      validChatMessage();
+      allow delete: if isAdmin();
+    }
+    
+    // Reports collection
+    match /reports/{reportId} {
+      // ✅ FIXED: Separate get and list permissions
+      allow get: if isSignedIn() && (resource.data.reporterId == request.auth.uid || isAdmin());
+      
+      // ✅ FIXED: Users can query their own reports, admins can query all
+      allow list: if isSignedIn();  // Query filters will restrict to user's own reports
+      
+      allow create: if isSignedIn() && isRMUEmail() &&
+                       request.resource.data.reporterId == request.auth.uid &&
+                       request.resource.data.reporterEmail == request.auth.token.email &&
+                       request.resource.data.status == 'new' &&
+                       (!('evidenceUrls' in request.resource.data) || request.resource.data.evidenceUrls is list);
+      allow update, delete: if isAdmin();
+    }
+    
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // ✅ FIXED: Separate get and list permissions
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // ✅ FIXED: Added list permission so users can query their notifications
+      allow list: if isSignedIn();  // Query filters by userId in code
+      
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Mail collection
+    match /mail/{mailId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if false;
+    }
+
+    // Admins collection
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+    
+    // User Warnings collection
+    match /userWarnings/{warningId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+    
+    // Drafts collection
+    match /drafts/{draftId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+    
+    // Cases collection (Admin Panel V2)
+    match /cases/{caseId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+    
+    // Support Tickets collection
+    match /support_tickets/{ticketId} {
+      // Users can read their own tickets
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      // ALL users (including banned) can create tickets - their only way to appeal
+      allow create: if isSignedIn() &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.userEmail == request.auth.token.email &&
+                      request.resource.data.status == 'new';
+      // Only admins can update/delete tickets
+      allow update, delete: if isAdmin();
+    }
+    
+    // Admin Logs collection (camelCase - matching code in lib/firestore.ts)
+    match /adminLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}
