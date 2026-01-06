@@ -85,15 +85,32 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
   const [images, setImages] = useState<string[]>([])
   const MAX_IMAGES = 5
   const [loading, setLoading] = useState(false)
+  const [userDisplayName, setUserDisplayName] = useState<string>("")
   const { user } = useAuth()
   const { toast } = useToast()
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
 
-  // Load cooldown from storage on mount
+  // Load user profile and cooldown from storage on mount
   useEffect(() => {
     if (user) {
       loadCooldownFromStorage('createItem', user.uid)
       setCooldownRemaining(getRemainingCooldown('createItem', user.uid))
+      
+      // Fetch user's displayName from Firestore
+      const fetchUserName = async () => {
+        try {
+          const { getUserProfile } = await import("@/lib/firestore")
+          const profile = await getUserProfile(user.uid)
+          if (profile?.displayName) {
+            setUserDisplayName(profile.displayName)
+          } else {
+            setUserDisplayName(user.displayName || user.email?.split("@")[0] || "")
+          }
+        } catch {
+          setUserDisplayName(user.displayName || user.email?.split("@")[0] || "")
+        }
+      }
+      fetchUserName()
     }
   }, [user])
 
@@ -215,6 +232,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
         status: "available",
         postedBy: user.uid,
         postedByEmail: user.email || "",
+        postedByName: userDisplayName || user.displayName || user.email?.split("@")[0] || "",
       })
 
       // Check if the API call was successful
@@ -396,11 +414,11 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
             </div>
 
             {location === "อื่นๆ (ระบุในรายละเอียด)" && (
-              <div className="p-3 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                <div className="h-5 w-5 rounded-full bg-[var(--warning)]/20 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-[var(--warning)] text-[10px] font-bold">!</span>
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                <div className="h-5 w-5 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-amber-500 text-[10px] font-bold">!</span>
                 </div>
-                <p className="text-xs text-[var(--warning)] leading-tight">
+                <p className="text-xs text-amber-500 leading-tight">
                   <span className="font-bold block mb-0.5">คำเตือน</span>
                   ต้องกำหนดสถานที่นัดรับ <strong>ภายในโรงเรียน/มหาวิทยาลัยเท่านั้น</strong> เพื่อความปลอดภัยของนักศึกษา
                 </p>

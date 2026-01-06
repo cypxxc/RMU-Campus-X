@@ -1,20 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { XCircle, Trash2 } from "lucide-react"
 import { Exchange } from "@/types"
+import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 
 interface CancelExchangeDialogProps {
   exchange: Exchange | null
@@ -63,54 +54,47 @@ export function CancelExchangeDialog({
   const isRequired = requiresReason()
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-md">
-        <AlertDialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950 flex items-center justify-center">
-              <XCircle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-            </div>
-            <div>
-              <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
-              <AlertDialogDescription className="mt-1">
-                คุณต้องการยกเลิกการแลกเปลี่ยน "{exchange?.itemTitle}" ใช่หรือไม่?
-              </AlertDialogDescription>
-            </div>
-          </div>
-        </AlertDialogHeader>
-        
-        {isRequired && (
-          <div className="space-y-2">
-            <Label htmlFor="cancel-reason" className="text-sm font-medium">
-              เหตุผลการยกเลิก <span className="text-destructive">*</span>
-            </Label>
-            <Textarea
-              id="cancel-reason"
-              placeholder="กรุณาระบุเหตุผลการยกเลิก..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value.slice(0, 300))}
-              rows={3}
-              className="resize-none"
-            />
-            <p className="text-[11px] text-muted-foreground text-right">{reason.length}/300</p>
-          </div>
-        )}
-
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={processing}>ไม่ยกเลิก</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(e) => {
-              e.preventDefault()
-              handleConfirm()
-            }}
-            disabled={processing || (isRequired && !reason.trim())}
-            className="bg-destructive hover:bg-destructive/90"
-          >
-            {processing ? "กำลังพิจารณา..." : "ยืนยันยกเลิก"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <UnifiedModal
+      open={open}
+      onOpenChange={onOpenChange}
+      size="md"
+      title="ยืนยันการยกเลิก"
+      description={`คุณต้องการยกเลิกการแลกเปลี่ยน "${exchange?.itemTitle}" ใช่หรือไม่?`}
+      icon={<XCircle className="h-5 w-5" />}
+      headerClassName="border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20"
+      footer={
+        <UnifiedModalActions
+          onCancel={() => onOpenChange(false)}
+          onSubmit={handleConfirm}
+          submitText={processing ? "กำลังพิจารณา..." : "ยืนยันยกเลิก"}
+          submitVariant="destructive"
+          submitDisabled={processing || (isRequired && !reason.trim())}
+          loading={processing}
+        />
+      }
+    >
+      {isRequired && (
+        <div className="space-y-3">
+          <Label htmlFor="cancel-reason" className="text-sm font-semibold">
+            เหตุผลการยกเลิก <span className="text-destructive">*</span>
+          </Label>
+          <Textarea
+            id="cancel-reason"
+            placeholder="กรุณาระบุเหตุผลการยกเลิก..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value.slice(0, 300))}
+            rows={4}
+            className="resize-none"
+          />
+          <p className="text-[11px] text-muted-foreground text-right">{reason.length}/300</p>
+        </div>
+      )}
+      {!isRequired && (
+        <p className="text-sm text-muted-foreground">
+          คุณสามารถยกเลิกการแลกเปลี่ยนนี้ได้เนื่องจากยังอยู่ในสถานะรอดำเนินการ
+        </p>
+      )}
+    </UnifiedModal>
   )
 }
 
@@ -130,38 +114,33 @@ export function DeleteExchangeDialog({
   deleting
 }: DeleteExchangeDialogProps) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-md">
-        <AlertDialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
-              <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
-            </div>
-            <div>
-              <AlertDialogTitle>ยืนยันการลบแชท</AlertDialogTitle>
-              <AlertDialogDescription className="mt-1">
-                คุณต้องการลบแชทการแลกเปลี่ยน "{exchange?.itemTitle}" ใช่หรือไม่?
-              </AlertDialogDescription>
-            </div>
-          </div>
-        </AlertDialogHeader>
-        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400">
-          ⚠️ การดำเนินการนี้ไม่สามารถย้อนกลับได้
+    <UnifiedModal
+      open={open}
+      onOpenChange={onOpenChange}
+      size="sm"
+      title="ยืนยันการลบแชท"
+      description={`คุณต้องการลบแชทการแลกเปลี่ยน "${exchange?.itemTitle}" ใช่หรือไม่?`}
+      icon={<Trash2 className="h-5 w-5" />}
+      headerClassName="border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20"
+      footer={
+        <UnifiedModalActions
+          onCancel={() => onOpenChange(false)}
+          onSubmit={onConfirm}
+          submitText={deleting ? "กำลังลบ..." : "ยืนยันลบ"}
+          submitVariant="destructive"
+          submitDisabled={deleting}
+          loading={deleting}
+        />
+      }
+    >
+      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-center gap-3">
+        <div className="bg-destructive/10 p-2 rounded-full shrink-0">
+          <Trash2 className="h-4 w-4 text-destructive" />
         </div>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={deleting}>ยกเลิก</AlertDialogCancel>
-          <AlertDialogAction 
-            onClick={(e) => {
-              e.preventDefault()
-              onConfirm()
-            }} 
-            disabled={deleting}
-            className="bg-destructive hover:bg-destructive/90"
-          >
-            {deleting ? "กำลังลบ..." : "ยืนยันลบ"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+        <div className="text-sm text-destructive font-medium">
+          การดำเนินการนี้ไม่สามารถย้อนกลับได้ ข้อมูลแชททั้งหมดจะถูกลบถาวร
+        </div>
+      </div>
+    </UnifiedModal>
   )
 }

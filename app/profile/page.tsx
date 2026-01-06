@@ -21,13 +21,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Loader2, Shield, Package, Trash2, Edit, Save, ArrowLeft, CheckCircle, History } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -41,6 +34,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Camera, Settings } from "lucide-react"
 import { LineNotificationSettings } from "@/components/line-notification-settings"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
+import { UnifiedModal } from "@/components/ui/unified-modal"
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
@@ -58,6 +52,9 @@ export default function ProfilePage() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
   const [completedExchanges, setCompletedExchanges] = useState<Exchange[]>([])
   const [loadingExchanges, setLoadingExchanges] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [exchangePage, setExchangePage] = useState(1)
+  const itemsPerPage = 10
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -377,73 +374,112 @@ export default function ProfilePage() {
                     </CardContent>
                   </Card>
                 ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {myItems.map((item, index) => {
-                      const postedDate = (item.postedAt as any)?.toDate?.() || new Date()
-                      return (
-                        <BounceWrapper 
-                          key={item.id} 
-                          variant="bounce-up"
-                          delay={index * 0.05}
-                          className="group"
-                        >
-                          <Card 
-                            className="border-none shadow-soft hover:shadow-md transition-all overflow-hidden"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center">
-                            {/* Image Part */}
-                            <div className="relative w-full sm:w-32 h-32 sm:h-auto aspect-square overflow-hidden bg-muted">
-                              {(item.imageUrls?.[0] || item.imageUrl) ? (
-                                <Image src={item.imageUrls?.[0] || item.imageUrl || ''} alt={item.title} fill className="object-cover group-hover:scale-105 transition-transform" unoptimized />
-                              ) : (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <Package className="h-10 w-10 text-muted-foreground/20" />
-                                </div>
-                              )}
-                            </div>
+                  <>
+                    <div className="grid grid-cols-1 gap-4">
+                      {myItems
+                        .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                        .map((item, index) => {
+                        const postedDate = (item.postedAt as any)?.toDate?.() || new Date()
+                        return (
+                          <BounceWrapper 
+                            key={item.id} 
+                            variant="bounce-up"
+                            delay={index * 0.05}
+                            className="group"
+                          >
+                            <Card 
+                              className="border-none shadow-soft hover:shadow-md transition-all overflow-hidden"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center">
+                              {/* Image Part */}
+                              <div className="relative w-24 h-24 m-4 rounded-xl overflow-hidden bg-muted shrink-0">
+                                {(item.imageUrls?.[0] || item.imageUrl) ? (
+                                  <Image src={item.imageUrls?.[0] || item.imageUrl || ''} alt={item.title} fill className="object-cover group-hover:scale-105 transition-transform" unoptimized />
+                                ) : (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <Package className="h-8 w-8 text-muted-foreground/20" />
+                                  </div>
+                                )}
+                              </div>
 
-                            {/* Info Part */}
-                            <div className="flex-1 p-5 min-w-0">
-                              <div className="flex justify-between items-start mb-2">
-                                <h4 className="font-bold text-lg truncate">{item.title}</h4>
-                                <Badge variant="outline" className={`ml-2 shrink-0 ${statusColors[item.status]}`}>
-                                  {statusLabels[item.status]}
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground line-clamp-1 mb-4">
-                                {item.description || "ไม่มีคำอธิบาย"}
-                              </p>
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                  ประกาศเมื่อ {formatDistanceToNow(postedDate, { addSuffix: true, locale: th })}
-                                </span>
-                                <div className="flex gap-2">
-                                  <Button 
-                                    variant="secondary" 
-                                    size="sm" 
-                                    className="h-8 rounded-full"
-                                    onClick={() => handleOpenEdit(item)}
-                                  >
-                                    <Edit className="h-3.5 w-3.5 mr-1" />
-                                    แก้ไข
-                                  </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon"
-                                    className="h-8 w-8 rounded-full text-destructive hover:bg-destructive/10"
-                                    onClick={() => setDeleteDialog({ open: true, itemId: item.id })}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                              {/* Info Part */}
+                              <div className="flex-1 p-5 min-w-0">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h4 className="font-bold text-lg truncate">{item.title}</h4>
+                                  <Badge variant="outline" className={`ml-2 shrink-0 ${statusColors[item.status]}`}>
+                                    {statusLabels[item.status]}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground line-clamp-1 mb-4">
+                                  {item.description || "ไม่มีคำอธิบาย"}
+                                </p>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    ประกาศเมื่อ {formatDistanceToNow(postedDate, { addSuffix: true, locale: th })}
+                                  </span>
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      variant="secondary" 
+                                      size="sm" 
+                                      className="h-8 rounded-full"
+                                      onClick={() => handleOpenEdit(item)}
+                                    >
+                                      <Edit className="h-3.5 w-3.5 mr-1" />
+                                      แก้ไข
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon"
+                                      className="h-8 w-8 rounded-full text-destructive hover:bg-destructive/10"
+                                      onClick={() => setDeleteDialog({ open: true, itemId: item.id })}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </Card>
-                        </BounceWrapper>
-                      )
-                    })}
-                  </div>
+                          </Card>
+                          </BounceWrapper>
+                        )
+                      })}
+                    </div>
+                    
+                    {/* Pagination */}
+                    {myItems.length > itemsPerPage && (
+                      <div className="flex items-center justify-center gap-2 mt-6">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          ก่อนหน้า
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.ceil(myItems.length / itemsPerPage) }, (_, i) => i + 1).map(page => (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? "default" : "ghost"}
+                              size="sm"
+                              className="w-8 h-8"
+                              onClick={() => setCurrentPage(page)}
+                            >
+                              {page}
+                            </Button>
+                          ))}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(Math.ceil(myItems.length / itemsPerPage), p + 1))}
+                          disabled={currentPage === Math.ceil(myItems.length / itemsPerPage)}
+                        >
+                          ถัดไป
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
@@ -468,45 +504,84 @@ export default function ProfilePage() {
                     </CardContent>
                   </Card>
                 ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {completedExchanges.map((exchange, index) => {
-                      const createdAt = (exchange.createdAt as any)?.toDate?.() || new Date()
-                      const isOwner = exchange.ownerId === user?.uid
-                      return (
-                        <BounceWrapper 
-                          key={exchange.id} 
-                          variant="bounce-up"
-                          delay={index * 0.05}
+                  <>
+                    <div className="grid grid-cols-1 gap-4">
+                      {completedExchanges
+                        .slice((exchangePage - 1) * itemsPerPage, exchangePage * itemsPerPage)
+                        .map((exchange, index) => {
+                        const createdAt = (exchange.createdAt as any)?.toDate?.() || new Date()
+                        const isOwner = exchange.ownerId === user?.uid
+                        return (
+                          <BounceWrapper 
+                            key={exchange.id} 
+                            variant="bounce-up"
+                            delay={index * 0.05}
+                          >
+                            <Card 
+                              className="border-none shadow-soft hover:shadow-md transition-all overflow-hidden"
+                          >
+                            <CardContent className="p-4 sm:p-5">
+                              <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                                  <CheckCircle className="h-6 w-6 text-primary" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-bold truncate">{exchange.itemTitle}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    {isOwner ? "คุณให้สิ่งของนี้" : "คุณได้รับสิ่งของนี้"}
+                                  </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+                                    สำเร็จ
+                                  </Badge>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {formatDistanceToNow(createdAt, { addSuffix: true, locale: th })}
+                                  </p>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          </BounceWrapper>
+                        )
+                      })}
+                    </div>
+                    
+                    {/* Pagination */}
+                    {completedExchanges.length > itemsPerPage && (
+                      <div className="flex items-center justify-center gap-2 mt-6">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setExchangePage(p => Math.max(1, p - 1))}
+                          disabled={exchangePage === 1}
                         >
-                          <Card 
-                            className="border-none shadow-soft hover:shadow-md transition-all overflow-hidden"
+                          ก่อนหน้า
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.ceil(completedExchanges.length / itemsPerPage) }, (_, i) => i + 1).map(page => (
+                            <Button
+                              key={page}
+                              variant={exchangePage === page ? "default" : "ghost"}
+                              size="sm"
+                              className="w-8 h-8"
+                              onClick={() => setExchangePage(page)}
+                            >
+                              {page}
+                            </Button>
+                          ))}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setExchangePage(p => Math.min(Math.ceil(completedExchanges.length / itemsPerPage), p + 1))}
+                          disabled={exchangePage === Math.ceil(completedExchanges.length / itemsPerPage)}
                         >
-                          <CardContent className="p-4 sm:p-5">
-                            <div className="flex items-center gap-4">
-                              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                                <CheckCircle className="h-6 w-6 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-bold truncate">{exchange.itemTitle}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {isOwner ? "คุณให้สิ่งของนี้" : "คุณได้รับสิ่งของนี้"}
-                                </p>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
-                                  สำเร็จ
-                                </Badge>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {formatDistanceToNow(createdAt, { addSuffix: true, locale: th })}
-                                </p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </BounceWrapper>
-                      )
-                    })}
-                  </div>
+                          ถัดไป
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
@@ -565,113 +640,19 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Edit Item Dialog - Enhanced Design */}
-      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
-        <DialogContent className="w-[var(--modal-md)] max-w-[90vw] max-h-[85vh] p-0 flex flex-col gap-0 overflow-hidden shadow-2xl">
-          <DialogHeader className="p-6 pb-4 pr-24 bg-gradient-to-br from-muted/50 to-transparent border-b shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 shadow-sm">
-                <Edit className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <DialogTitle className="text-xl font-bold tracking-tight">แก้ไขสิ่งของ</DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  แก้ไขข้อมูลสิ่งของของคุณ
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          
-          {selectedItem && (
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-              {/* Image Preview - Enhanced */}
-              {(selectedItem.imageUrls?.[0] || selectedItem.imageUrl) && (
-                <div className="relative w-full h-48 rounded-xl overflow-hidden bg-gradient-to-br from-muted to-muted/50 border shadow-sm group">
-                  <Image 
-                    src={selectedItem.imageUrls?.[0] || selectedItem.imageUrl || ''} 
-                    alt={selectedItem.title} 
-                    fill 
-                    className="object-cover group-hover:scale-105 transition-transform duration-300" 
-                    unoptimized 
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute bottom-3 left-3 right-3 text-white">
-                      <p className="text-sm font-medium truncate">{selectedItem.title}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Title Input - Enhanced */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="edit-title" className="text-sm font-semibold flex items-center gap-2">
-                    <Package className="h-4 w-4 text-primary" />
-                    ชื่อสิ่งของ
-                    <span className="text-destructive">*</span>
-                  </Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {editTitle.length}/100
-                  </span>
-                </div>
-                <Input 
-                  id="edit-title"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value.slice(0, 100))}
-                  placeholder="ระบุชื่อสิ่งของ..."
-                  className="h-11 bg-muted/20 border-border/60 focus-visible:border-primary/50 transition-colors"
-                  maxLength={100}
-                />
-                <p className="text-xs text-muted-foreground opacity-70">
-                  ชื่อที่ชัดเจนจะช่วยให้คนอื่นเข้าใจง่ายขึ้น
-                </p>
-              </div>
-              
-              {/* Description Input - Enhanced */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="edit-description" className="text-sm font-semibold flex items-center gap-2">
-                    <Edit className="h-4 w-4 text-primary" />
-                    คำอธิบาย
-                  </Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {editDescription.length}/1000
-                  </span>
-                </div>
-                <div className="p-1 rounded-xl border-2 border-muted/30 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 transition-all bg-muted/5">
-                  <Textarea 
-                    id="edit-description"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value.slice(0, 1000))}
-                    placeholder="อธิบายรายละเอียด สภาพ หรือข้อมูลเพิ่มเติม..."
-                    rows={5}
-                    className="border-none shadow-none focus-visible:ring-0 bg-transparent resize-y min-h-[120px] leading-relaxed"
-                    maxLength={1000}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground opacity-70">
-                  รายละเอียดที่ดีจะช่วยเพิ่มโอกาสในการแลกเปลี่ยน
-                </p>
-              </div>
-
-              {/* Status Badge */}
-              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                  <span className="text-sm font-medium text-muted-foreground">สถานะปัจจุบัน</span>
-                </div>
-                <Badge variant="outline" className={statusColors[selectedItem.status]}>
-                  {statusLabels[selectedItem.status]}
-                </Badge>
-              </div>
-            </div>
-          )}
-          
-          {/* Footer Actions - Enhanced */}
-          <div className="p-6 pt-4 border-t bg-muted/10 shrink-0 space-y-3">
+      {/* Edit Item Dialog - Using UnifiedModal for consistent sizing */}
+      <UnifiedModal
+        open={!!selectedItem}
+        onOpenChange={(open) => !open && setSelectedItem(null)}
+        size="lg"
+        title="แก้ไขสิ่งของ"
+        description="แก้ไขข้อมูลสิ่งของของคุณ"
+        icon={<Edit className="h-5 w-5" />}
+        footer={
+          <div className="space-y-3 w-full">
             {/* Delete Button - Separated */}
             <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-destructive/5 border border-destructive/20">
-              <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
                 <Trash2 className="h-4 w-4 text-destructive" />
               </div>
               <div className="flex-1 min-w-0">
@@ -696,14 +677,13 @@ export default function ProfilePage() {
               <Button 
                 variant="outline" 
                 onClick={() => setSelectedItem(null)}
-                className="h-11 px-6"
               >
                 ยกเลิก
               </Button>
               <Button 
                 onClick={handleSaveEdit} 
                 disabled={saving || !editTitle.trim()}
-                className="h-11 px-8 shadow-sm gap-2 font-semibold"
+                className="gap-2"
               >
                 {saving ? (
                   <>
@@ -719,8 +699,84 @@ export default function ProfilePage() {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        }
+      >
+        {selectedItem && (
+          <div className="space-y-4">
+            {/* Image Preview - Compact */}
+            {(selectedItem.imageUrls?.[0] || selectedItem.imageUrl) && (
+              <div className="relative w-full h-32 rounded-lg overflow-hidden bg-gradient-to-br from-muted to-muted/50 border shadow-sm group">
+                <Image 
+                  src={selectedItem.imageUrls?.[0] || selectedItem.imageUrl || ''} 
+                  alt={selectedItem.title} 
+                  fill 
+                  className="object-cover group-hover:scale-105 transition-transform duration-300" 
+                  unoptimized 
+                />
+              </div>
+            )}
+            
+            {/* Title Input */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-title" className="text-sm font-semibold flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  ชื่อสิ่งของ
+                  <span className="text-destructive">*</span>
+                </Label>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {editTitle.length}/100
+                </span>
+              </div>
+              <Input 
+                id="edit-title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value.slice(0, 100))}
+                placeholder="ระบุชื่อสิ่งของ..."
+                maxLength={100}
+              />
+              <p className="text-xs text-muted-foreground">
+                ชื่อที่ชัดเจนจะช่วยให้คนอื่นเข้าใจง่ายขึ้น
+              </p>
+            </div>
+            
+            {/* Description Input */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-description" className="text-sm font-semibold flex items-center gap-2">
+                  <Edit className="h-4 w-4 text-primary" />
+                  คำอธิบาย
+                </Label>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {editDescription.length}/1000
+                </span>
+              </div>
+              <Textarea 
+                id="edit-description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value.slice(0, 1000))}
+                placeholder="อธิบายรายละเอียด สภาพ หรือข้อมูลเพิ่มเติม..."
+                rows={4}
+                maxLength={1000}
+              />
+              <p className="text-xs text-muted-foreground">
+                รายละเอียดที่ดีจะช่วยเพิ่มโอกาสในการแลกเปลี่ยน
+              </p>
+            </div>
+
+            {/* Status Badge */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                <span className="text-sm font-medium text-muted-foreground">สถานะปัจจุบัน</span>
+              </div>
+              <Badge variant="outline" className={statusColors[selectedItem.status]}>
+                {statusLabels[selectedItem.status]}
+              </Badge>
+            </div>
+          </div>
+        )}
+      </UnifiedModal>
 
       {/* Delete Confirmation */}
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>

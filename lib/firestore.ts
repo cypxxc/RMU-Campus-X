@@ -1142,21 +1142,29 @@ export const createSupportTicket = async (
 
   // Notify all admins about new support ticket
   const adminsSnapshot = await getDocs(collection(db, "admins"))
-  const notifyPromises = adminsSnapshot.docs.map(async (adminDoc) => {
-    const adminData = adminDoc.data()
+  const adminEmails = new Set(adminsSnapshot.docs.map(doc => doc.data().email))
+  const notifiedUserIds = new Set<string>()
+
+  const notifyPromises = Array.from(adminEmails).map(async (email) => {
     // Get admin user ID from users collection by email
-    const usersQuery = query(collection(db, "users"), where("email", "==", adminData.email))
+    const usersQuery = query(collection(db, "users"), where("email", "==", email))
     const usersSnapshot = await getDocs(usersQuery)
     
     if (!usersSnapshot.empty && usersSnapshot.docs[0]) {
       const adminUserId = usersSnapshot.docs[0].data().uid
-      await createNotification({
-        userId: adminUserId,
-        title: "📩 Support Ticket ใหม่",
-        message: `"${ticketData.subject}" จาก ${ticketData.userEmail}`,
-        type: "support",
-        relatedId: docRef.id,
-      })
+      
+      // Prevent duplicate notifications if multiple emails map to same UID (unlikely but safe)
+      if (!notifiedUserIds.has(adminUserId)) {
+        notifiedUserIds.add(adminUserId)
+        
+        await createNotification({
+          userId: adminUserId,
+          title: "📩 Support Ticket ใหม่",
+          message: `"${ticketData.subject}" จาก ${ticketData.userEmail}`,
+          type: "support",
+          relatedId: docRef.id,
+        })
+      }
     }
   })
   

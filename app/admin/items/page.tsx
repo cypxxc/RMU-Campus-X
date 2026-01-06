@@ -1,7 +1,5 @@
 "use client"
 
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
-
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs, onSnapshot, orderBy } from "firebase/firestore"
@@ -30,7 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Package, Search, Trash2, Eye, MapPin, Users, Clock, CheckCircle2 } from "lucide-react"
+import { Loader2, Package, Search, Trash2, Eye, MapPin, Users, Clock, CheckCircle2, ArrowLeft, RefreshCw } from "lucide-react"
 
 import Image from "next/image"
 
@@ -57,6 +55,8 @@ export default function AdminItemsPage() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
   const [processing, setProcessing] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
 
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -204,65 +204,118 @@ export default function AdminItemsPage() {
   }).length
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-background py-6">
+      <div className="max-w-7xl mx-auto px-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold mb-1">จัดการสิ่งของ</h1>
-        <p className="text-muted-foreground text-sm">ดูแลและจัดการสิ่งของทั้งหมดในระบบ</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")}>
+              <ArrowLeft className="h-4 w-4" />
+           </Button>
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Package className="h-8 w-8 text-primary" />
+              จัดการสิ่งของ
+            </h1>
+            <p className="text-muted-foreground">ดูแลและจัดการสิ่งของทั้งหมดในระบบ</p>
+          </div>
+        </div>
+        <Button onClick={() => setupRealTimeListener()} variant="outline" className="gap-2">
+          <RefreshCw className="h-4 w-4" />
+          รีเฟรช
+        </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{items.length}</div>
-            <p className="text-sm text-muted-foreground">ทั้งหมด</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-primary/10 rounded-lg">
+                <Package className="h-5 w-5 text-primary" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold">{items.length}</div>
+               <p className="text-xs text-muted-foreground">สิ่งของทั้งหมด</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">{newCount}</div>
-            <p className="text-sm text-muted-foreground">ใหม่ (24 ชม.)</p>
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-blue-100 rounded-lg">
+                <Clock className="h-5 w-5 text-blue-600" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold text-foreground">{newCount}</div>
+               <p className="text-xs text-muted-foreground">ใหม่ (24 ชม.)</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">
-              {items.filter(i => i.status === 'available').length}
-            </div>
-            <p className="text-sm text-muted-foreground">พร้อมให้</p>
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-green-100 rounded-lg">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold text-foreground">
+                 {items.filter(i => i.status === 'available').length}
+               </div>
+               <p className="text-xs text-muted-foreground">พร้อมให้</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-muted-foreground">
-              {items.filter(i => i.status === 'completed').length}
-            </div>
-            <p className="text-sm text-muted-foreground">เสร็จสิ้น</p>
+        <Card className="border shadow-sm">
+           <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-gray-100 rounded-lg">
+                <CheckCircle2 className="h-5 w-5 text-gray-600" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold text-foreground">
+                 {items.filter(i => i.status === 'completed').length}
+               </div>
+               <p className="text-xs text-muted-foreground">เสร็จสิ้น</p>
+             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search */}
-      <BounceWrapper className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="ค้นหาสิ่งของ..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
-      </BounceWrapper>
+      {/* Items Section Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <Package className="h-5 w-5 text-primary" />
+          รายการสิ่งของ
+          <Badge variant="secondary" className="ml-2 px-3 py-1">
+            {filteredItems.length} รายการ
+          </Badge>
+        </h2>
+        <div className="relative w-full md:w-auto">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="ค้นหาสิ่งของ..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-background w-full md:w-[300px]"
+          />
+        </div>
+      </div>
 
       {/* Items Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 contain-paint">
         {filteredItems.length === 0 ? (
-          <div className="col-span-full py-20 text-center text-muted-foreground">
-            <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
-            <p>ไม่พบสิ่งของ</p>
+           <div className="col-span-full py-16 text-center bg-linear-to-b from-transparent to-muted/20 rounded-xl border border-dashed">
+            <div className="p-4 rounded-full bg-muted/50 w-fit mx-auto mb-4">
+              <Package className="h-12 w-12 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-1">
+              ไม่พบสิ่งของ
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {searchQuery ? "ลองเปลี่ยนคำค้นหาใหม่" : "ยังไม่มีสิ่งของในระบบ"}
+            </p>
           </div>
         ) : (
-          filteredItems.map((item) => (
+          filteredItems
+            .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+            .map((item) => (
             <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow group">
               <div className="relative aspect-video bg-muted">
                 {item.imageUrl ? (
@@ -318,6 +371,44 @@ export default function AdminItemsPage() {
           ))
         )}
       </div>
+      
+      {/* Pagination */}
+      {filteredItems.length > itemsPerPage && (
+        <div className="flex items-center justify-center gap-2 mt-6">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            ก่อนหน้า
+          </Button>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.ceil(filteredItems.length / itemsPerPage) }, (_, i) => i + 1).slice(
+              Math.max(0, currentPage - 3),
+              Math.min(Math.ceil(filteredItems.length / itemsPerPage), currentPage + 2)
+            ).map(page => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "ghost"}
+                size="sm"
+                className="w-8 h-8"
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredItems.length / itemsPerPage), p + 1))}
+            disabled={currentPage === Math.ceil(filteredItems.length / itemsPerPage)}
+          >
+            ถัดไป
+          </Button>
+        </div>
+      )}
 
       {/* Item Detail Dialog */}
       <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
@@ -495,6 +586,7 @@ export default function AdminItemsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
     </div>
   )
 }

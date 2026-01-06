@@ -4,12 +4,13 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs, onSnapshot, orderBy } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
-import { updateTicketStatus, replyToTicket } from "@/lib/firestore"
-import type { SupportTicket } from "@/types"
+import { replyToTicket, updateTicketStatus, getUserProfile } from "@/lib/firestore"
+import type { SupportTicket, User } from "@/types"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
@@ -26,9 +27,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, MessageSquare, Send, Eye, CheckCircle2, Clock, Inbox } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
+import { Loader2, MessageSquare, Send, Eye, CheckCircle2, Clock, Inbox, ArrowLeft, RefreshCw, Search } from "lucide-react"
+import Link from "next/link"
 
 const ticketCategoryLabels: Record<string, string> = {
   general: "ปัญหาทั่วไป",
@@ -50,8 +50,12 @@ export default function AdminSupportPage() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null)
+  const [ticketUser, setTicketUser] = useState<User | null>(null)
   const [ticketReply, setTicketReply] = useState("")
   const [processing, setProcessing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -121,7 +125,6 @@ export default function AdminSupportPage() {
 
     setProcessing(true)
     try {
-      // replyToTicket(ticketId, reply, adminId, adminEmail)
       await replyToTicket(selectedTicket.id, ticketReply.trim(), user.uid, user.email || "")
 
       toast({ title: "ตอบกลับสำเร็จ" })
@@ -174,97 +177,178 @@ export default function AdminSupportPage() {
     )
   }
 
+  // Filter Logic
+  const filteredTickets = tickets.filter(t => {
+    const q = searchQuery.toLowerCase()
+    return (
+      (t.subject || "").toLowerCase().includes(q) ||
+      (t.userEmail || "").toLowerCase().includes(q) ||
+      (t.description || "").toLowerCase().includes(q)
+    )
+  })
+
   const newCount = tickets.filter(t => t.status === 'new').length
   const inProgressCount = tickets.filter(t => t.status === 'in_progress').length
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-background py-6">
+      <div className="max-w-7xl mx-auto px-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold mb-1">Support Tickets</h1>
-        <p className="text-muted-foreground text-sm">จัดการคำร้องและตอบกลับผู้ใช้</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Link href="/admin">
+            <Button variant="ghost" size="icon" className="h-9 w-9">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <MessageSquare className="h-8 w-8 text-primary" />
+              Support Tickets
+            </h1>
+            <p className="text-muted-foreground">จัดการคำร้องและตอบกลับผู้ใช้</p>
+          </div>
+        </div>
+        <Button onClick={() => setupRealTimeListener()} variant="outline" className="gap-2">
+          <RefreshCw className="h-4 w-4" />
+          รีเฟรช
+        </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{tickets.length}</div>
-            <p className="text-sm text-muted-foreground">ทั้งหมด</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-primary/10 rounded-lg">
+                <Inbox className="h-5 w-5 text-primary" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold">{tickets.length}</div>
+               <p className="text-xs text-muted-foreground">ทั้งหมด</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">{newCount}</div>
-            <p className="text-sm text-muted-foreground">ใหม่</p>
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-blue-100 rounded-lg">
+                <Inbox className="h-5 w-5 text-blue-600" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold text-foreground">{newCount}</div>
+               <p className="text-xs text-muted-foreground">ใหม่</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-yellow-600">{inProgressCount}</div>
-            <p className="text-sm text-muted-foreground">กำลังดำเนินการ</p>
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-yellow-100 rounded-lg">
+                <Clock className="h-5 w-5 text-yellow-600" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold text-foreground">{inProgressCount}</div>
+               <p className="text-xs text-muted-foreground">กำลังดำเนินการ</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">
-              {tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length}
-            </div>
-            <p className="text-sm text-muted-foreground">เสร็จสิ้น</p>
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-green-100 rounded-lg">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold text-foreground">
+                 {tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length}
+               </div>
+               <p className="text-xs text-muted-foreground">เสร็จสิ้น</p>
+             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Tickets Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5" />
-            รายการ Tickets
-          </CardTitle>
+      <Card className="overflow-hidden border shadow-sm">
+        <CardHeader className="border-b px-6 py-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-primary" />
+              รายการ Tickets
+              <Badge variant="secondary" className="ml-2 px-3 py-1">
+                {filteredTickets.length} รายการ
+              </Badge>
+            </CardTitle>
+            <div className="relative w-full md:w-auto">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="ค้นหา Ticket..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-background w-full md:w-[300px]"
+              />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>หัวข้อ</TableHead>
-                <TableHead>หมวดหมู่</TableHead>
-                <TableHead>สถานะ</TableHead>
-                <TableHead>วันที่</TableHead>
-                <TableHead className="text-right">จัดการ</TableHead>
+              <TableRow className="bg-muted/30 hover:bg-muted/40">
+                <TableHead className="font-semibold">หัวข้อ</TableHead>
+                <TableHead className="font-semibold">หมวดหมู่</TableHead>
+                <TableHead className="font-semibold">สถานะ</TableHead>
+                <TableHead className="font-semibold">วันที่</TableHead>
+                <TableHead className="text-right font-semibold">จัดการ</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tickets.length === 0 ? (
+              {filteredTickets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                    <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                    <p>ไม่มี Tickets</p>
+                  <TableCell colSpan={5} className="text-center py-16 px-4">
+                    <div className="p-4 rounded-full bg-muted/50 w-fit mx-auto mb-4">
+                      <MessageSquare className="h-12 w-12 text-muted-foreground/50" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-foreground mb-1">
+                      {searchQuery ? "ไม่พบ Ticket ที่ค้นหา" : "ไม่มี Tickets"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {searchQuery ? "ลองเปลี่ยนคำค้นหาใหม่" : "เมื่อมีผู้ใช้แจ้งปัญหาจะแสดงที่นี่"}
+                    </p>
                   </TableCell>
                 </TableRow>
               ) : (
-                tickets.map((ticket) => (
-                  <TableRow key={ticket.id}>
+                filteredTickets
+                  .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                  .map((ticket) => (
+                  <TableRow key={ticket.id} className="hover:bg-muted/5 border-b last:border-0">
                     <TableCell>
                       <div>
-                        <p className="font-medium">{ticket.subject}</p>
-                        <p className="text-xs text-muted-foreground">{ticket.userEmail}</p>
+                        <p className="font-medium text-foreground">{ticket.subject}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+                          {ticket.userEmail}
+                        </p>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{ticketCategoryLabels[ticket.category]}</Badge>
+                      <Badge variant="outline" className="font-normal bg-background/50">{ticketCategoryLabels[ticket.category]}</Badge>
                     </TableCell>
                     <TableCell>{getStatusBadge(ticket.status)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatDistanceToNow((ticket.createdAt as any)?.toDate?.() || new Date(), {
-                        addSuffix: true,
-                        locale: th,
-                      })}
+                      {((ticket.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedTicket(ticket)}>
+                      <Button variant="ghost" size="sm" onClick={async () => {
+                        setSelectedTicket(ticket)
+                        // Fetch user profile
+                        try {
+                          const profile = await getUserProfile(ticket.userId)
+                          setTicketUser(profile)
+                        } catch (e) {
+                          setTicketUser(null)
+                        }
+                      }}
+                      className="hover:bg-primary/10 hover:text-primary"
+                      >
                         <Eye className="h-4 w-4 mr-1" />
-                        ดู
+                        ดูรายละเอียด
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -272,6 +356,44 @@ export default function AdminSupportPage() {
               )}
             </TableBody>
           </Table>
+          
+          {/* Pagination */}
+          {filteredTickets.length > itemsPerPage && (
+            <div className="flex items-center justify-center gap-2 p-4 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                ก่อนหน้า
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.ceil(filteredTickets.length / itemsPerPage) }, (_, i) => i + 1).slice(
+                  Math.max(0, currentPage - 3),
+                  Math.min(Math.ceil(filteredTickets.length / itemsPerPage), currentPage + 2)
+                ).map(page => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "ghost"}
+                    size="sm"
+                    className="w-8 h-8"
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </Button>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredTickets.length / itemsPerPage), p + 1))}
+                disabled={currentPage === Math.ceil(filteredTickets.length / itemsPerPage)}
+              >
+                ถัดไป
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -302,14 +424,26 @@ export default function AdminSupportPage() {
               <div className="space-y-6">
                  {/* User Initial Message */}
                  <div className="flex gap-4 group">
-                    <div className="h-10 w-10 rounded-full bg-gray-100 border flex items-center justify-center shrink-0">
-                       <span className="font-bold text-gray-500 text-sm">USER</span>
-                    </div>
+                    {ticketUser?.photoURL ? (
+                       <img 
+                          src={ticketUser.photoURL} 
+                          alt={ticketUser.displayName || 'User'}
+                          className="h-10 w-10 rounded-full border object-cover shrink-0"
+                       />
+                    ) : (
+                       <div className="h-10 w-10 rounded-full bg-gray-100 border flex items-center justify-center shrink-0">
+                          <span className="font-bold text-gray-500 text-sm uppercase">
+                             {(ticketUser?.displayName || selectedTicket?.userEmail || 'U').charAt(0)}
+                          </span>
+                       </div>
+                    )}
                     <div className="flex-1 space-y-2">
                        <div className="flex items-baseline justify-between">
-                          <span className="text-sm font-semibold text-foreground/80">ผู้ใช้งาน</span>
+                          <span className="text-sm font-semibold text-foreground/80">
+                             {ticketUser?.displayName || selectedTicket?.userEmail?.split('@')[0] || 'ผู้ใช้งาน'}
+                          </span>
                           <span className="text-xs text-muted-foreground">
-                             {formatDistanceToNow((selectedTicket.createdAt as any)?.toDate?.() || new Date(), { addSuffix: true, locale: th })}
+                             {((selectedTicket.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
                        </div>
                        <div className="bg-white dark:bg-card border p-4 rounded-2xl rounded-tl-none shadow-sm text-sm leading-relaxed whitespace-pre-wrap">
@@ -334,20 +468,30 @@ export default function AdminSupportPage() {
                     )
                     .map((msg: any, idx: number) => (
                     <div key={idx} className={`flex gap-4 group ${msg.sender === 'admin' ? 'flex-row-reverse' : ''}`}>
-                       <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 border ${
-                          msg.sender === 'admin' 
-                          ? 'bg-primary/10 border-primary/20 text-primary' 
-                          : 'bg-gray-100 text-gray-500'
-                       }`}>
-                          <span className="font-bold text-sm uppercase">{msg.sender === 'admin' ? 'ADM' : 'USER'}</span>
-                       </div>
+                       {msg.sender === 'admin' ? (
+                          <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 border bg-primary/10 border-primary/20 text-primary">
+                             <span className="font-bold text-sm">ADM</span>
+                          </div>
+                       ) : ticketUser?.photoURL ? (
+                          <img 
+                             src={ticketUser.photoURL} 
+                             alt={ticketUser.displayName || 'User'}
+                             className="h-10 w-10 rounded-full border object-cover shrink-0"
+                          />
+                       ) : (
+                          <div className="h-10 w-10 rounded-full bg-gray-100 border flex items-center justify-center shrink-0 text-gray-500">
+                             <span className="font-bold text-sm uppercase">
+                                {(ticketUser?.displayName || selectedTicket?.userEmail || 'U').charAt(0)}
+                             </span>
+                          </div>
+                       )}
                        <div className="flex-1 space-y-2">
                           <div className={`flex items-baseline justify-between ${msg.sender === 'admin' ? 'flex-row-reverse' : ''}`}>
                              <span className={`text-sm font-semibold ${msg.sender === 'admin' ? 'text-primary' : 'text-foreground/80'}`}>
-                                {msg.sender === 'admin' ? 'Admin Response' : 'ผู้ใช้งาน'}
+                                {msg.sender === 'admin' ? 'Admin Response' : (ticketUser?.displayName || selectedTicket?.userEmail?.split('@')[0] || 'ผู้ใช้งาน')}
                              </span>
                              <span className="text-xs text-muted-foreground">
-                                {formatDistanceToNow((msg.createdAt as any)?.toDate?.() || new Date(), { addSuffix: true, locale: th })}
+                                {((msg.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                              </span>
                           </div>
                           <div className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap border shadow-sm ${
@@ -442,5 +586,6 @@ export default function AdminSupportPage() {
         </DialogContent>
       </Dialog>
     </div>
+  </div>
   )
 }

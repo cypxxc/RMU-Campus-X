@@ -12,18 +12,16 @@ import { useToast } from "@/hooks/use-toast"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Package, MapPin, Calendar, User as UserIcon, Loader2, AlertTriangle, HandHeart, X, Maximize2 } from "lucide-react"
+import { HandHeart, X, Maximize2, Package, MapPin, Calendar, User as UserIcon, AlertTriangle, Info } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
 import Image from "next/image"
 import Link from "next/link"
 import { ReportModal } from "@/components/report-modal"
 import { useAccountStatus } from "@/hooks/use-account-status"
+import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 
 interface ItemDetailViewProps {
   item: Item
@@ -58,14 +56,22 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
   const [showReportModal, setShowReportModal] = useState(false)
   const [showImageZoom, setShowImageZoom] = useState(false)
   const [poster, setPoster] = useState<User | null>(null)
+  const [posterLoading, setPosterLoading] = useState(true)
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const { canExchange } = useAccountStatus()
 
-  // Fetch poster profile
+  // Fetch poster profile only if postedByName is not available (for old items)
   useEffect(() => {
+    // If postedByName exists, no need to fetch
+    if (item.postedByName) {
+      setPosterLoading(false)
+      return
+    }
+    
     const loadPoster = async () => {
+      setPosterLoading(true)
       if (item.postedBy) {
         try {
           const profile = await getUserProfile(item.postedBy)
@@ -74,9 +80,10 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
           console.error("Failed to load poster profile:", err)
         }
       }
+      setPosterLoading(false)
     }
     loadPoster()
-  }, [item.postedBy])
+  }, [item.postedBy, item.postedByName])
 
   const handleRequestItem = async () => {
     if (!user || !item) return
@@ -225,53 +232,66 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
           {/* Info Card */}
           <Card className="border-border/60 bg-muted/20 shadow-none">
             <CardContent className="p-4 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="h-9 w-9 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
-                    <Package className="h-4 w-4 text-primary" />
+              <div className={`grid gap-4 ${isModal ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
+                    <Package className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">หมวดหมู่</span>
-                    <p className="font-semibold">{categoryLabels[item.category]}</p>
+                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">หมวดหมู่</span>
+                    <p className="font-semibold text-base">{categoryLabels[item.category]}</p>
                   </div>
                 </div>
                 
                 {item.location && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <div className="h-9 w-9 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
-                      <MapPin className="h-4 w-4 text-primary" />
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
+                      <MapPin className="h-5 w-5 text-primary" />
                     </div>
-                    <div>
-                      <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">สถานที่</span>
-                      <p className="font-semibold truncate max-w-[150px]">{item.location}</p>
-                      {item.locationDetail && (
-                        <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 max-w-[150px] line-clamp-1 italic">
-                          {item.locationDetail}
-                        </p>
-                      )}
+                    <div className="min-w-0 flex-1">
+                      <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">สถานที่</span>
+                      <p className="font-semibold text-base wrap-break-word">{item.location}</p>
+                    </div>
+                  </div>
+                )}
+
+                {item.locationDetail && (
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
+                      <Info className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">รายละเอียดสถานที่</span>
+                      <p className="font-semibold text-base wrap-break-word">{item.locationDetail}</p>
                     </div>
                   </div>
                 )}
                 
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="h-9 w-9 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
-                    <UserIcon className="h-4 w-4 text-primary" />
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
+                    <UserIcon className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
-                    <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">โพสต์โดย</span>
-                    <p className="font-semibold truncate max-w-[150px]">
-                      {poster?.displayName || item.postedByEmail.split('@')[0]}
+                  <div className="min-w-0 flex-1">
+                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">โพสต์โดย</span>
+                    <p className="font-semibold text-base wrap-break-word">
+                      {item.postedByName ? (
+                        item.postedByName
+                      ) : posterLoading ? (
+                        <span className="text-muted-foreground">กำลังโหลด...</span>
+                      ) : (
+                        poster?.displayName || item.postedByEmail.split('@')[0]
+                      )}
                     </p>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="h-9 w-9 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
-                    <Calendar className="h-4 w-4 text-primary" />
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
+                    <Calendar className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">โพสต์เมื่อ</span>
-                    <p className="font-semibold">
+                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">โพสต์เมื่อ</span>
+                    <p className="font-semibold text-base">
                       {formatDistanceToNow(postedDate, { addSuffix: true, locale: th })}
                     </p>
                   </div>
@@ -354,37 +374,33 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
         </DialogContent>
       </Dialog>
 
-      {/* Request Dialog */}
-      <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
-        <DialogContent className="p-6">
-          <DialogHeader className="mb-4">
-            <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <HandHeart className="text-primary h-6 w-6" />
-              ยืนยันการขอรับสิ่งของ
-            </DialogTitle>
-            <DialogDescription className="text-sm pt-2">
-              คุณต้องการขอรับ <span className="font-bold text-foreground">"{item.title}"</span> ใช่หรือไม่? 
-              <br />
-              ระบบจะเปิดแชทให้คุณติดต่อกับเจ้าของได้ทันทีเพื่อตกลงวันเวลาในการรับของ
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-1 pt-4">
-            <Button variant="ghost" className="font-bold" onClick={() => setShowRequestDialog(false)}>
-              ยกเลิก
-            </Button>
-            <Button onClick={handleRequestItem} disabled={requesting} className="gap-2 font-bold px-8">
-              {requesting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  กำลังดำเนินการ...
-                </>
-              ) : (
-                "ยืนยันขอรับสิ่งของ"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Request Dialog - Refactored to UnifiedModal */}
+      <UnifiedModal
+        open={showRequestDialog}
+        onOpenChange={setShowRequestDialog}
+        size="md"
+        title="ยืนยันการขอรับสิ่งของ"
+        description={<>คุณต้องการขอรับ <span className="font-bold text-foreground">"{item.title}"</span> ใช่หรือไม่?</>}
+        icon={<HandHeart className="h-5 w-5" />}
+        footer={
+          <UnifiedModalActions
+            onCancel={() => setShowRequestDialog(false)}
+            onSubmit={handleRequestItem}
+            submitText="ยืนยันขอรับสิ่งของ"
+            loading={requesting}
+            submitDisabled={requesting}
+          />
+        }
+      >
+        <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
+          <p className="text-sm text-muted-foreground flex gap-2">
+            <Info className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>
+              ระบบจะเปิดห้องแชทระหว่างคุณกับเจ้าของสิ่งของโดยอัตโนมัติ เพื่อให้คุณสามารถสอบถามรายละเอียดและนัดหมายการรับของได้
+            </span>
+          </p>
+        </div>
+      </UnifiedModal>
 
       {/* Report Modal */}
       {item && (
@@ -398,4 +414,5 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
       )}
     </div>
   )
+
 }

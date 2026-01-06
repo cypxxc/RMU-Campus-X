@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
-import { LogOut, Shield, Menu, User, Package, Home, Plus } from "lucide-react"
+import { LogOut, Shield, Menu, User, Package, Home, Plus, HelpCircle } from "lucide-react"
 import { useAuth } from "./auth-provider"
 import { signOut } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
@@ -21,6 +21,11 @@ const PostItemModal = dynamic(
   { ssr: false }
 )
 
+const SupportTicketModal = dynamic(
+  () => import("./support-ticket-modal").then(m => ({ default: m.SupportTicketModal })),
+  { ssr: false }
+)
+
 export function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -28,6 +33,7 @@ export function Navbar() {
   const { toast } = useToast()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [postModalOpen, setPostModalOpen] = useState(false)
+  const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -54,7 +60,6 @@ export function Navbar() {
     { href: "/dashboard", label: "หน้าหลัก", icon: Home },
     { href: "/profile", label: "โปรไฟล์", icon: User },
     { href: "/my-exchanges", label: "การแลกเปลี่ยน", icon: Package },
-    ...(isAdmin ? [{ href: "/admin", label: "Admin Panel", icon: Shield }] : []),
   ]
 
   const isActive = (href: string) => pathname === href
@@ -82,6 +87,19 @@ export function Navbar() {
                 </Link>
               </Button>
             ))}
+            
+            {/* Support Button - Desktop (Opens Modal) */}
+            {user && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                onClick={() => setSupportModalOpen(true)}
+              >
+                <HelpCircle className="h-4 w-4" />
+                ช่วยเหลือ
+              </Button>
+            )}
           </div>
 
           {/* Right Side Actions */}
@@ -103,6 +121,21 @@ export function Navbar() {
 
                 {/* Notification Bell */}
                 <NotificationBell />
+
+                {/* Admin Panel Link - Desktop */}
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    className="hidden sm:flex gap-2"
+                  >
+                    <Link href="/admin">
+                      <Shield className="h-4 w-4" />
+                      Admin
+                    </Link>
+                  </Button>
+                )}
 
                 {/* Theme Toggle */}
                 <ModeToggle />
@@ -178,6 +211,17 @@ export function Navbar() {
                               <Plus className="h-4 w-4" />
                               โพสต์สิ่งของ
                             </Button>
+                            <Button
+                              variant="ghost"
+                              className="w-full justify-start gap-3"
+                              onClick={() => {
+                                setMobileMenuOpen(false)
+                                setSupportModalOpen(true)
+                              }}
+                            >
+                              <HelpCircle className="h-4 w-4" />
+                              ช่วยเหลือ
+                            </Button>
                           </div>
                         </div>
 
@@ -216,6 +260,9 @@ export function Navbar() {
 
       {/* Post Item Modal */}
       <PostItemModal open={postModalOpen} onOpenChange={setPostModalOpen} />
+
+      {/* Support Ticket Modal */}
+      <SupportTicketModal open={supportModalOpen} onOpenChange={setSupportModalOpen} />
 
       {/* Account Status Banner */}
       <AccountStatusBanner />

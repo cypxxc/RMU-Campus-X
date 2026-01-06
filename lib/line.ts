@@ -31,18 +31,20 @@ interface LinePushResponse {
 
 const LINE_API_BASE = "https://api.line.me/v2/bot"
 
-function getChannelAccessToken(): string {
+function getChannelAccessToken(): string | null {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
   if (!token) {
-    throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured")
+    console.warn("LINE_CHANNEL_ACCESS_TOKEN is not configured - skipping LINE notification")
+    return null
   }
   return token
 }
 
-function getChannelSecret(): string {
+function getChannelSecret(): string | null {
   const secret = process.env.LINE_CHANNEL_SECRET
   if (!secret) {
-    throw new Error("LINE_CHANNEL_SECRET is not configured")
+    console.warn("LINE_CHANNEL_SECRET is not configured - skipping verification")
+    return null
   }
   return secret
 }
@@ -57,11 +59,16 @@ export async function sendPushMessage(
   messages: LineMessage[]
 ): Promise<LinePushResponse> {
   try {
+    const token = getChannelAccessToken()
+    if (!token) {
+      return { success: false, error: "LINE_CHANNEL_ACCESS_TOKEN not configured" }
+    }
+
     const response = await fetch(`${LINE_API_BASE}/message/push`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${getChannelAccessToken()}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         to: lineUserId,
@@ -90,11 +97,16 @@ export async function sendReplyMessage(
   messages: LineMessage[]
 ): Promise<LinePushResponse> {
   try {
+    const token = getChannelAccessToken()
+    if (!token) {
+      return { success: false, error: "LINE_CHANNEL_ACCESS_TOKEN not configured" }
+    }
+
     const response = await fetch(`${LINE_API_BASE}/message/reply`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${getChannelAccessToken()}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         replyToken,
@@ -121,6 +133,7 @@ export async function sendReplyMessage(
 export async function verifySignature(body: string, signature: string): Promise<boolean> {
   try {
     const channelSecret = getChannelSecret()
+    if (!channelSecret) return false
     
     // Use Web Crypto API for Vercel Edge compatibility
     const encoder = new TextEncoder()

@@ -64,6 +64,7 @@ export interface Item {
   status: ItemStatus
   postedBy: string
   postedByEmail: string
+  postedByName?: string // Display name of poster (cached for fast display)
   postedAt: Timestamp
   updatedAt: Timestamp
 }
@@ -256,7 +257,7 @@ export interface AdminLog {
 
 // ============ Support Ticket System ============
 
-export type SupportTicketCategory = 'general' | 'bug' | 'feature' | 'account' | 'other'
+export type SupportTicketCategory = 'general' | 'bug' | 'feature' | 'account' | 'exchange' | 'other'
 
 export type SupportTicketStatus = 'new' | 'in_progress' | 'resolved' | 'closed'
 

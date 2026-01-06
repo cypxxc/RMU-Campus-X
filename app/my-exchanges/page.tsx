@@ -31,6 +31,8 @@ export default function MyExchangesPage() {
   const [deleting, setDeleting] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportExchangeId, setReportExchangeId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -265,104 +267,143 @@ export default function MyExchangesPage() {
           </div>
         ) : (
           /* Exchange List */
-          <div className="space-y-4">
-            {exchanges.map((exchange, index) => {
-              const createdDate = exchange.createdAt?.toDate?.() || new Date()
-              const isRequester = user?.uid === exchange.requesterId
+          <>
+            <div className="space-y-4">
+              {exchanges
+                .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                .map((exchange, index) => {
+                const createdDate = exchange.createdAt?.toDate?.() || new Date()
+                const isRequester = user?.uid === exchange.requesterId
 
-              return (
-                <BounceWrapper 
-                  key={exchange.id} 
-                  variant="bounce-up"
-                  delay={index * 0.05}
-                >
-                  <Card 
-                    className="border-border/60 hover:border-border transition-colors"
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <CardTitle className="text-base sm:text-lg truncate">
-                          {exchange.itemTitle}
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                          {isRequester ? `กับ ${exchange.ownerEmail}` : `กับ ${exchange.requesterEmail}`}
-                        </p>
+                return (
+                  <BounceWrapper 
+                    key={exchange.id} 
+                    variant="bounce-up"
+                    delay={index * 0.05}
+                  >
+                    <Card 
+                      className="border-border/60 hover:border-border transition-colors"
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-base sm:text-lg truncate">
+                            {exchange.itemTitle}
+                          </CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            {isRequester ? `กับ ${exchange.ownerEmail}` : `กับ ${exchange.requesterEmail}`}
+                          </p>
+                        </div>
+                        <Badge 
+                          variant="outline" 
+                          className={`shrink-0 ${getStatusBadgeClass(exchange.status)}`}
+                        >
+                          {statusLabels[exchange.status]}
+                        </Badge>
                       </div>
-                      <Badge 
-                        variant="outline" 
-                        className={`shrink-0 ${getStatusBadgeClass(exchange.status)}`}
-                      >
-                        {statusLabels[exchange.status]}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(createdDate, { addSuffix: true, locale: th })}
-                      </div>
-                      
-                      {/* Actions */}
-                      <div className="flex flex-wrap gap-2">
-                        {/* Chat Button */}
-                        <Button asChild size="sm" className="gap-1.5">
-                          <Link href={`/chat/${exchange.id}`}>
-                            <MessageCircle className="h-4 w-4" />
-                            <span className="hidden sm:inline">เปิดแชท</span>
-                          </Link>
-                        </Button>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(createdDate, { addSuffix: true, locale: th })}
+                        </div>
+                        
+                        {/* Actions */}
+                        <div className="flex flex-wrap gap-2">
+                          {/* Chat Button */}
+                          <Button asChild size="sm" className="gap-1.5">
+                            <Link href={`/chat/${exchange.id}`}>
+                              <MessageCircle className="h-4 w-4" />
+                              <span className="hidden sm:inline">เปิดแชท</span>
+                            </Link>
+                          </Button>
 
-                        {/* Cancel Button */}
-                        {canCancel(exchange, isRequester) && (
-                          <Button
+                          {/* Cancel Button */}
+                          {canCancel(exchange, isRequester) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setExchangeToCancel(exchange)
+                              }}
+                              disabled={cancellingId === exchange.id}
+                              className="gap-1.5"
+                            >
+                              <X className="h-4 w-4" />
+                              <span className="hidden sm:inline">ยกเลิก</span>
+                            </Button>
+                          )}
+
+                          {/* Report Button */}
+                          <Button 
+                            size="sm" 
                             variant="outline"
-                            size="sm"
                             onClick={() => {
-                              setExchangeToCancel(exchange)
+                              setReportExchangeId(exchange.id)
+                              setShowReportModal(true)
                             }}
-                            disabled={cancellingId === exchange.id}
                             className="gap-1.5"
                           >
-                            <X className="h-4 w-4" />
-                            <span className="hidden sm:inline">ยกเลิก</span>
+                            <AlertTriangle className="h-4 w-4" />
+                            <span className="hidden sm:inline">รายงาน</span>
                           </Button>
-                        )}
 
-                        {/* Report Button */}
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => {
-                            setReportExchangeId(exchange.id)
-                            setShowReportModal(true)
-                          }}
-                          className="gap-1.5"
-                        >
-                          <AlertTriangle className="h-4 w-4" />
-                          <span className="hidden sm:inline">รายงาน</span>
-                        </Button>
-
-                        {/* Delete Button */}
-                        {canDelete(exchange) && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => setExchangeToDelete(exchange)}
-                            disabled={deleting}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                          {/* Delete Button */}
+                          {canDelete(exchange) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setExchangeToDelete(exchange)}
+                              disabled={deleting}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                </BounceWrapper>
-              )
-            })}
-          </div>
+                    </CardContent>
+                  </Card>
+                  </BounceWrapper>
+                )
+              })}
+            </div>
+            
+            {/* Pagination */}
+            {exchanges.length > itemsPerPage && (
+              <div className="flex items-center justify-center gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  ก่อนหน้า
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.ceil(exchanges.length / itemsPerPage) }, (_, i) => i + 1).map(page => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "ghost"}
+                      size="sm"
+                      className="w-8 h-8"
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(exchanges.length / itemsPerPage), p + 1))}
+                  disabled={currentPage === Math.ceil(exchanges.length / itemsPerPage)}
+                >
+                  ถัดไป
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
 

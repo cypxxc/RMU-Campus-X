@@ -1,6 +1,6 @@
 "use client"
 
-import { BounceWrapper } from '@/components/ui/bounce-wrapper'
+
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -10,7 +10,7 @@ import { getReports, updateReportStatus } from "@/lib/firestore"
 import type { Report, ReportStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -37,13 +37,15 @@ import {
   XCircle, 
   Eye, 
   AlertTriangle,
-  User as UserIcon, 
   Package,
-  Clock
+  Clock,
+  Search,
+  User as UserIcon,
+  ArrowLeft,
+  RefreshCw
 } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
 import Image from "next/image"
+import { Input } from "@/components/ui/input"
 
 
 const reportReasonLabels: Record<string, string> = {
@@ -99,9 +101,10 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedReport, setSelectedReport] = useState<ReportWithDetails | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
 
   const [processing, setProcessing] = useState(false)
-
+  
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -236,74 +239,182 @@ export default function AdminReportsPage() {
     )
   }
 
-  const pendingReports = reports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status))
-  const historyReports = reports.filter(r => !['new', 'under_review', 'waiting_user'].includes(r.status))
+  const filteredReports = reports.filter(r => {
+    const q = searchQuery.toLowerCase()
+    
+    // Check main report fields
+    if (r.id.toLowerCase().includes(q) || 
+        r.reporterEmail.toLowerCase().includes(q) || 
+        r.reason.toLowerCase().includes(q) || 
+        (r.description || "").toLowerCase().includes(q)) {
+      return true
+    }
+    
+    // Check target data
+    if (r.targetId.toLowerCase().includes(q)) return true
+    
+    if (r.targetData) {
+      if (r.targetData.email && r.targetData.email.toLowerCase().includes(q)) return true
+      if (r.targetData.title && r.targetData.title.toLowerCase().includes(q)) return true
+    }
+    
+    return false
+  })
+
+  // Update these to use filteredReports instead of reports
+  const pendingReports = filteredReports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status))
+  const historyReports = filteredReports.filter(r => !['new', 'under_review', 'waiting_user'].includes(r.status))
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-background py-6">
+      <div className="max-w-7xl mx-auto px-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold mb-1">จัดการรายงาน</h1>
-        <p className="text-muted-foreground text-sm">ตรวจสอบและจัดการรายงานความไม่เหมาะสม</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")}>
+              <ArrowLeft className="h-4 w-4" />
+           </Button>
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Flag className="h-8 w-8 text-primary" />
+              จัดการรายงาน
+            </h1>
+            <p className="text-muted-foreground">ตรวจสอบและจัดการรายงานความไม่เหมาะสม</p>
+          </div>
+        </div>
+        <Button onClick={loadData} variant="outline" className="gap-2">
+          <RefreshCw className="h-4 w-4" />
+          รีเฟรช
+        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{reports.length}</div>
-            <p className="text-sm text-muted-foreground">ทั้งหมด</p>
+      {/* Stats - Keep using original 'reports' for stats to show full overview */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-primary/10 rounded-lg">
+                <Flag className="h-5 w-5 text-primary" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold">{reports.length}</div>
+               <p className="text-xs text-muted-foreground">ได้รับทั้งหมด</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-yellow-600">{pendingReports.length}</div>
-            <p className="text-sm text-muted-foreground">รอดำเนินการ</p>
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-yellow-100 rounded-lg">
+                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+             </div>
+             <div>
+                <div className="text-2xl font-bold text-foreground">
+                   {reports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status)).length}
+                </div>
+                <p className="text-xs text-muted-foreground">รอดำเนินการ</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">
-              {reports.filter(r => ['resolved', 'action_taken'].includes(r.status)).length}
-            </div>
-            <p className="text-sm text-muted-foreground">ดำเนินการแล้ว</p>
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-green-100 rounded-lg">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+             </div>
+             <div>
+                <div className="text-2xl font-bold text-foreground">
+                  {reports.filter(r => ['resolved', 'action_taken'].includes(r.status)).length}
+                </div>
+                <p className="text-xs text-muted-foreground">ดำเนินการแล้ว</p>
+             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-gray-600">
-              {reports.filter(r => ['rejected', 'closed'].includes(r.status)).length}
-            </div>
-            <p className="text-sm text-muted-foreground">ปิด/ปฏิเสธ</p>
+        <Card className="border shadow-sm">
+           <CardContent className="p-4 flex items-center gap-4">
+             <div className="p-2 bg-gray-100 rounded-lg">
+                <XCircle className="h-5 w-5 text-gray-600" />
+             </div>
+             <div>
+               <div className="text-2xl font-bold text-foreground">
+                  {reports.filter(r => ['rejected', 'closed'].includes(r.status)).length}
+               </div>
+               <p className="text-xs text-muted-foreground">ปิด/ปฏิเสธ</p>
+             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Reports List */}
       <Tabs defaultValue="pending" className="w-full">
-        <TabsList>
-          <BounceWrapper>
-            <TabsTrigger value="pending">รอดำเนินการ ({pendingReports.length})</TabsTrigger>
-          </BounceWrapper>
-          <BounceWrapper>
-            <TabsTrigger value="history">ประวัติ ({historyReports.length})</TabsTrigger>
-          </BounceWrapper>
+        <TabsList className="bg-muted/50 p-1 mb-4">
+          <TabsTrigger value="pending" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
+             รอดำเนินการ ({pendingReports.length})
+          </TabsTrigger>
+          <TabsTrigger value="history" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
+             ประวัติ ({historyReports.length})
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pending" className="mt-4">
-          <ReportsTable 
-            data={pendingReports} 
-            onView={(r) => setSelectedReport(r)} 
-            emptyMessage="ไม่มีรายการที่รอดำเนินการ"
-          />
+        <TabsContent value="pending">
+          <Card className="overflow-hidden border shadow-sm">
+             <CardHeader className="border-b px-6 py-4">
+               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                 <CardTitle className="flex items-center gap-2">
+                   <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                   รายการที่ต้องจัดการ
+                   <Badge variant="secondary" className="ml-2 px-3 py-1">
+                     {pendingReports.length} รายการ
+                   </Badge>
+                 </CardTitle>
+                 <div className="relative w-full md:w-auto">
+                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                   <Input
+                     placeholder="ค้นหารายงาน..."
+                     value={searchQuery}
+                     onChange={(e) => setSearchQuery(e.target.value)}
+                     className="pl-10 bg-background w-full md:w-[300px]"
+                   />
+                 </div>
+               </div>
+             </CardHeader>
+             <CardContent className="p-0">
+               <ReportsTable 
+                 data={pendingReports} 
+                 onView={(r) => setSelectedReport(r)} 
+                 emptyMessage="ไม่มีรายการที่รอดำเนินการ"
+               />
+             </CardContent>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="history" className="mt-4">
-           <ReportsTable 
-            data={historyReports} 
-            onView={(r) => setSelectedReport(r)} 
-            emptyMessage="ไม่มีประวัติการรายงาน"
-          />
+        <TabsContent value="history">
+           <Card className="overflow-hidden border shadow-sm">
+             <CardHeader className="border-b px-6 py-4">
+               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                 <CardTitle className="flex items-center gap-2">
+                   <Clock className="h-4 w-4 text-muted-foreground" />
+                   ประวัติการจัดการ
+                   <Badge variant="secondary" className="ml-2 px-3 py-1">
+                     {historyReports.length} รายการ
+                   </Badge>
+                 </CardTitle>
+                 <div className="relative w-full md:w-auto">
+                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                   <Input
+                     placeholder="ค้นหารายงาน..."
+                     value={searchQuery}
+                     onChange={(e) => setSearchQuery(e.target.value)}
+                     className="pl-10 bg-background w-full md:w-[300px]"
+                   />
+                 </div>
+               </div>
+             </CardHeader>
+             <CardContent className="p-0">
+               <ReportsTable 
+                 data={historyReports} 
+                 onView={(r) => setSelectedReport(r)} 
+                 emptyMessage="ไม่มีประวัติการรายงาน"
+               />
+             </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
@@ -322,7 +433,7 @@ export default function AdminReportsPage() {
                     <span className="text-border">•</span>
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {selectedReport && formatDistanceToNow((selectedReport.createdAt as any)?.toDate?.() || new Date(), { addSuffix: true, locale: th })}
+                      {selectedReport && ((selectedReport.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                  </div>
                </div>
@@ -457,6 +568,7 @@ export default function AdminReportsPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </div>
   )
 }
 
@@ -469,74 +581,124 @@ function ReportsTable({
   onView: (report: ReportWithDetails) => void, 
   emptyMessage: string 
 }) {
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+  const totalPages = Math.ceil(data.length / itemsPerPage)
+  const paginatedData = data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
+  // Reset page when data changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [data.length])
+
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>วันที่แจ้ง</TableHead>
-            <TableHead>ประเภท</TableHead>
-            <TableHead>เป้าหมาย</TableHead>
-            <TableHead>ข้อหา</TableHead>
-            <TableHead>ผู้แจ้ง</TableHead>
-            <TableHead>สถานะ</TableHead>
-            <TableHead className="text-right">จัดการ</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.length === 0 ? (
+    <div>
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                <Flag className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>{emptyMessage}</p>
-              </TableCell>
+              <TableHead>วันที่แจ้ง</TableHead>
+              <TableHead>ประเภท</TableHead>
+              <TableHead>เป้าหมาย</TableHead>
+              <TableHead>ข้อหา</TableHead>
+              <TableHead>ผู้แจ้ง</TableHead>
+              <TableHead>สถานะ</TableHead>
+              <TableHead className="text-right">จัดการ</TableHead>
             </TableRow>
-          ) : (
-            data.map((report) => (
-              <TableRow key={report.id}>
-                <TableCell className="text-nowrap text-muted-foreground">
-                  {formatDistanceToNow((report.createdAt as any)?.toDate?.() || new Date(), { addSuffix: true, locale: th })}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="capitalize">
-                    {(report.reportType && reportTypeLabels[report.reportType]) || 
-                     (report.targetType && targetTypeLabels[report.targetType]) || 
-                     report.reportType || report.targetType || '-'}
-                  </Badge>
-                </TableCell>
-                <TableCell className="max-w-[200px]">
-                  <div className="truncate font-medium">
-                    {report.targetData 
-                      ? (report.targetType === 'user' ? report.targetData.email : report.targetData.title)
-                      : <span className="text-muted-foreground italic">Unknown ID: {report.targetId}</span>
-                    }
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="font-medium text-destructive">
-                    {reportReasonLabels[report.reason] || report.reason}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className="truncate max-w-[150px] text-muted-foreground">
-                    {report.reporterEmail}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge className={statusBadgeStyles[report.status]}>
-                    {statusLabels[report.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" onClick={() => onView(report)}>
-                    <Eye className="h-4 w-4" />
-                  </Button>
+          </TableHeader>
+          <TableBody>
+            {data.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <Flag className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                  <p>{emptyMessage}</p>
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ) : (
+              paginatedData.map((report) => (
+                <TableRow key={report.id}>
+                  <TableCell className="text-nowrap text-muted-foreground">
+                    {((report.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="capitalize">
+                      {(report.reportType && reportTypeLabels[report.reportType]) || 
+                       (report.targetType && targetTypeLabels[report.targetType]) || 
+                       report.reportType || report.targetType || '-'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="max-w-[200px]">
+                    <div className="truncate font-medium">
+                      {report.targetData 
+                        ? (report.targetType === 'user' ? report.targetData.email : report.targetData.title)
+                        : <span className="text-muted-foreground italic">Unknown ID: {report.targetId}</span>
+                      }
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium text-destructive">
+                      {reportReasonLabels[report.reason] || report.reason}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="truncate max-w-[150px] text-muted-foreground">
+                      {report.reporterEmail}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={statusBadgeStyles[report.status]}>
+                      {statusLabels[report.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" onClick={() => onView(report)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      
+      {/* Pagination */}
+      {data.length > itemsPerPage && (
+        <div className="flex items-center justify-center gap-2 p-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            ก่อนหน้า
+          </Button>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
+              Math.max(0, currentPage - 3),
+              Math.min(totalPages, currentPage + 2)
+            ).map(page => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "ghost"}
+                size="sm"
+                className="w-8 h-8"
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            ถัดไป
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -8,7 +8,7 @@ import { getReports, updateUserStatus, issueWarning, getUserWarnings, deleteUser
 import type { Report, User, UserStatus, UserWarning } from "@/types"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -19,11 +19,21 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, AlertTriangle, Ban, ShieldAlert, CheckCircle2, Eye } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
+import { 
+  Loader2, 
+  AlertTriangle, 
+  Ban, 
+  ShieldAlert, 
+  CheckCircle2, 
+  Eye, 
+  User as UserIcon, 
+  ArrowLeft, 
+  RefreshCw,
+  Search 
+} from "lucide-react"
 import { UserDetailModal } from "@/components/admin/admin-modals"
 import { ActionDialog } from "@/components/admin/action-dialog"
+import { Input } from "@/components/ui/input"
 
 interface UserWithReports extends User {
   reportsReceived: number
@@ -38,10 +48,13 @@ export default function AdminReportedUsersPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserWithReports | null>(null)
   const [userWarnings, setUserWarnings] = useState<UserWarning[]>([])
+  const [searchQuery, setSearchQuery] = useState("") // New state
   const [actionDialog, setActionDialog] = useState<{
     open: boolean
     type: 'warn' | 'suspend' | 'ban' | 'activate' | 'delete' | null
   }>({ open: false, type: null })
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   
   // State for actions moved to ActionDialog component to prevent re-renders
 
@@ -289,6 +302,12 @@ export default function AdminReportedUsersPage() {
     )
   }
 
+  const filteredUsers = users.filter(u => 
+    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.uid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (u.status || "").toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   if (loading || !isAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -298,56 +317,106 @@ export default function AdminReportedUsersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background py-8">
-      <div className="container mx-auto px-4">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">จัดการผู้ใช้</h1>
-          <p className="text-muted-foreground">รายชื่อผู้ใช้ทั้งหมดในระบบและสถานะการถูกรายงาน</p>
+    <div className="min-h-screen bg-background py-6">
+      <div className="max-w-7xl mx-auto px-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")}>
+                <ArrowLeft className="h-4 w-4" />
+             </Button>
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-2">
+                <UserIcon className="h-8 w-8 text-primary" />
+                จัดการผู้ใช้
+              </h1>
+              <p className="text-muted-foreground">รายชื่อผู้ใช้ทั้งหมดในระบบและสถานะการถูกรายงาน</p>
+            </div>
+          </div>
+          <Button onClick={loadData} variant="outline" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            รีเฟรช
+          </Button>
         </div>
 
-        <Card>
-          <CardContent className="pt-6 contain-paint">
+        {/* Users Table */}
+        <Card className="overflow-hidden border shadow-sm">
+          <CardHeader className="border-b px-6 py-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <UserIcon className="h-5 w-5 text-primary" />
+                รายชื่อผู้ใช้
+                <Badge variant="secondary" className="ml-2 px-3 py-1">
+                  {filteredUsers.length} คน
+                </Badge>
+              </CardTitle>
+              <div className="relative w-full md:w-auto">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="ค้นหาผู้ใช้ด้วยอีเมล, ID, หรือสถานะ..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-background w-full md:w-[300px]"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>อีเมล</TableHead>
-                  <TableHead>สถานะ</TableHead>
-                  <TableHead className="text-center">ถูกรายงาน (ครั้ง)</TableHead>
-                  <TableHead className="text-center">แจ้งรายงาน (ครั้ง)</TableHead>
-                  <TableHead className="text-center">คำเตือนสะสม</TableHead>
-                  <TableHead>รายงานล่าสุดเมื่อ</TableHead>
-                  <TableHead className="text-right">จัดการ</TableHead>
+                <TableRow className="bg-muted/30 hover:bg-muted/40">
+                  <TableHead className="font-semibold">อีเมล</TableHead>
+                  <TableHead className="font-semibold">สถานะ</TableHead>
+                  <TableHead className="text-center font-semibold">ถูกรายงาน (ครั้ง)</TableHead>
+                  <TableHead className="text-center font-semibold">แจ้งรายงาน (ครั้ง)</TableHead>
+                  <TableHead className="text-center font-semibold">คำเตือนสะสม</TableHead>
+                  <TableHead className="font-semibold">รายงานล่าสุดเมื่อ</TableHead>
+                  <TableHead className="text-right font-semibold">จัดการ</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      ไม่พบข้อมูลผู้ใช้
-                    </TableCell>
-                  </TableRow>
+                {filteredUsers.length === 0 ? (
+                   <div className="text-center py-16 px-4 bg-linear-to-b from-transparent to-muted/20">
+                    <div className="p-4 rounded-full bg-muted/50 w-fit mx-auto mb-4">
+                      <UserIcon className="h-12 w-12 text-muted-foreground/50" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-foreground mb-1">
+                      {searchQuery ? "ไม่พบผู้ใช้ที่ค้นหา" : "ไม่พบข้อมูลผู้ใช้"}
+                    </h3>
+                  </div>
                 ) : (
-                  users.map((u) => (
-                    <TableRow key={u.uid}>
+                  filteredUsers
+                    .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                    .map((u, index) => (
+                    <TableRow key={u.uid} className={`hover:bg-muted/50 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
                       <TableCell className="font-medium">
-                        {u.email}
-                        {!u.createdAt && <Badge variant="secondary" className="ml-2 text-[10px]">Ghost</Badge>}
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-xs font-medium text-primary">
+                              {u.email.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                             <div className="text-sm font-medium">{u.email}</div>
+                             {!u.createdAt && <Badge variant="secondary" className="text-[9px] h-4 px-1">Ghost</Badge>}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>{getStatusBadge(u)}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={u.reportsReceived > 0 ? "destructive" : "outline"}>
+                        <Badge variant={u.reportsReceived > 0 ? "destructive" : "outline"} className="min-w-[30px] justify-center">
                           {u.reportsReceived}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className="text-muted-foreground text-sm">{u.reportsFiled}</span>
+                        <span className="text-muted-foreground text-sm font-medium">{u.reportsFiled}</span>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={u.warningCount > 0 ? "secondary" : "outline"}>{u.warningCount || 0}</Badge>
+                        <Badge variant={u.warningCount > 0 ? "secondary" : "outline"} className="min-w-[30px] justify-center">{u.warningCount || 0}</Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {u.lastReportDate 
-                          ? formatDistanceToNow(u.lastReportDate, { addSuffix: true, locale: th })
+                          ? u.lastReportDate.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                           : "-"}
                       </TableCell>
                       <TableCell className="text-right">
@@ -355,6 +424,7 @@ export default function AdminReportedUsersPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleViewUser(u)}
+                          className="hover:bg-primary/10 hover:text-primary"
                         >
                           <Eye className="h-4 w-4 mr-2" />
                           จัดการ
@@ -365,6 +435,44 @@ export default function AdminReportedUsersPage() {
                 )}
               </TableBody>
             </Table>
+            
+            {/* Pagination */}
+            {filteredUsers.length > itemsPerPage && (
+              <div className="flex items-center justify-center gap-2 p-4 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  ก่อนหน้า
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.ceil(filteredUsers.length / itemsPerPage) }, (_, i) => i + 1).slice(
+                    Math.max(0, currentPage - 3),
+                    Math.min(Math.ceil(filteredUsers.length / itemsPerPage), currentPage + 2)
+                  ).map(page => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "ghost"}
+                      size="sm"
+                      className="w-8 h-8"
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredUsers.length / itemsPerPage), p + 1))}
+                  disabled={currentPage === Math.ceil(filteredUsers.length / itemsPerPage)}
+                >
+                  ถัดไป
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -396,7 +504,7 @@ export default function AdminReportedUsersPage() {
             }
           }}
           getStatusBadge={getStatusBadge}
-          formatDate={(date) => formatDistanceToNow(date, { addSuffix: true, locale: th })}
+          formatDate={(date) => date.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
         />
       )}
 

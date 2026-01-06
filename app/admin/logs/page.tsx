@@ -1,6 +1,6 @@
 "use client"
 
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
+
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -11,13 +11,6 @@ import { useAuth } from "@/components/auth-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -38,8 +31,11 @@ import {
   MessageSquare,
   ClipboardList,
   RefreshCw,
-  ArrowLeft
+  ArrowLeft,
+  Search
 } from "lucide-react"
+
+import { Input } from "@/components/ui/input"
 
 import Link from "next/link"
 
@@ -69,8 +65,11 @@ export default function AdminLogsPage() {
   const [logs, setLogs] = useState<AdminLog[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [filterAction, setFilterAction] = useState<string>("all")
-  const [filterTarget, setFilterTarget] = useState<string>("all")
+  const [filterAction] = useState<string>("all")
+  const [filterTarget] = useState<string>("all")
+  const [searchQuery, setSearchQuery] = useState("") // New state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -153,11 +152,30 @@ export default function AdminLogsPage() {
     )
   }
 
+  const filteredLogs = logs.filter(log => {
+    const q = searchQuery.toLowerCase()
+    
+    // Check main fields
+    if ((log.description || "").toLowerCase().includes(q) ||
+        (log.adminEmail || "").toLowerCase().includes(q)) {
+      return true
+    }
+    
+    // Check target ID and info
+    if ((log.targetId || "").toLowerCase().includes(q) ||
+        (log.targetInfo || "").toLowerCase().includes(q)) {
+      return true
+    }
+    
+    return false
+  })
+
   return (
-    <div className="min-h-screen bg-background py-8">
-      <div className="container mx-auto px-4">
+    <div className="min-h-screen bg-background py-6">
+      <div className="max-w-7xl mx-auto px-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
+          {/* ... existing header content ... */}
           <div className="flex items-center gap-4">
             <Link href="/admin">
               <Button variant="ghost" size="icon" className="h-9 w-9">
@@ -178,101 +196,40 @@ export default function AdminLogsPage() {
           </Button>
         </div>
 
-        {/* Filters */}
-        <Card className="p-6 mb-6 bg-linear-to-br from-card via-card to-muted/30 border-t-4 border-t-primary/60 shadow-lg">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <ClipboardList className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <h3 className="font-semibold">กรองผลลัพธ์</h3>
-              <p className="text-xs text-muted-foreground">เลือกประเภทการกระทำหรือเป้าหมาย</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <AlertTriangle className="h-3 w-3" />
-                ประเภทการกระทำ
-              </label>
-              <Select value={filterAction} onValueChange={setFilterAction}>
-                <BounceWrapper>
-                  <SelectTrigger className="bg-background border-border/60 hover:border-primary/50 transition-colors">
-                    <SelectValue placeholder="ประเภทการกระทำ" />
-                  </SelectTrigger>
-                </BounceWrapper>
-                <SelectContent className="bg-popover/95 backdrop-blur-sm">
-                  <SelectItem value="all">ทั้งหมด</SelectItem>
-                  {Object.entries(ACTION_TYPE_LABELS).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>
-                      <span className="flex items-center gap-2">
-                        <val.icon className="h-3 w-3" />
-                        {val.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <Package className="h-3 w-3" />
-                ประเภทเป้าหมาย
-              </label>
-              <Select value={filterTarget} onValueChange={setFilterTarget}>
-                <BounceWrapper>
-                  <SelectTrigger className="bg-background border-border/60 hover:border-primary/50 transition-colors">
-                    <SelectValue placeholder="ประเภทเป้าหมาย" />
-                  </SelectTrigger>
-                </BounceWrapper>
-                <SelectContent className="bg-popover/95 backdrop-blur-sm">
-                  <SelectItem value="all">ทั้งหมด</SelectItem>
-                  {Object.entries(TARGET_TYPE_LABELS).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>{val}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {(filterAction !== "all" || filterTarget !== "all") && (
-              <div className="flex items-end md:col-span-2 lg:col-span-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => { setFilterAction("all"); setFilterTarget("all"); }}
-                  className="gap-2"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  รีเซ็ตตัวกรอง
-                </Button>
-              </div>
-            )}
-          </div>
-        </Card>
-
         {/* Logs Table */}
-        <Card className="overflow-hidden border-0 shadow-lg">
-          <CardHeader className="bg-linear-to-r from-muted/50 to-transparent border-b">
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
+        <Card className="overflow-hidden border shadow-sm">
+          <CardHeader className="px-4 py-3">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <CardTitle className="flex items-center gap-2 text-base">
                 <ClipboardList className="h-5 w-5 text-primary" />
                 รายการกิจกรรม
-              </span>
-              <Badge variant="secondary" className="px-3 py-1">
-                {logs.length} รายการ
-              </Badge>
-            </CardTitle>
+                <Badge variant="secondary" className="ml-2 px-3 py-1">
+                  {filteredLogs.length} รายการ
+                </Badge>
+              </CardTitle>
+              <div className="relative w-full md:w-auto">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="ค้นหาประวัติการทำงาน..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-background w-full md:w-[300px] h-9"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            {logs.length === 0 ? (
-              <div className="text-center py-16 px-4 bg-linear-to-b from-transparent to-muted/20">
+            {filteredLogs.length === 0 ? (
+              <div className="text-center py-16 px-4">
                 <div className="p-4 rounded-full bg-muted/50 w-fit mx-auto mb-4">
                   <ClipboardList className="h-12 w-12 text-muted-foreground/50" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-1">ยังไม่มีบันทึกกิจกรรม</h3>
-                <p className="text-sm text-muted-foreground">เมื่อผู้ดูแลดำเนินการใดๆ จะแสดงที่นี่</p>
+                <h3 className="text-lg font-semibold text-foreground mb-1">
+                  {searchQuery ? "ไม่พบกิจกรรมที่ค้นหา" : "ยังไม่มีบันทึกกิจกรรม"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {searchQuery ? "ลองเปลี่ยนคำค้นหาใหม่" : "เมื่อผู้ดูแลดำเนินการใดๆ จะแสดงที่นี่"}
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -287,7 +244,9 @@ export default function AdminLogsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {logs.map((log, index) => {
+                    {filteredLogs
+                      .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                      .map((log, index) => {
                       const actionConfig = ACTION_TYPE_LABELS[log.actionType] || ACTION_TYPE_LABELS.other
                       const ActionIcon = actionConfig.icon
                       
@@ -333,8 +292,7 @@ export default function AdminLogsPage() {
                               month: 'short', 
                               day: 'numeric', 
                               hour: '2-digit', 
-                              minute: '2-digit',
-                              second: '2-digit'
+                              minute: '2-digit'
                             })}
                           </TableCell>
                         </TableRow>
@@ -342,6 +300,44 @@ export default function AdminLogsPage() {
                     })}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+            
+            {/* Pagination */}
+            {filteredLogs.length > itemsPerPage && (
+              <div className="flex items-center justify-center gap-2 p-4 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  ก่อนหน้า
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.ceil(filteredLogs.length / itemsPerPage) }, (_, i) => i + 1).slice(
+                    Math.max(0, currentPage - 3),
+                    Math.min(Math.ceil(filteredLogs.length / itemsPerPage), currentPage + 2)
+                  ).map(page => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "ghost"}
+                      size="sm"
+                      className="w-8 h-8"
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredLogs.length / itemsPerPage), p + 1))}
+                  disabled={currentPage === Math.ceil(filteredLogs.length / itemsPerPage)}
+                >
+                  ถัดไป
+                </Button>
               </div>
             )}
           </CardContent>
