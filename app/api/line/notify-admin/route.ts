@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { type, ...data } = body
 
+    console.log(`[Admin Notify] Received notification request - Type: ${type}`, data)
+
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569.vercel.app"
     
     // Get all admin LINE user IDs
@@ -104,6 +106,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: "No admins to notify" })
     }
 
+    console.log(`[Admin Notify] Will notify ${adminLineIds.length} admin(s) for ${type}`)
+
     switch (type) {
       case "new_report":
         await notifyAdminsNewReport(
@@ -113,6 +117,7 @@ export async function POST(request: NextRequest) {
           data.reporterEmail,
           baseUrl
         )
+        console.log("[Admin Notify] Report notification sent")
         break
 
       case "new_support_ticket":
@@ -123,6 +128,7 @@ export async function POST(request: NextRequest) {
           data.userEmail,
           baseUrl
         )
+        console.log("[Admin Notify] Support ticket notification sent")
         break
 
       case "custom":
@@ -134,9 +140,11 @@ export async function POST(request: NextRequest) {
         await Promise.allSettled(
           adminLineIds.map((adminId) => sendPushMessage(adminId, [message]))
         )
+        console.log("[Admin Notify] Custom notification sent")
         break
 
       default:
+        console.log(`[Admin Notify] Unknown notification type: ${type}`)
         return NextResponse.json({ success: false, error: "Unknown notification type" }, { status: 400 })
     }
 

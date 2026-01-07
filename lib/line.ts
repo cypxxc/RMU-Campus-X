@@ -619,6 +619,8 @@ export async function notifyAdminsNewReport(
   reporterEmail: string,
   baseUrl: string
 ): Promise<void> {
+  console.log(`[LINE Admin] Sending report notification to ${adminLineUserIds.length} admin(s)`)
+  
   const reportTypeLabels: Record<string, string> = {
     item_report: "รายงานสิ่งของ",
     exchange_report: "รายงานการแลกเปลี่ยน",
@@ -638,9 +640,18 @@ export async function notifyAdminsNewReport(
   }
 
   // ส่งแจ้งเตือนให้ admin ทุกคน (แบบ parallel)
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     adminLineUserIds.map((adminId) => sendPushMessage(adminId, [message]))
   )
+  
+  // Log results for debugging
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      console.log(`[LINE Admin] Report notification to admin ${index + 1}: ${result.value.success ? 'SUCCESS' : 'FAILED - ' + result.value.error}`)
+    } else {
+      console.error(`[LINE Admin] Report notification to admin ${index + 1}: REJECTED - ${result.reason}`)
+    }
+  })
 }
 
 /**
@@ -653,6 +664,8 @@ export async function notifyAdminsNewSupportTicket(
   userEmail: string,
   baseUrl: string
 ): Promise<void> {
+  console.log(`[LINE Admin] Sending support ticket notification to ${adminLineUserIds.length} admin(s)`)
+  
   const categoryLabels: Record<string, string> = {
     general: "ทั่วไป",
     bug: "แจ้งปัญหา",
@@ -672,9 +685,18 @@ export async function notifyAdminsNewSupportTicket(
 กรุณาตรวจสอบ: ${baseUrl}/admin/support`,
   }
 
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     adminLineUserIds.map((adminId) => sendPushMessage(adminId, [message]))
   )
+  
+  // Log results for debugging
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      console.log(`[LINE Admin] Ticket notification to admin ${index + 1}: ${result.value.success ? 'SUCCESS' : 'FAILED - ' + result.value.error}`)
+    } else {
+      console.error(`[LINE Admin] Ticket notification to admin ${index + 1}: REJECTED - ${result.reason}`)
+    }
+  })
 }
 
 // ============ Item Notifications ============
