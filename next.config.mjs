@@ -10,10 +10,10 @@ const nextConfig = {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   
-  // Image optimization - support Cloudinary CDN and legacy base64
+  // Image optimization - enable for Cloudinary CDN
+  // Note: Legacy Base64 images will still work but won't be optimized
   images: {
-    // Keep unoptimized for backward compatibility with old Base64 images
-    unoptimized: true,
+    unoptimized: false, // Enable optimization for Cloudinary URLs
     // กำหนด domains ที่อนุญาตสำหรับ external images
     remotePatterns: [
       {
