@@ -11,11 +11,12 @@
 **RMU Exchange** เป็นเว็บแอปพลิเคชันสำหรับแลกเปลี่ยนและบริจาคสิ่งของระหว่างนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม
 
 ### ความสามารถหลัก
-- 📦 โพสต์สิ่งของที่ไม่ต้องการแล้ว
+- 📦 โพสต์สิ่งของที่ไม่ต้องการแล้ว (รองรับหลายรูป)
 - 🤝 ขอรับสิ่งของจากผู้อื่น
 - 💬 สื่อสารผ่านระบบแชทเรียลไทม์
 - 📱 รับการแจ้งเตือนผ่าน LINE
-- 🚨 รายงานปัญหา
+- 🚨 รายงานปัญหา + ติดต่อทีมงาน
+- 🛡️ ระบบผู้ดูแล (Admin Dashboard)
 
 ---
 
@@ -28,7 +29,7 @@
 
 ### 📦 การจัดการสิ่งของ
 - สร้าง แก้ไข และลบโพสต์
-- อัพโหลดรูปภาพหลายรูป
+- อัพโหลดรูปภาพหลายรูป (สูงสุด 5 รูป) ผ่าน **Cloudinary CDN**
 - หมวดหมู่: อิเล็กทรอนิกส์ หนังสือ เฟอร์นิเจอร์ เสื้อผ้า กีฬา อื่นๆ
 - สถานะ: พร้อมให้ → รอดำเนินการ → เสร็จสิ้น
 - ระบุสถานที่นัดรับ
@@ -61,12 +62,12 @@
 
 ### 🚨 ระบบรายงาน
 - รายงาน: สิ่งของ, การแลกเปลี่ยน, แชท, ผู้ใช้
-- อัพโหลดหลักฐาน
+- อัพโหลดหลักฐาน (ผ่าน Cloudinary)
 - ติดตามสถานะรายงาน
 
 ### 🛡️ ระบบผู้ดูแล (Admin)
 - Dashboard สถิติภาพรวม
-- จัดการผู้ใช้ (เตือน/ระงับ/แบน/ลบถาวร)
+- จัดการผู้ใช้ (เตือน/ระงับ/แบน)
 - จัดการสิ่งของ
 - จัดการรายงานและตั๋วสนับสนุน
 - บันทึกกิจกรรมผู้ดูแล (Admin Logs)
@@ -81,17 +82,20 @@
 
 ## 🛠️ เทคโนโลยีที่ใช้
 
-| หมวด           | เทคโนโลยี                                      |
-| -------------- | ---------------------------------------------- |
+| หมวด           | เทคโนโลยี                                           |
+| -------------- | --------------------------------------------------- |
 | **Framework**  | Next.js 16.1.1 (App Router), React 18.3, TypeScript 5 |
-| **Styling**    | Tailwind CSS 4.1.9, shadcn/ui, Lucide Icons    |
-| **Animation**  | Framer Motion 12.x, Three.js (@react-three/fiber) |
-| **Backend**    | Firebase (Auth, Firestore, Storage)            |
-| **LINE**       | LINE Messaging API                             |
-| **Forms**      | React Hook Form, Zod                           |
-| **Data**       | TanStack React Query, React Table              |
-| **Charts**     | Recharts                                       |
-| **Deployment** | Vercel                                         |
+| **Styling**    | Tailwind CSS 4.1.9, shadcn/ui, Lucide Icons         |
+| **Animation**  | Framer Motion 12.x, Three.js (@react-three/fiber)   |
+| **Database**   | Firebase Firestore                                  |
+| **Auth**       | Firebase Authentication                             |
+| **Storage**    | **Cloudinary CDN** (รูปภาพ)                          |
+| **Backend**    | Firebase Admin SDK 13.6.0 (Server-side operations)  |
+| **LINE**       | LINE Messaging API                                  |
+| **Forms**      | React Hook Form, Zod                                |
+| **Data**       | TanStack React Query, React Table                   |
+| **Charts**     | Recharts                                            |
+| **Deployment** | Vercel                                              |
 
 ---
 
@@ -112,7 +116,8 @@ rmu-exchange/
 │   │   ├── exchanges/            # Exchanges API
 │   │   ├── line/                 # LINE API (webhook, notifications)
 │   │   ├── reports/              # Reports API
-│   │   └── support/              # Support API
+│   │   ├── support/              # Support API
+│   │   └── upload/               # 🆕 Cloudinary Upload API
 │   ├── chat/[exchangeId]/        # หน้าแชท
 │   ├── dashboard/                # Dashboard หลัก
 │   ├── item/[id]/                # รายละเอียดสิ่งของ
@@ -124,18 +129,18 @@ rmu-exchange/
 │   ├── globals.css               # Global styles
 │   └── layout.tsx                # Root layout
 ├── components/                   # React components
-│   ├── ui/                       # shadcn/ui (57 components)
-│   │   ├── bounce-wrapper.tsx    # Animation wrapper (Framer Motion)
-│   │   └── ...
-│   ├── admin/                    # Admin components (17 files)
+│   ├── ui/                       # shadcn/ui components
+│   ├── admin/                    # Admin components
 │   ├── exchange/                 # Exchange action dialogs
 │   └── ...                       # Feature components
 ├── lib/                          # Utility libraries
-│   ├── firebase.ts               # Firebase initialization
+│   ├── firebase.ts               # Firebase Client SDK initialization
+│   ├── firebase-admin.ts         # 🆕 Firebase Admin SDK (server-side)
 │   ├── firestore.ts              # Firestore CRUD operations
+│   ├── cloudinary.ts             # 🆕 Cloudinary configuration
+│   ├── storage.ts                # Image upload utilities
 │   ├── line.ts                   # LINE API functions
 │   ├── auth.ts                   # Authentication utilities
-│   ├── storage.ts                # Firebase Storage utilities
 │   ├── admin.ts                  # Admin utilities
 │   ├── validations.ts            # Zod schemas
 │   └── ...
@@ -151,23 +156,27 @@ rmu-exchange/
 สร้างไฟล์ `.env.local`:
 
 ```env
-# Firebase
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-
-# LINE (สำหรับ LINE Notifications)
+# ===== LINE Messaging API =====
 LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
 LINE_CHANNEL_SECRET=your_line_channel_secret
 
-# Base URL
+# ===== Cloudinary (Image Storage) =====
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+
+# ===== Firebase Admin SDK (Optional - for server operations) =====
+FIREBASE_ADMIN_PROJECT_ID=your_project_id
+FIREBASE_ADMIN_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+# ===== Base URL =====
 NEXT_PUBLIC_BASE_URL=https://your-domain.vercel.app
 ```
 
-> ⚠️ **สำคัญ**: อย่า commit `.env.local` ไปยัง version control!
+> ⚠️ **สำคัญ**: 
+> - อย่า commit `.env.local` ไปยัง version control!
+> - Firebase Client SDK config อยู่ใน `lib/firebase.ts` (hardcoded)
 
 ---
 
@@ -177,6 +186,7 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.vercel.app
 - Node.js 18.x หรือสูงกว่า
 - npm หรือ yarn
 - บัญชีอีเมล RMU (`@rmu.ac.th`)
+- บัญชี Cloudinary (ฟรี)
 
 ### ขั้นตอน
 
@@ -189,8 +199,7 @@ cd rmu-exchange
 npm install
 
 # 3. ตั้งค่า environment variables
-cp .env.example .env.local
-# แก้ไขไฟล์ .env.local
+# สร้างไฟล์ .env.local และใส่ค่าตามด้านบน
 
 # 4. รัน development server
 npm run dev
@@ -211,6 +220,28 @@ npm run dev
 | `npm run test`        | Unit tests                     |
 | `npm run test:watch`  | Watch mode tests               |
 | `npm run test:coverage` | Tests with coverage          |
+
+---
+
+## ☁️ Cloudinary Setup
+
+### ขั้นตอนการตั้งค่า
+
+1. สมัครบัญชีที่ [cloudinary.com](https://cloudinary.com) (ฟรี)
+2. ไปที่ Dashboard → Copy ค่า:
+   - **Cloud Name**
+   - **API Key**
+   - **API Secret**
+3. เพิ่มใน `.env.local` และ Vercel Environment Variables
+
+### Folder Structure บน Cloudinary
+
+```
+rmu-exchange/
+├── items/      # รูปสิ่งของ (800x600, auto quality)
+├── avatars/    # รูปโปรไฟล์ (200x200, face crop)
+└── thumbnails/ # Thumbnails (100x100)
+```
 
 ---
 
@@ -250,7 +281,7 @@ npm run dev
 - ดูสถิติระบบ
 - บันทึกกิจกรรม
 
-**การตั้งค่าผู้ดูแล**: เพิ่ม document ใน Firestore collection `admins` โดยใช้ user UID เป็น document ID
+**การตั้งค่าผู้ดูแล**: ใน Firestore กำหนด `isAdmin: true` ใน document ของ user
 
 ---
 
