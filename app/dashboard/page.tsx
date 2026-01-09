@@ -6,7 +6,7 @@ import type { Item, ItemCategory, ItemStatus } from "@/types"
 import { ItemCard } from "@/components/item-card"
 import { FilterSidebar } from "@/components/filter-sidebar"
 import { Button } from "@/components/ui/button"
-import { Search, Loader2, Package, Sparkles } from "lucide-react"
+import { Search, Loader2, Package, Sparkles, X } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { Input } from "@/components/ui/input"
 import {
@@ -17,6 +17,7 @@ import {
 import { ItemDetailView } from "@/components/item-detail-view"
 import { AccountStatusBanner } from "@/components/account-status-banner"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
+import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
 import debounce from 'lodash/debounce'
 import { useInView } from 'react-intersection-observer'
 import { toast } from 'sonner'
@@ -28,10 +29,11 @@ const MemoizedItemCard = memo(ItemCard)
 export default function DashboardPage() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
-  const [category, setCategory] = useState<ItemCategory | "all">("all")
-  const [status, setStatus] = useState<ItemStatus | "all">("all")
+  const [categories, setCategories] = useState<ItemCategory[]>([])
+  const [status, setStatus] = useState<ItemStatus | "all">("available")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+  const [isSearching, setIsSearching] = useState(false)
   const { user } = useAuth()
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
 
@@ -43,8 +45,13 @@ export default function DashboardPage() {
 
   // Debounce search query
   useEffect(() => {
+    if (searchQuery !== debouncedSearchQuery) {
+      setIsSearching(true)
+    }
+    
     const handler = debounce(() => {
       setDebouncedSearchQuery(searchQuery)
+      setIsSearching(false)
     }, 500)
 
     handler()
@@ -66,10 +73,10 @@ export default function DashboardPage() {
         setLoadingMore(true)
       }
 
-      const filters: { category?: ItemCategory; status?: ItemStatus; searchQuery?: string; lastDoc?: any; pageSize?: number } = {
+      const filters: { categories?: ItemCategory[]; status?: ItemStatus; searchQuery?: string; lastDoc?: any; pageSize?: number } = {
         pageSize: 12,
       }
-      if (category !== "all") filters.category = category
+      if (categories.length > 0) filters.categories = categories
       if (status !== "all") filters.status = status
       if (debouncedSearchQuery.trim()) filters.searchQuery = debouncedSearchQuery.trim()
       if (!isInitial && lastDocRef.current) filters.lastDoc = lastDocRef.current
@@ -100,12 +107,12 @@ export default function DashboardPage() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [category, status, debouncedSearchQuery]) // lastDoc removed from dependency
+  }, [categories, status, debouncedSearchQuery]) // lastDoc removed from dependency
 
   // Initial load and reload on filter/search change
   useEffect(() => {
     loadItems(true)
-  }, [category, status, debouncedSearchQuery]) // Removed loadItems from dependencies
+  }, [categories, status, debouncedSearchQuery]) // Removed loadItems from dependencies
 
   // Load more items when inView and conditions met
   useEffect(() => {
@@ -144,9 +151,9 @@ export default function DashboardPage() {
           {/* Sidebar - Desktop */}
           <aside className="lg:w-64 shrink-0">
             <FilterSidebar
-              category={category}
+              categories={categories}
               status={status}
-              onCategoryChange={setCategory}
+              onCategoriesChange={setCategories}
               onStatusChange={setStatus}
             />
           </aside>
@@ -155,9 +162,14 @@ export default function DashboardPage() {
           <main className="flex-1 min-w-0">
             {/* Results Header & Search */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-              <h2 className="text-sm font-medium text-muted-foreground order-2 sm:order-1">
+              <h2 className="text-sm font-medium text-muted-foreground order-2 sm:order-1 flex items-center gap-2">
                 {loading ? (
                   "กำลังโหลด..."
+                ) : isSearching ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    กำลังค้นหา...
+                  </>
                 ) : (
                   debouncedSearchQuery ? `พบ ${items.length} รายการจากคำค้นหา` : `พบ ${items.length} รายการ`
                 )}
@@ -169,17 +181,24 @@ export default function DashboardPage() {
                   placeholder="ค้นหาสิ่งของ..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-10 bg-background border-muted shadow-xs transition-shadow focus-visible:ring-primary/20"
+                  className="pl-10 pr-10 h-10 bg-background border-muted shadow-xs transition-shadow focus-visible:ring-primary/20"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="ล้างคำค้นหา"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Loading State */}
+            {/* Loading State - Skeleton */}
             {loading && items.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                <p className="text-sm text-muted-foreground">กำลังโหลดข้อมูล...</p>
-              </div>
+              <ItemCardSkeletonGrid count={6} />
             ) : items.length === 0 ? (
               /* Empty State */
               <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -192,12 +211,12 @@ export default function DashboardPage() {
                 <p className="text-muted-foreground text-sm max-w-sm">
                   {debouncedSearchQuery ? "ลองค้นหาด้วยคำสำคัญอื่นๆ หรือตรวจสอบคำผิด" : "ลองเปลี่ยนตัวกรองหรือกลับมาดูใหม่ภายหลัง"}
                 </p>
-                {(category !== "all" || status !== "all" || debouncedSearchQuery) && (
+                {(categories.length > 0 || status !== "all" || debouncedSearchQuery) && (
                   <Button 
                     variant="outline" 
                     className="mt-4"
                     onClick={() => {
-                      setCategory("all")
+                      setCategories([])
                       setStatus("all")
                       setSearchQuery("")
                     }}

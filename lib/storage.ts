@@ -2,10 +2,14 @@
  * Image Upload Utilities
  * - Cloudinary CDN upload
  * - File validation
+ * - Client-side compression
  */
+
+import { compressImage, shouldCompress, blobToFile, formatFileSize } from './image-utils'
 
 /**
  * Upload image to Cloudinary via API
+ * Automatically compresses large images before upload
  * @param file - Image file to upload
  * @param preset - Upload preset ('item' | 'avatar')
  * @returns Cloudinary secure URL
@@ -14,8 +18,32 @@ export const uploadToCloudinary = async (
   file: File, 
   preset: 'item' | 'avatar' = 'item'
 ): Promise<string> => {
+  let fileToUpload: File = file
+  
+  // Compress image if it's larger than 500KB
+  if (shouldCompress(file)) {
+    try {
+      const originalSize = file.size
+      const compressedBlob = await compressImage(file, {
+        maxWidth: preset === 'avatar' ? 400 : 1200,
+        maxHeight: preset === 'avatar' ? 400 : 1200,
+        quality: 0.8,
+        format: 'image/webp'
+      })
+      
+      // Only use compressed version if it's actually smaller
+      if (compressedBlob.size < originalSize) {
+        fileToUpload = blobToFile(compressedBlob, file.name.replace(/\.[^.]+$/, '.webp'))
+        console.log(`[Upload] Compressed: ${formatFileSize(originalSize)} → ${formatFileSize(compressedBlob.size)}`)
+      }
+    } catch (error) {
+      // If compression fails, use original file
+      console.warn('[Upload] Compression failed, using original file:', error)
+    }
+  }
+
   const formData = new FormData()
-  formData.append('file', file)
+  formData.append('file', fileToUpload)
   formData.append('preset', preset)
 
   const response = await fetch('/api/upload', {
@@ -49,3 +77,4 @@ export const validateImageFile = (file: File): { valid: boolean; error?: string 
   
   return { valid: true }
 }
+

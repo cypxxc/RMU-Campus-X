@@ -220,6 +220,13 @@
   html {
     scroll-behavior: smooth;
     scrollbar-gutter: stable;
+    /* Hide scrollbar but keep scroll functionality */
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  html::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 
   /* Focus visible styles - specific selectors for better performance than universal * */

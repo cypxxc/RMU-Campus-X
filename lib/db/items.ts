@@ -49,7 +49,7 @@ export const createItem = async (itemData: Omit<Item, "id" | "postedAt" | "updat
 }
 
 export const getItems = async (filters?: { 
-  category?: ItemCategory; 
+  categories?: ItemCategory[]; 
   status?: ItemStatus;
   pageSize?: number;
   lastDoc?: DocumentSnapshot;
@@ -62,7 +62,10 @@ export const getItems = async (filters?: {
       const pageSize = filters?.pageSize || 20
       const constraints: QueryConstraint[] = [orderBy("postedAt", "desc"), limit(pageSize)]
       
-      if (filters?.category) constraints.push(where("category", "==", filters.category))
+      // Multi-category filter using 'in' operator (supports up to 30 values)
+      if (filters?.categories && filters.categories.length > 0) {
+        constraints.push(where("category", "in", filters.categories))
+      }
       if (filters?.status) constraints.push(where("status", "==", filters.status))
       
       if (filters?.searchQuery) {
