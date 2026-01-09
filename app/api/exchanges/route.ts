@@ -4,8 +4,9 @@
  * ใช้ Firebase REST API สำหรับ Vercel serverless
  */
 
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { sendPushMessage } from "@/lib/line"
+import { successResponse, ApiErrors, validateRequiredFields, parseRequestBody } from "@/lib/api-response"
 
 const FIREBASE_PROJECT = "resource-4e4fc"
 const FIREBASE_API_KEY = "AIzaSyAhtR1jX2lycnS2xYLhiAtMAjn5dLOYAZM"
@@ -120,7 +121,10 @@ export async function POST(request: NextRequest) {
   console.log("[Exchange API] POST request received")
   
   try {
-    const body: CreateExchangeBody = await request.json()
+    const body = await parseRequestBody<CreateExchangeBody>(request)
+    if (!body) {
+      return ApiErrors.badRequest("Invalid request body")
+    }
     console.log("[Exchange API] Body:", JSON.stringify(body))
 
     const {
@@ -134,12 +138,10 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Validate required fields
-    if (!itemId || !ownerId || !requesterId) {
-      console.log("[Exchange API] Missing required fields")
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
+    const validation = validateRequiredFields(body, ["itemId", "ownerId", "requesterId"])
+    if (!validation.valid) {
+      console.log("[Exchange API] Missing required fields:", validation.missing)
+      return ApiErrors.missingFields(validation.missing)
     }
 
     // Create exchange document
@@ -215,15 +217,10 @@ ${BASE_URL}/chat/${exchangeId}`,
     }
 
     console.log("[Exchange API] Success!")
-    return NextResponse.json({
-      success: true,
-      exchangeId,
-    })
+    return successResponse({ exchangeId })
   } catch (error) {
     console.error("[Exchange API] Error:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
-      { status: 500 }
-    )
+    return ApiErrors.internalError(error instanceof Error ? error.message : "Internal server error")
   }
 }
+

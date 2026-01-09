@@ -7,8 +7,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader } from "@/components/ui/sheet"
 import type { ItemCategory, ItemStatus } from "@/types"
-import { Filter, Package, BookOpen, Sofa, Shirt, Dumbbell, MoreHorizontal, CheckCircle, Clock, Check, X, Smartphone } from "lucide-react"
+import { Filter, Package, Check } from "lucide-react"
 import { useState, useEffect } from "react"
+import { CATEGORY_OPTIONS, STATUS_OPTIONS } from "@/lib/constants"
 
 interface FilterSidebarProps {
   categories: ItemCategory[]
@@ -16,22 +17,6 @@ interface FilterSidebarProps {
   onCategoriesChange: (categories: ItemCategory[]) => void
   onStatusChange: (status: ItemStatus | "all") => void
 }
-
-const categoryOptions: { value: ItemCategory; label: string; icon: typeof Package; color: string }[] = [
-  { value: "electronics", label: "อิเล็กทรอนิกส์", icon: Smartphone, color: "text-blue-500" },
-  { value: "books", label: "หนังสือ", icon: BookOpen, color: "text-amber-500" },
-  { value: "furniture", label: "เฟอร์นิเจอร์", icon: Sofa, color: "text-purple-500" },
-  { value: "clothing", label: "เสื้อผ้า", icon: Shirt, color: "text-pink-500" },
-  { value: "sports", label: "กีฬา", icon: Dumbbell, color: "text-cyan-500" },
-  { value: "other", label: "อื่นๆ", icon: MoreHorizontal, color: "text-orange-500" },
-]
-
-const statusOptions = [
-  { value: "all", label: "ทั้งหมด", icon: CheckCircle, color: "text-primary" },
-  { value: "available", label: "พร้อมให้", icon: Check, color: "text-green-500" },
-  { value: "pending", label: "รอดำเนินการ", icon: Clock, color: "text-amber-500" },
-  { value: "completed", label: "เสร็จสิ้น", icon: X, color: "text-gray-500" },
-]
 
 function FilterContent({ categories, status, onCategoriesChange, onStatusChange }: FilterSidebarProps) {
   const allSelected = categories.length === 0
@@ -78,7 +63,7 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
           </div>
           
           {/* Individual Categories */}
-          {categoryOptions.map((option) => {
+          {CATEGORY_OPTIONS.map((option) => {
             const Icon = option.icon
             const isSelected = categories.includes(option.value)
             return (
@@ -113,7 +98,7 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-foreground">สถานะ</h3>
         <RadioGroup value={status} onValueChange={onStatusChange} className="space-y-1">
-          {statusOptions.map((option) => {
+          {STATUS_OPTIONS.map((option) => {
             const Icon = option.icon
             return (
               <div 

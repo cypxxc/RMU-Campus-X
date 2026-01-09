@@ -9,7 +9,10 @@ import {
   where, 
   orderBy, 
   limit, 
-  serverTimestamp 
+  startAfter,
+  serverTimestamp,
+  DocumentSnapshot,
+  getCountFromServer
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import type { AppNotification } from "@/types"
@@ -25,16 +28,67 @@ export const createNotification = async (notificationData: Omit<AppNotification,
   return docRef.id
 }
 
-export const getNotifications = async (userId: string) => {
+interface GetNotificationsOptions {
+  pageSize?: number
+  lastDoc?: DocumentSnapshot | null
+}
+
+interface GetNotificationsResult {
+  notifications: AppNotification[]
+  lastDoc: DocumentSnapshot | null
+  hasMore: boolean
+  totalCount: number
+}
+
+export const getNotifications = async (
+  userId: string, 
+  options: GetNotificationsOptions = {}
+): Promise<GetNotificationsResult> => {
   const db = getFirebaseDb()
-  const q = query(
+  const { pageSize = 10, lastDoc } = options
+  
+  // Build query
+  let q = query(
     collection(db, "notifications"),
     where("userId", "==", userId),
     orderBy("createdAt", "desc"),
-    limit(50)
+    limit(pageSize + 1) // Fetch one extra to check if there's more
   )
+  
+  // Add pagination cursor if provided
+  if (lastDoc) {
+    q = query(
+      collection(db, "notifications"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc"),
+      startAfter(lastDoc),
+      limit(pageSize + 1)
+    )
+  }
+  
   const snapshot = await getDocs(q)
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as AppNotification)
+  const docs = snapshot.docs
+  
+  // Check if there are more results
+  const hasMore = docs.length > pageSize
+  const notifications = docs
+    .slice(0, pageSize)
+    .map((doc) => ({ id: doc.id, ...doc.data() }) as AppNotification)
+  
+  // Get total count
+  const countQuery = query(
+    collection(db, "notifications"),
+    where("userId", "==", userId)
+  )
+  const countSnapshot = await getCountFromServer(countQuery)
+  const totalCount = countSnapshot.data().count
+  
+  return {
+    notifications,
+    lastDoc: docs.length > 0 ? docs[Math.min(docs.length - 1, pageSize - 1)] ?? null : null,
+    hasMore,
+    totalCount
+  }
 }
 
 export const markNotificationAsRead = async (notificationId: string) => {
@@ -60,3 +114,4 @@ export const deleteNotification = async (notificationId: string) => {
   const docRef = doc(db, "notifications", notificationId)
   await deleteDoc(docRef)
 }
+

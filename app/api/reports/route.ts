@@ -3,10 +3,12 @@
  * สร้าง Report พร้อมส่ง LINE Notification ไปยัง Admin
  */
 
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { getAdminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { notifyAdminsNewReport } from "@/lib/line"
+import { successResponse, ApiErrors, validateRequiredFields, parseRequestBody } from "@/lib/api-response"
+import { REPORT_TYPE_LABELS } from "@/lib/constants"
 import type { Report, User } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
@@ -31,7 +33,10 @@ interface CreateReportBody {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: CreateReportBody = await request.json()
+    const body = await parseRequestBody<CreateReportBody>(request)
+    if (!body) {
+      return ApiErrors.badRequest("Invalid request body")
+    }
 
     const {
       reportType,
@@ -48,11 +53,9 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Validate required fields
-    if (!reportType || !reporterId || !targetId || !reportedUserId) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
+    const validation = validateRequiredFields(body, ["reportType", "reporterId", "targetId", "reportedUserId"])
+    if (!validation.valid) {
+      return ApiErrors.missingFields(validation.missing)
     }
 
     const db = getAdminDb()
@@ -83,7 +86,6 @@ export async function POST(request: NextRequest) {
     
     for (const adminDoc of adminsSnapshot.docs) {
       const adminData = adminDoc.data()
-      // Get admin user ID from users collection by email
       const usersSnapshot = await db.collection("users")
         .where("email", "==", adminData.email)
         .get()
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
         await db.collection("notifications").add({
           userId: adminUserId,
           title: "🚨 มีรายงานใหม่",
-          message: `${getReportTypeLabel(reportType)}: "${targetTitle || targetId}"`,
+          message: `${REPORT_TYPE_LABELS[reportType] || reportType}: "${targetTitle || targetId}"`,
           type: "report",
           relatedId: docRef.id,
           isRead: false,
@@ -117,16 +119,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      reportId: docRef.id,
-    })
+    return successResponse({ reportId: docRef.id })
   } catch (error) {
     console.error("[Report API] Error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return ApiErrors.internalError()
   }
 }
 
@@ -157,12 +153,3 @@ async function getAdminLineUserIds(db: FirebaseFirestore.Firestore): Promise<str
   return lineUserIds
 }
 
-function getReportTypeLabel(type: string): string {
-  const labels: Record<string, string> = {
-    item_report: "รายงานสิ่งของ",
-    exchange_report: "รายงานการแลกเปลี่ยน",
-    chat_report: "รายงานแชท",
-    user_report: "รายงานผู้ใช้",
-  }
-  return labels[type] || type
-}

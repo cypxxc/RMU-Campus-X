@@ -22,32 +22,12 @@ import Link from "next/link"
 import { ReportModal } from "@/components/report-modal"
 import { useAccountStatus } from "@/hooks/use-account-status"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
+import { CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS } from "@/lib/constants"
 
 interface ItemDetailViewProps {
   item: Item
   isModal?: boolean
   onClose?: () => void
-}
-
-const categoryLabels: Record<string, string> = {
-  electronics: "อิเล็กทรอนิกส์",
-  books: "หนังสือ",
-  furniture: "เฟอร์นิเจอร์",
-  clothing: "เสื้อผ้า",
-  sports: "กีฬา",
-  other: "อื่นๆ",
-}
-
-const statusLabels: Record<string, string> = {
-  available: "พร้อมให้",
-  pending: "รอดำเนินการ",
-  completed: "เสร็จสิ้น",
-}
-
-const statusColors: Record<string, string> = {
-  available: "bg-primary/10 text-primary border-primary/20",
-  pending: "badge-warning",
-  completed: "bg-muted text-muted-foreground border-border",
 }
 
 export function ItemDetailView({ item, isModal = false, onClose: _onClose }: ItemDetailViewProps) {
@@ -221,9 +201,9 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
               <h1 className={`${isModal ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"} font-bold text-balance leading-tight`}>{item.title}</h1>
               <Badge
                 variant="outline"
-                className={`shrink-0 text-[10px] font-bold px-2 py-0.5 mt-1 ${statusColors[item.status]}`}
+                className={`shrink-0 text-[10px] font-bold px-2 py-0.5 mt-1 ${STATUS_COLORS[item.status]}`}
               >
-                {statusLabels[item.status]}
+                {STATUS_LABELS[item.status]}
               </Badge>
             </div>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed whitespace-pre-wrap">{item.description}</p>
@@ -239,7 +219,7 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
                   </div>
                   <div>
                     <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">หมวดหมู่</span>
-                    <p className="font-semibold text-base">{categoryLabels[item.category]}</p>
+                    <p className="font-semibold text-base">{CATEGORY_LABELS[item.category]}</p>
                   </div>
                 </div>
                 

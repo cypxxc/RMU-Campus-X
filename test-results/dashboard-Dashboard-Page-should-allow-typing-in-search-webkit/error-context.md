@@ -1,0 +1,313 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - link "RMU-Campus X Logo RMU-Campus X University Platform" [ref=e5] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=e6]:
+            - img "RMU-Campus X Logo" [ref=e8]
+            - generic [ref=e9]:
+              - generic [ref=e10]: RMU-Campus X
+              - generic [ref=e11]: University Platform
+        - generic [ref=e12]:
+          - link "เข้าสู่ระบบ" [ref=e13] [cursor=pointer]:
+            - /url: /login
+          - link "สมัครสมาชิก" [ref=e14] [cursor=pointer]:
+            - /url: /register
+    - generic [ref=e15]:
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - img [ref=e20]
+          - generic [ref=e22]: แพลตฟอร์มแลกเปลี่ยน
+        - heading "RMU-Campus X" [level=1] [ref=e23]
+        - paragraph [ref=e24]: แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของสำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม
+      - generic [ref=e26]:
+        - complementary [ref=e27]:
+          - generic [ref=e28]:
+            - generic [ref=e30]:
+              - img [ref=e31]
+              - text: ตัวกรอง
+            - generic [ref=e34]:
+              - generic [ref=e35]:
+                - heading "หมวดหมู่" [level=3] [ref=e36]
+                - generic [ref=e37]:
+                  - generic [ref=e38] [cursor=pointer]:
+                    - checkbox [checked] [ref=e39]:
+                      - generic:
+                        - img
+                    - img [ref=e40]
+                    - generic [ref=e44]: ทั้งหมด
+                    - img [ref=e45]
+                  - generic [ref=e47] [cursor=pointer]:
+                    - checkbox [ref=e48]
+                    - img [ref=e49]
+                    - generic [ref=e51]: อิเล็กทรอนิกส์
+                  - generic [ref=e52] [cursor=pointer]:
+                    - checkbox [ref=e53]
+                    - img [ref=e54]
+                    - generic [ref=e56]: หนังสือ
+                  - generic [ref=e57] [cursor=pointer]:
+                    - checkbox [ref=e58]
+                    - img [ref=e59]
+                    - generic [ref=e62]: เฟอร์นิเจอร์
+                  - generic [ref=e63] [cursor=pointer]:
+                    - checkbox [ref=e64]
+                    - img [ref=e65]
+                    - generic [ref=e67]: เสื้อผ้า
+                  - generic [ref=e68] [cursor=pointer]:
+                    - checkbox [ref=e69]
+                    - img [ref=e70]
+                    - generic [ref=e76]: กีฬา
+                  - generic [ref=e77] [cursor=pointer]:
+                    - checkbox [ref=e78]
+                    - img [ref=e79]
+                    - generic [ref=e83]: อื่นๆ
+              - generic [ref=e84]:
+                - heading "สถานะ" [level=3] [ref=e85]
+                - radiogroup [ref=e86] [cursor=pointer]:
+                  - generic [ref=e87]:
+                    - radio "ทั้งหมด" [ref=e88]
+                    - img [ref=e89]
+                    - generic [ref=e92]: ทั้งหมด
+                  - generic [ref=e93]:
+                    - radio "พร้อมให้" [checked] [ref=e94]:
+                      - img [ref=e95]
+                    - img [ref=e97]
+                    - generic [ref=e99]: พร้อมให้
+                    - img [ref=e100]
+                  - generic [ref=e102]:
+                    - radio "รอดำเนินการ" [ref=e103]
+                    - img [ref=e104]
+                    - generic [ref=e107]: รอดำเนินการ
+                  - generic [ref=e108]:
+                    - radio "เสร็จสิ้น" [ref=e109]
+                    - img [ref=e110]
+                    - generic [ref=e113]: เสร็จสิ้น
+        - main [ref=e114]:
+          - generic [ref=e115]:
+            - heading "พบ 12 รายการ" [level=2] [ref=e116]
+            - generic [ref=e117]:
+              - img [ref=e118]
+              - textbox "ค้นหาสิ่งของ..." [active] [ref=e121]
+          - generic [ref=e122]:
+            - generic [ref=e124] [cursor=pointer]:
+              - img "ASD" [ref=e128]
+              - generic [ref=e130]:
+                - generic [ref=e131]:
+                  - heading "ASD" [level=3] [ref=e133]
+                  - generic [ref=e134]: พร้อมให้
+                - paragraph [ref=e135]: ASD
+                - generic [ref=e136]:
+                  - generic [ref=e137]:
+                    - img [ref=e138]
+                    - text: อิเล็กทรอนิกส์
+                  - generic [ref=e142]:
+                    - img [ref=e143]
+                    - text: 1. คณะครุศาสตร์
+                  - generic [ref=e146]:
+                    - img [ref=e147]
+                    - text: 7 นาทีที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e150]
+            - generic [ref=e152] [cursor=pointer]:
+              - img "AA" [ref=e156]
+              - generic [ref=e158]:
+                - generic [ref=e159]:
+                  - heading "AA" [level=3] [ref=e161]
+                  - generic [ref=e162]: พร้อมให้
+                - paragraph [ref=e163]: AA
+                - generic [ref=e164]:
+                  - generic [ref=e165]:
+                    - img [ref=e166]
+                    - text: อื่นๆ
+                  - generic [ref=e170]:
+                    - img [ref=e171]
+                    - text: 1. คณะครุศาสตร์
+                  - generic [ref=e174]:
+                    - img [ref=e175]
+                    - text: ประมาณ 8 ชั่วโมงที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e178]
+            - generic [ref=e180] [cursor=pointer]:
+              - generic [ref=e183]:
+                - img "AA" [ref=e184]
+                - generic [ref=e185]: "+1"
+              - generic [ref=e187]:
+                - generic [ref=e188]:
+                  - heading "AA" [level=3] [ref=e190]
+                  - generic [ref=e191]: พร้อมให้
+                - paragraph [ref=e192]: AA
+                - generic [ref=e193]:
+                  - generic [ref=e194]:
+                    - img [ref=e195]
+                    - text: อื่นๆ
+                  - generic [ref=e199]:
+                    - img [ref=e200]
+                    - text: 5. ตึกปฏิบัติการทางวิทยาศาสตร์
+                  - generic [ref=e203]:
+                    - img [ref=e204]
+                    - text: ประมาณ 11 ชั่วโมงที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e207]
+            - generic [ref=e209] [cursor=pointer]:
+              - img "AA" [ref=e213]
+              - generic [ref=e215]:
+                - generic [ref=e216]:
+                  - heading "AA" [level=3] [ref=e218]
+                  - generic [ref=e219]: พร้อมให้
+                - paragraph [ref=e220]: AA
+                - generic [ref=e221]:
+                  - generic [ref=e222]:
+                    - img [ref=e223]
+                    - text: อิเล็กทรอนิกส์
+                  - generic [ref=e227]:
+                    - img [ref=e228]
+                    - text: 3. คณะมนุษยศาสตร์และสังคมศาสตร์
+                  - generic [ref=e231]:
+                    - img [ref=e232]
+                    - text: ประมาณ 24 ชั่วโมงที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e235]
+            - generic [ref=e237] [cursor=pointer]:
+              - img [ref=e241]
+              - generic [ref=e245]:
+                - generic [ref=e246]:
+                  - heading "AA" [level=3] [ref=e248]
+                  - generic [ref=e249]: พร้อมให้
+                - paragraph [ref=e250]: AA
+                - generic [ref=e251]:
+                  - generic [ref=e252]:
+                    - img [ref=e253]
+                    - text: อื่นๆ
+                  - generic [ref=e257]:
+                    - img [ref=e258]
+                    - text: 1. คณะครุศาสตร์
+                  - generic [ref=e261]:
+                    - img [ref=e262]
+                    - text: ประมาณ 24 ชั่วโมงที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e265]
+            - generic [ref=e267] [cursor=pointer]:
+              - img "ฟกหกฟ" [ref=e271]
+              - generic [ref=e273]:
+                - generic [ref=e274]:
+                  - heading "ฟกหกฟ" [level=3] [ref=e276]
+                  - generic [ref=e277]: พร้อมให้
+                - paragraph [ref=e278]: หฟหฟฟห
+                - generic [ref=e279]:
+                  - generic [ref=e280]:
+                    - img [ref=e281]
+                    - text: อื่นๆ
+                  - generic [ref=e285]:
+                    - img [ref=e286]
+                    - text: 1 วันที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e289]
+            - generic [ref=e291] [cursor=pointer]:
+              - img "SS" [ref=e295]
+              - generic [ref=e297]:
+                - generic [ref=e298]:
+                  - heading "SS" [level=3] [ref=e300]
+                  - generic [ref=e301]: พร้อมให้
+                - paragraph [ref=e302]: SS
+                - generic [ref=e303]:
+                  - generic [ref=e304]:
+                    - img [ref=e305]
+                    - text: เฟอร์นิเจอร์
+                  - generic [ref=e309]:
+                    - img [ref=e310]
+                    - text: 6. คณะวิทยาศาสตร์และเทคโนโลยี
+                  - generic [ref=e313]:
+                    - img [ref=e314]
+                    - text: 1 วันที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e317]
+            - generic [ref=e319] [cursor=pointer]:
+              - img "AA" [ref=e323]
+              - generic [ref=e325]:
+                - generic [ref=e326]:
+                  - heading "AA" [level=3] [ref=e328]
+                  - generic [ref=e329]: พร้อมให้
+                - paragraph [ref=e330]: AA
+                - generic [ref=e331]:
+                  - generic [ref=e332]:
+                    - img [ref=e333]
+                    - text: อื่นๆ
+                  - generic [ref=e337]:
+                    - img [ref=e338]
+                    - text: 5. ตึกปฏิบัติการทางวิทยาศาสตร์
+                  - generic [ref=e341]:
+                    - img [ref=e342]
+                    - text: 1 วันที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e345]
+            - generic [ref=e347] [cursor=pointer]:
+              - img "AA" [ref=e351]
+              - generic [ref=e353]:
+                - generic [ref=e354]:
+                  - heading "AA" [level=3] [ref=e356]
+                  - generic [ref=e357]: พร้อมให้
+                - paragraph [ref=e358]: AA
+                - generic [ref=e359]:
+                  - generic [ref=e360]:
+                    - img [ref=e361]
+                    - text: อิเล็กทรอนิกส์
+                  - generic [ref=e365]:
+                    - img [ref=e366]
+                    - text: 1 วันที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e369]
+            - generic [ref=e371] [cursor=pointer]:
+              - img "AA" [ref=e375]
+              - generic [ref=e377]:
+                - generic [ref=e378]:
+                  - heading "AA" [level=3] [ref=e380]
+                  - generic [ref=e381]: พร้อมให้
+                - paragraph [ref=e382]: AA
+                - generic [ref=e383]:
+                  - generic [ref=e384]:
+                    - img [ref=e385]
+                    - text: หนังสือ
+                  - generic [ref=e389]:
+                    - img [ref=e390]
+                    - text: 7. คณะครุศาสตร์ (หลังเก่า)
+                  - generic [ref=e393]:
+                    - img [ref=e394]
+                    - text: 3 วันที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e397]
+            - generic [ref=e399] [cursor=pointer]:
+              - img "q" [ref=e403]
+              - generic [ref=e405]:
+                - generic [ref=e406]:
+                  - heading "q" [level=3] [ref=e408]
+                  - generic [ref=e409]: พร้อมให้
+                - paragraph [ref=e410]: q
+                - generic [ref=e411]:
+                  - generic [ref=e412]:
+                    - img [ref=e413]
+                    - text: เฟอร์นิเจอร์
+                  - generic [ref=e417]:
+                    - img [ref=e418]
+                    - text: 3. คณะมนุษยศาสตร์และสังคมศาสตร์
+                  - generic [ref=e421]:
+                    - img [ref=e422]
+                    - text: 3 วันที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e425]
+            - generic [ref=e427] [cursor=pointer]:
+              - img "B" [ref=e431]
+              - generic [ref=e433]:
+                - generic [ref=e434]:
+                  - heading "B" [level=3] [ref=e436]
+                  - generic [ref=e437]: พร้อมให้
+                - paragraph [ref=e438]: B
+                - generic [ref=e439]:
+                  - generic [ref=e440]:
+                    - img [ref=e441]
+                    - text: อิเล็กทรอนิกส์
+                  - generic [ref=e445]:
+                    - img [ref=e446]
+                    - text: อาคารเฉลิมพระเกียรติฯ (อาคาร 15)
+                  - generic [ref=e449]:
+                    - img [ref=e450]
+                    - text: 5 วันที่ผ่านมา
+              - button "ดูรายละเอียด" [ref=e453]
+  - region "Notifications (F8)":
+    - list
+  - alert [ref=e455]
+  - iframe [ref=e456]:
+    
+```

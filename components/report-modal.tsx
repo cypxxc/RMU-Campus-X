@@ -3,8 +3,8 @@
 import { useState } from "react"
 import { useAuth } from "@/components/auth-provider"
 import { createReport } from "@/lib/firestore"
-import { uploadToCloudinary } from "@/lib/storage"
 import { useToast } from "@/hooks/use-toast"
+import { useImageUpload } from "@/hooks/use-image-upload"
 import Image from "next/image"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 import {
@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Info, X, Plus, AlertTriangle } from "lucide-react"
+import { REPORT_TYPE_LABELS } from "@/lib/constants"
 
 type ReportType = "item_report" | "exchange_report" | "chat_report" | "user_report"
 
@@ -71,22 +72,27 @@ const REPORT_REASONS = {
   ],
 }
 
-const REPORT_TYPE_LABELS = {
-  item_report: "รายงานสิ่งของ",
-  exchange_report: "รายงานการแลกเปลี่ยน",
-  chat_report: "รายงานแชท",
-  user_report: "รายงานผู้ใช้",
-}
-
 export function ReportModal({ open, onOpenChange, reportType, targetId, targetTitle }: ReportModalProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const [reasonCode, setReasonCode] = useState("")
   const [description, setDescription] = useState("")
   const [confirmed, setConfirmed] = useState(false)
-  const [images, setImages] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+
+  // Use the shared image upload hook
+  const { 
+    images, 
+    isUploading, 
+    handleFileChange: handleImageUpload, 
+    removeImage, 
+    clearImages,
+    canAddMore 
+  } = useImageUpload({ 
+    maxImages: 5, 
+    folder: "item" 
+  })
 
   const reasons = REPORT_REASONS[reportType] || []
   const selectedReason = reasons.find((r) => r.code === reasonCode)
@@ -235,7 +241,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
       // Reset form
       setReasonCode("")
       setDescription("")
-      setImages([])
+      clearImages()
       setConfirmed(false)
       setShowConfirmDialog(false)
       onOpenChange(false)
@@ -251,48 +257,6 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
     }
   }
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files) return
-
-    const newImages = [...images]
-    if (newImages.length + (files.length || 0) > 5) {
-      toast({
-        title: "จำกัดจำนวนรูปภาพ",
-        description: "สามารถอัปโหลดรูปภาพได้สูงสุด 5 รูป",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setLoading(true)
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        if (file) {
-          // Upload to Cloudinary
-          const cloudinaryUrl = await uploadToCloudinary(file, 'item')
-          newImages.push(cloudinaryUrl)
-        }
-      }
-      setImages(newImages)
-    } catch (error) {
-      console.error("[Report] Error resizing image:", error)
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถประมวลผลรูปภาพได้",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const removeImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index))
-  }
-
-
   const handleSubmitClick = () => {
     if (!isFormValid) return
     setShowConfirmDialog(true)
@@ -304,7 +268,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
         open={open}
         onOpenChange={onOpenChange}
         size="lg"
-        title={REPORT_TYPE_LABELS[reportType]}
+        title={REPORT_TYPE_LABELS[reportType] || "รายงาน"}
         description="กรุณาระบุเหตุผลในการรายงาน ข้อมูลของคุณจะถูกเก็บเป็นความลับ"
         icon={<AlertTriangle className="h-5 w-5" />}
         footer={
@@ -409,7 +373,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
                   </div>
                 ))}
                 
-                {images.length < 5 && (
+                {canAddMore && (
                   <label className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
                     <Plus className="h-6 w-6 text-muted-foreground mb-1" />
                     <span className="text-[10px] text-muted-foreground lowercase">เพิ่มรูป</span>
@@ -418,8 +382,8 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
                       accept="image/*"
                       multiple
                       className="hidden"
-                      onChange={handleImageChange}
-                      disabled={loading}
+                      onChange={handleImageUpload}
+                      disabled={loading || isUploading}
                     />
                   </label>
                 )}

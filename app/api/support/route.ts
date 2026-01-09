@@ -3,10 +3,11 @@
  * สร้าง Support Ticket พร้อมส่ง LINE Notification ไปยัง Admin
  */
 
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { getAdminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { notifyAdminsNewSupportTicket } from "@/lib/line"
+import { successResponse, ApiErrors, validateRequiredFields, parseRequestBody } from "@/lib/api-response"
 import type { SupportTicket, User } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
@@ -21,16 +22,17 @@ interface CreateTicketBody {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: CreateTicketBody = await request.json()
+    const body = await parseRequestBody<CreateTicketBody>(request)
+    if (!body) {
+      return ApiErrors.badRequest("Invalid request body")
+    }
 
     const { subject, category, description, userId, userEmail } = body
 
     // Validate required fields
-    if (!subject || !category || !userId) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
+    const validation = validateRequiredFields(body, ["subject", "category", "userId"])
+    if (!validation.valid) {
+      return ApiErrors.missingFields(validation.missing)
     }
 
     const db = getAdminDb()
@@ -89,16 +91,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      ticketId: docRef.id,
-    })
+    return successResponse({ ticketId: docRef.id })
   } catch (error) {
     console.error("[Support API] Error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return ApiErrors.internalError()
   }
 }
 
@@ -128,3 +124,4 @@ async function getAdminLineUserIds(db: FirebaseFirestore.Firestore): Promise<str
 
   return lineUserIds
 }
+

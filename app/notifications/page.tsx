@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from "@/lib/firestore"
 import type { AppNotification } from "@/types"
-import { Bell, MessageCircle, AlertTriangle, Package, Info, Loader2, ArrowLeft, CheckCheck, X } from "lucide-react"
+import { DocumentSnapshot } from "firebase/firestore"
+import { Bell, MessageCircle, AlertTriangle, Package, Info, Loader2, ArrowLeft, CheckCheck, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +16,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
+const PAGE_SIZE = 10
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,21 +25,31 @@ export default function NotificationsPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const paginationDocs = useRef<Map<number, DocumentSnapshot | null>>(new Map([[1, null]]))
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login")
-    } else if (!authLoading && user) {
-      fetchNotifications()
-    }
-  }, [user, authLoading, router])
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async (page: number = 1) => {
     if (!user) return
     setLoading(true)
     try {
-      const data = await getNotifications(user.uid)
-      setNotifications(data)
+      const lastDoc = page === 1 ? null : paginationDocs.current.get(page) ?? null
+      const result = await getNotifications(user.uid, {
+        pageSize: PAGE_SIZE,
+        lastDoc
+      })
+      
+      setNotifications(result.notifications)
+      setTotalCount(result.totalCount)
+      
+      // Store lastDoc for next page
+      if (result.lastDoc && result.hasMore) {
+        paginationDocs.current.set(page + 1, result.lastDoc)
+      }
     } catch (error: any) {
       toast({
         title: "เกิดข้อผิดพลาด",
@@ -45,6 +58,20 @@ export default function NotificationsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }, [user, toast])
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login")
+    } else if (!authLoading && user) {
+      fetchNotifications(currentPage)
+    }
+  }, [user, authLoading, currentPage])
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage)
     }
   }
 
@@ -83,6 +110,7 @@ export default function NotificationsPage() {
     try {
       await deleteNotification(id)
       setNotifications(prev => prev.filter(n => n.id !== id))
+      setTotalCount(prev => prev - 1)
       toast({ title: "ลบการแจ้งเตือนแล้ว" })
     } catch (error) {
       toast({ title: "เกิดข้อผิดพลาดในการลบ", variant: "destructive" })
@@ -116,7 +144,7 @@ export default function NotificationsPage() {
 
   const unreadCount = notifications.filter(n => !n.isRead).length
 
-  if (authLoading || loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -140,7 +168,8 @@ export default function NotificationsPage() {
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold">การแจ้งเตือน</h1>
             <p className="text-muted-foreground text-sm">
-              ติดตามความเคลื่อนไหวทั้งหมดของคุณ
+              ทั้งหมด {totalCount} รายการ
+              {totalPages > 1 && ` • หน้า ${currentPage}/${totalPages}`}
             </p>
           </div>
         </div>
@@ -173,63 +202,100 @@ export default function NotificationsPage() {
           </div>
 
           <TabsContent value={activeTab} className="space-y-3 mt-4">
-            {filteredNotifications.length > 0 ? (
-              filteredNotifications.map((n, index) => (
-                <BounceWrapper 
-                  key={n.id}
-                  variant="bounce-up"
-                  delay={index * 0.03}
-                >
-                  <Card 
-                    className={`cursor-pointer transition-all hover:shadow-md border-border/60 ${
-                      !n.isRead ? "border-l-4 border-l-primary" : ""
-                    }`}
-                    onClick={() => handleMarkAsRead(n)}
-                >
-                  <CardContent className="p-4 flex gap-4 relative group/item">
-                    {/* Delete button shown on hover */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-2 top-2 h-8 w-8 rounded-full opacity-0 group-hover/item:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground z-10"
-                      onClick={(e) => handleDeleteNotification(e, n.id)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                    {/* Icon */}
-                    <div className={`shrink-0 h-10 w-10 rounded-xl flex items-center justify-center ${getIconBg(n.type)}`}>
-                      {getIcon(n.type)}
-                    </div>
-                    
-                    {/* Content */}
-                    <div className="flex-1 min-w-0 space-y-1 pr-8">
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
-                        <h3 className={`text-sm leading-tight ${!n.isRead ? "font-semibold" : "font-medium"}`}>
-                          {n.title}
-                        </h3>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                          {formatDistanceToNow((n.createdAt as any)?.toDate?.() || new Date(), {
-                            addSuffix: true,
-                            locale: th,
-                          })}
-                        </span>
+            {loading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : filteredNotifications.length > 0 ? (
+              <>
+                {filteredNotifications.map((n, index) => (
+                  <BounceWrapper 
+                    key={n.id}
+                    variant="bounce-up"
+                    delay={index * 0.03}
+                  >
+                    <Card 
+                      className={`cursor-pointer transition-all hover:shadow-md border-border/60 ${
+                        !n.isRead ? "border-l-4 border-l-primary" : ""
+                      }`}
+                      onClick={() => handleMarkAsRead(n)}
+                  >
+                    <CardContent className="p-4 flex gap-4 relative group/item">
+                      {/* Delete button shown on hover */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-2 top-2 h-8 w-8 rounded-full opacity-0 group-hover/item:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground z-10"
+                        onClick={(e) => handleDeleteNotification(e, n.id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      {/* Icon */}
+                      <div className={`shrink-0 h-10 w-10 rounded-xl flex items-center justify-center ${getIconBg(n.type)}`}>
+                        {getIcon(n.type)}
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                        {n.message}
-                      </p>
-                      {!n.isRead && (
-                        <Badge 
-                          variant="outline" 
-                          className="mt-1.5 text-[10px] h-5 bg-primary/10 text-primary border-primary/20"
-                        >
-                          ใหม่
-                        </Badge>
-                      )}
+                      
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 space-y-1 pr-8">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
+                          <h3 className={`text-sm leading-tight ${!n.isRead ? "font-semibold" : "font-medium"}`}>
+                            {n.title}
+                          </h3>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                            {formatDistanceToNow((n.createdAt as any)?.toDate?.() || new Date(), {
+                              addSuffix: true,
+                              locale: th,
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                          {n.message}
+                        </p>
+                        {!n.isRead && (
+                          <Badge 
+                            variant="outline" 
+                            className="mt-1.5 text-[10px] h-5 bg-primary/10 text-primary border-primary/20"
+                          >
+                            ใหม่
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  </BounceWrapper>
+                ))}
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-4 border-t mt-6">
+                    <p className="text-sm text-muted-foreground">
+                      หน้า {currentPage} จาก {totalPages}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1 || loading}
+                        className="gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        ก่อนหน้า
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages || loading}
+                        className="gap-1"
+                      >
+                        ถัดไป
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-                </BounceWrapper>
-              ))
+                  </div>
+                )}
+              </>
             ) : (
               /* Empty State */
               <div className="text-center py-16">
@@ -251,3 +317,4 @@ export default function NotificationsPage() {
     </div>
   )
 }
+

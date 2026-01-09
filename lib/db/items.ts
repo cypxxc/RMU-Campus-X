@@ -13,7 +13,8 @@ import {
   serverTimestamp,
   QueryConstraint,
   startAfter,
-  DocumentSnapshot
+  DocumentSnapshot,
+  getCountFromServer
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import type { Item, ItemCategory, ItemStatus } from "@/types"
@@ -54,49 +55,52 @@ export const getItems = async (filters?: {
   pageSize?: number;
   lastDoc?: DocumentSnapshot;
   searchQuery?: string;
-}): Promise<ApiResponse<{ items: Item[]; lastDoc: DocumentSnapshot | null; hasMore: boolean }>> => {
+}): Promise<ApiResponse<{ items: Item[]; lastDoc: DocumentSnapshot | null; hasMore: boolean; totalCount: number }>> => {
   return apiCall(
     async () => {
       const startTime = performance.now()
       const db = getFirebaseDb()
       const pageSize = filters?.pageSize || 20
-      const constraints: QueryConstraint[] = [orderBy("postedAt", "desc"), limit(pageSize)]
       
-      // Multi-category filter using 'in' operator (supports up to 30 values)
+      // Base constraints for both count and data queries
+      const baseConstraints: QueryConstraint[] = []
+      
+      // Multi-category filter using 'in' operator
       if (filters?.categories && filters.categories.length > 0) {
-        constraints.push(where("category", "in", filters.categories))
+        baseConstraints.push(where("category", "in", filters.categories))
       }
-      if (filters?.status) constraints.push(where("status", "==", filters.status))
+      if (filters?.status) {
+        baseConstraints.push(where("status", "==", filters.status))
+      }
       
+      // Search logic for base filtering
       if (filters?.searchQuery) {
-        // Simple search: check if 'searchKeywords' contains the first word of the query
-        // Limitation: Firestore 'array-contains' only allows one value for equality checks combined with other filters in some cases,
-        // and 'array-contains-any' allows up to 10.
-        // For simplicity and "starts with" emulation, we might rely on exact match of tokens.
-        
         const terms = filters.searchQuery.toLowerCase().split(/\s+/).filter(t => t.length > 0)
-        
         if (terms.length > 0) {
-           // We take the first term for the server-side filter to narrow down results.
-           // Ideally we'd use array-contains-any[...terms] but that's OR logic.
-           // We use array-contains for the first term as a primary filter.
-           // Note: Compound queries with array-contains and other equality clauses work.
-           // But array-contains + orderBy range/inequality has limitations.
-           
-           // Strategy: Use array-contains for the first meaningful keyword.
-           // This requires an index if mixed with other fields.
-           
-           constraints.push(where("searchKeywords", "array-contains", terms[0]))
+           baseConstraints.push(where("searchKeywords", "array-contains", terms[0]))
         }
       }
-      
-      if (filters?.lastDoc) constraints.push(startAfter(filters.lastDoc))
 
-      const q = query(collection(db, "items"), ...constraints)
+      // 1. Get total count
+      let totalCount = 0
+      try {
+        const countQ = query(collection(db, "items"), ...baseConstraints)
+        const countSnapshot = await getCountFromServer(countQ)
+        totalCount = countSnapshot.data().count
+      } catch (error) {
+        console.warn("Count query failed", error)
+        // Fallback: totalCount remains 0 or we could try to estimate
+      }
+
+      // 2. Get data
+      const dataConstraints = [...baseConstraints, orderBy("postedAt", "desc"), limit(pageSize)]
+      if (filters?.lastDoc) dataConstraints.push(startAfter(filters.lastDoc))
+
+      const q = query(collection(db, "items"), ...dataConstraints)
       const snapshot = await getDocs(q)
       let items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Item)
       
-      // If we used a search query, do a quick in-memory refinement for other terms (AND logic)
+      // In-memory refinement for additional search terms
       if (filters?.searchQuery) {
           const terms = filters.searchQuery.toLowerCase().split(/\s+/).filter(t => t.length > 0)
           if (terms.length > 1) {
@@ -112,10 +116,15 @@ export const getItems = async (filters?: {
       // Log query performance
       const duration = performance.now() - startTime
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[Query] getItems: ${duration.toFixed(2)}ms, ${items.length} items`)
+        console.log(`[Query] getItems: ${duration.toFixed(2)}ms, ${items.length} items, total: ${totalCount}`)
       }
       
-      return { items, lastDoc: lastVisible, hasMore: snapshot.docs.length === pageSize }
+      return { 
+        items, 
+        lastDoc: lastVisible, 
+        hasMore: snapshot.docs.length === pageSize,
+        totalCount
+      }
     },
     'getItems',
     TIMEOUT_CONFIG.STANDARD

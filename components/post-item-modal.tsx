@@ -4,7 +4,6 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/components/auth-provider"
 import { createItem } from "@/lib/firestore"
-import { uploadToCloudinary, validateImageFile } from "@/lib/storage"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,10 +11,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 import { useToast } from "@/hooks/use-toast"
+import { useImageUpload } from "@/hooks/use-image-upload"
 import type { ItemCategory } from "@/types"
-import { X, Loader2, ImagePlus, Package, Smartphone, BookOpen, Sofa, Shirt, Dumbbell, MoreHorizontal } from 'lucide-react'
+import { X, Loader2, ImagePlus, Package } from 'lucide-react'
 import Image from "next/image"
 import { isOnCooldown, getRemainingCooldown, recordAction, loadCooldownFromStorage, formatCooldownTime } from "@/lib/rate-limit"
+import { CATEGORY_OPTIONS, LOCATION_OPTIONS } from "@/lib/constants"
 
 interface PostItemModalProps {
   open: boolean
@@ -23,72 +24,30 @@ interface PostItemModalProps {
   onSuccess?: () => void // Callback when item is successfully posted
 }
 
-const categoryOptions = [
-  { value: "electronics", label: "อิเล็กทรอนิกส์", icon: Smartphone, color: "text-blue-500" },
-  { value: "books", label: "หนังสือ", icon: BookOpen, color: "text-amber-500" },
-  { value: "furniture", label: "เฟอร์นิเจอร์", icon: Sofa, color: "text-purple-500" },
-  { value: "clothing", label: "เสื้อผ้า", icon: Shirt, color: "text-pink-500" },
-  { value: "sports", label: "กีฬา", icon: Dumbbell, color: "text-cyan-500" },
-  { value: "other", label: "อื่นๆ", icon: MoreHorizontal, color: "text-orange-500" },
-]
-
-const locationOptions = [
-  "1. คณะครุศาสตร์",
-  "3. คณะมนุษยศาสตร์และสังคมศาสตร์",
-  "5. ตึกปฏิบัติการทางวิทยาศาสตร์",
-  "6. คณะวิทยาศาสตร์และเทคโนโลยี",
-  "7. คณะครุศาสตร์ (หลังเก่า)",
-  "8. อาคารเทคโนโลยีและนวัตกรรมการศึกษา",
-  "10. ศูนย์วิทยาศาสตร์และวิทยาศาสตร์ประยุกต์",
-  "11. ศูนย์การศึกษาพิเศษ",
-  "12. อาคารเทคโนโลยีอุตสาหกรรม",
-  "15. อาคารเฉลิมพระเกียรติ 72 พรรษา (อาคาร 15 ชั้น)",
-  "16. อาคารสำนักวิทยบริการและเทคโนโลยีสารสนเทศ",
-  "17. อาคารวิริยะ บัณฑิตครุศาสตร์",
-  "18. คณะเทคโนโลยีการเกษตร",
-  "19. อาคารวิศวกรรมศาสตร์",
-  "20. อาคารเทคโนโลยีคอมพิวเตอร์ออกแบบผลิตภัณฑ์",
-  "23. อาคารสาธารณสุขชุมชน",
-  "24. สำนักศิลปะและวัฒนธรรม",
-  "25. โรงยิม 1",
-  "26. ศูนย์ภาษาและคอมพิวเตอร์",
-  "31. หอประชุมเฉลิมพระเกียรติ 80 พรรษา",
-  "32. อาคารกองกิจการนักศึกษา (กองพัฒน์)",
-  "33. คณะนิติศาสตร์ / ศูนย์กฎหมายและการปกครอง",
-  "34. คณะวิทยาการจัดการ",
-  "อาคารเฉลิมพระเกียรติฉลองสิริราชสมบัติครบ 60 ปี",
-  "36. ศูนย์การเรียนรู้ภูมิปัญญาท้องถิ่น",
-  "37. ศูนย์ถ่ายทอดเทคโนโลยีอุตสาหกรรมสู่ท้องถิ่น",
-  "38. คณะเทคโนโลยีสารสนเทศ",
-  "39. อาคารปฏิบัติการกลางวิทยาศาสตร์",
-  "อาคารศูนย์กลางพัฒนาทรัพยากรมนุษย์เพื่อพัฒนาท้องถิ่น",
-  "A. สนามอรุณ ปรีดีดิลก (สนาม 3)",
-  "B. สนามมวย",
-  "C. สนามกีฬา",
-  "D. โรงเรียนสาธิตมหาวิทยาลัยราชภัฏมหาสารคาม",
-  "E. โรงเรียนอนุบาลสาธิตมหาวิทยาลัยราชภัฏมหาสารคาม",
-  "G. โรงอาหาร",
-  "H. สนามกีฬา 1",
-  "I. สนามกีฬา 2",
-  "J. อาคารบูรพา / หอพักนักศึกษา",
-  "L. สระว่ายน้ำ",
-  "N. โรงแรมสวนวรุณ",
-  "อื่นๆ (ระบุในรายละเอียด)"
-]
-
 export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalProps) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState<ItemCategory>("other")
   const [location, setLocation] = useState("")
   const [locationDetail, setLocationDetail] = useState("")
-  const [images, setImages] = useState<string[]>([])
-  const MAX_IMAGES = 5
   const [loading, setLoading] = useState(false)
   const [userDisplayName, setUserDisplayName] = useState<string>("")
   const { user } = useAuth()
   const { toast } = useToast()
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
+
+  // Use the shared image upload hook
+  const { 
+    images, 
+    isUploading, 
+    handleFileChange: handleImageChange, 
+    removeImage, 
+    clearImages,
+    canAddMore 
+  } = useImageUpload({ 
+    maxImages: 5, 
+    folder: "item" 
+  })
 
   // Load user profile and cooldown from storage on mount
   useEffect(() => {
@@ -130,75 +89,14 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
     setCategory("other")
     setLocation("")
     setLocationDetail("")
-    setImages([])
+    clearImages()
   }
 
   const handleClose = () => {
-    if (!loading) {
+    if (!loading && !isUploading) {
       resetForm()
       onOpenChange(false)
     }
-  }
-
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    // Check max limit
-    if (images.length + files.length > MAX_IMAGES) {
-      toast({
-        title: "รูปภาพเกินจำนวน",
-        description: `สามารถอัพโหลดได้สูงสุด ${MAX_IMAGES} รูป`,
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      const newImages: string[] = []
-      let uploadCount = 0
-
-      for (const file of Array.from(files)) {
-        // Validate each file
-        const validation = validateImageFile(file)
-        if (!validation.valid) {
-          toast({
-            title: "ไฟล์ไม่ถูกต้อง",
-            description: `${file.name}: ${validation.error}`,
-            variant: "destructive",
-          })
-          continue
-        }
-
-        // Upload to Cloudinary
-        const cloudinaryUrl = await uploadToCloudinary(file, 'item')
-        newImages.push(cloudinaryUrl)
-        uploadCount++
-      }
-
-      if (newImages.length > 0) {
-        setImages(prev => [...prev, ...newImages].slice(0, MAX_IMAGES))
-        
-        toast({
-          title: `อัปโหลด ${uploadCount} รูปภาพสำเร็จ ✨`,
-          description: `รูปภาพถูกบันทึกไปยัง Cloudinary CDN`,
-        })
-      }
-    } catch (error) {
-      console.error("[PostItemModal] Error processing images:", error)
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถประมวลผลรูปภาพได้",
-        variant: "destructive",
-      })
-    }
-    
-    // Reset input
-    e.target.value = ''
-  }
-
-  const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -367,7 +265,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {categoryOptions.map((option) => {
+                  {CATEGORY_OPTIONS.map((option) => {
                     const IconComponent = option.icon
                     return (
                       <SelectItem key={option.value} value={option.value}>
@@ -389,7 +287,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                   <SelectValue placeholder="เลือกสถานที่" />
                 </SelectTrigger>
                 <SelectContent>
-                  {locationOptions.map((loc) => (
+                  {LOCATION_OPTIONS.map((loc) => (
                     <SelectItem key={loc} value={loc}>
                       {loc}
                     </SelectItem>
@@ -430,7 +328,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
           {/* Image Upload - Multiple Images */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              รูปภาพ <span className="text-muted-foreground font-normal">({images.length}/{MAX_IMAGES})</span>
+              รูปภาพ <span className="text-muted-foreground font-normal">({images.length}/5)</span>
             </Label>
             
             {/* Image Grid */}
@@ -458,7 +356,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                 ))}
                 
                 {/* Add More Button */}
-                {images.length < MAX_IMAGES && (
+                {canAddMore && (
                   <label
                     htmlFor="modal-image"
                     className="aspect-square border-2 border-dashed border-border rounded-lg cursor-pointer bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-1"
@@ -472,7 +370,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                       multiple
                       className="hidden" 
                       onChange={handleImageChange}
-                      disabled={loading} 
+                      disabled={loading || isUploading} 
                     />
                   </label>
                 )}
@@ -491,7 +389,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                 <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
                   คลิกเพื่ออัปโหลดรูปภาพ
                 </span>
-                <span className="text-xs text-muted-foreground mt-0.5">เลือกได้สูงสุด {MAX_IMAGES} รูป (PNG, JPG, GIF)</span>
+                <span className="text-xs text-muted-foreground mt-0.5">เลือกได้สูงสุด 5 รูป (PNG, JPG, GIF)</span>
                 <Input 
                   id="modal-image-empty" 
                   type="file" 
@@ -499,7 +397,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                   multiple
                   className="hidden" 
                   onChange={handleImageChange}
-                  disabled={loading} 
+                  disabled={loading || isUploading} 
                 />
               </label>
             )}

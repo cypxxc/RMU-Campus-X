@@ -6,7 +6,7 @@ import type { Item, ItemCategory, ItemStatus } from "@/types"
 import { ItemCard } from "@/components/item-card"
 import { FilterSidebar } from "@/components/filter-sidebar"
 import { Button } from "@/components/ui/button"
-import { Search, Loader2, Package, Sparkles, X } from "lucide-react"
+import { Search, Loader2, Package, Sparkles, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { Input } from "@/components/ui/input"
 import {
@@ -19,12 +19,14 @@ import { AccountStatusBanner } from "@/components/account-status-banner"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
 import debounce from 'lodash/debounce'
-import { useInView } from 'react-intersection-observer'
 import { toast } from 'sonner'
-import { memo } from "react" // Keep memo for MemoizedItemCard
+import { memo } from "react"
+import { DocumentSnapshot } from "firebase/firestore"
 
 // Memoized Item Card เพื่อป้องกัน re-render
 const MemoizedItemCard = memo(ItemCard)
+
+const PAGE_SIZE = 12
 
 export default function DashboardPage() {
   const [items, setItems] = useState<Item[]>([])
@@ -37,11 +39,11 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
 
-  // Infinite scroll states
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(true)
-  const lastDocRef = useRef<any>(null)
-  const { ref, inView } = useInView()
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const paginationDocs = useRef<Map<number, DocumentSnapshot | null>>(new Map([[1, null]]))
+  const [totalPages, setTotalPages] = useState(1)
 
   // Debounce search query
   useEffect(() => {
@@ -52,6 +54,7 @@ export default function DashboardPage() {
     const handler = debounce(() => {
       setDebouncedSearchQuery(searchQuery)
       setIsSearching(false)
+      setCurrentPage(1) // Reset to first page on search
     }, 500)
 
     handler()
@@ -61,65 +64,74 @@ export default function DashboardPage() {
     }
   }, [searchQuery])
 
-  // Memoized loadItems function
-  const loadItems = useCallback(async (isInitial: boolean = false) => {
-    try {
-      if (isInitial) {
-        setLoading(true)
-        setItems([])
-        lastDocRef.current = null
-        setHasMore(true)
-      } else {
-        setLoadingMore(true)
-      }
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+    paginationDocs.current = new Map([[1, null]])
+  }, [categories, status])
 
-      const filters: { categories?: ItemCategory[]; status?: ItemStatus; searchQuery?: string; lastDoc?: any; pageSize?: number } = {
-        pageSize: 12,
+  // Load items logic
+  const loadItems = useCallback(async (page: number) => {
+    try {
+      setLoading(true)
+      
+      const lastDoc = page === 1 ? null : paginationDocs.current.get(page) ?? null
+
+      const filters: { 
+        categories?: ItemCategory[]; 
+        status?: ItemStatus; 
+        searchQuery?: string; 
+        lastDoc?: any; 
+        pageSize?: number 
+      } = {
+        pageSize: PAGE_SIZE,
+        lastDoc
       }
+      
       if (categories.length > 0) filters.categories = categories
       if (status !== "all") filters.status = status
       if (debouncedSearchQuery.trim()) filters.searchQuery = debouncedSearchQuery.trim()
-      if (!isInitial && lastDocRef.current) filters.lastDoc = lastDocRef.current
 
       const result = await getItems(filters)
       
       if (result.success && result.data) {
-        const newItems = result.data.items
-        if (isInitial) {
-          setItems(newItems)
-        } else {
-          setItems(prev => [...prev, ...newItems])
+        setItems(result.data.items)
+        
+        // Update total count and pages
+        const count = result.data.totalCount || 0
+        setTotalCount(count)
+        setTotalPages(Math.ceil(count / PAGE_SIZE) || 1)
+
+        // Store next page cursor
+        if (result.data.lastDoc && result.data.hasMore) {
+          paginationDocs.current.set(page + 1, result.data.lastDoc)
         }
-        lastDocRef.current = result.data.lastDoc
-        setHasMore(result.data.hasMore)
       } else {
         console.error('[Dashboard] Error:', result.error)
         toast.error('ไม่สามารถโหลดข้อมูลได้')
         setItems([])
-        setHasMore(false)
+        setTotalCount(0)
       }
     } catch (error) {
       console.error('[Dashboard] Error:', error)
       toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล')
       setItems([])
-      setHasMore(false)
     } finally {
       setLoading(false)
-      setLoadingMore(false)
     }
-  }, [categories, status, debouncedSearchQuery]) // lastDoc removed from dependency
+  }, [categories, status, debouncedSearchQuery])
 
-  // Initial load and reload on filter/search change
+  // Load items when page or dependencies change
   useEffect(() => {
-    loadItems(true)
-  }, [categories, status, debouncedSearchQuery]) // Removed loadItems from dependencies
+    loadItems(currentPage)
+  }, [loadItems, currentPage])
 
-  // Load more items when inView and conditions met
-  useEffect(() => {
-    if (inView && hasMore && !loading && !loadingMore) {
-      loadItems(false)
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
-  }, [inView, hasMore, loading, loadingMore, loadItems])
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -164,14 +176,20 @@ export default function DashboardPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
               <h2 className="text-sm font-medium text-muted-foreground order-2 sm:order-1 flex items-center gap-2">
                 {loading ? (
-                  "กำลังโหลด..."
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    กำลังโหลด...
+                  </>
                 ) : isSearching ? (
                   <>
                     <Loader2 className="h-3 w-3 animate-spin" />
                     กำลังค้นหา...
                   </>
                 ) : (
-                  debouncedSearchQuery ? `พบ ${items.length} รายการจากคำค้นหา` : `พบ ${items.length} รายการ`
+                  <>
+                    {debouncedSearchQuery ? `พบ ${totalCount} รายการจากคำค้นหา` : `ทั้งหมด ${totalCount} รายการ`}
+                    {totalCount > 0 && <span className="hidden sm:inline">• หน้า {currentPage}/{totalPages}</span>}
+                  </>
                 )}
               </h2>
               
@@ -197,7 +215,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Loading State - Skeleton */}
-            {loading && items.length === 0 ? (
+            {loading ? (
               <ItemCardSkeletonGrid count={6} />
             ) : items.length === 0 ? (
               /* Empty State */
@@ -244,10 +262,37 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {/* Infinite Scroll Loader */}
-                {hasMore && items.length > 0 && (
-                  <div ref={ref} className="mt-8 flex justify-center py-4">
-                     {loadingMore && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="mt-8 flex items-center justify-between border-t pt-4">
+                    <p className="text-sm text-muted-foreground hidden sm:block">
+                      หน้า {currentPage} จาก {totalPages}
+                    </p>
+                    <div className="flex items-center gap-2 mx-auto sm:mx-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1 || loading}
+                        className="gap-1 min-w-[100px]"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        ก่อนหน้า
+                      </Button>
+                      <span className="text-sm font-medium sm:hidden">
+                        {currentPage} / {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages || loading}
+                        className="gap-1 min-w-[100px]"
+                      >
+                        ถัดไป
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 )}
               </>
