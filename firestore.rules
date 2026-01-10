@@ -51,10 +51,17 @@ service cloud.firestore {
     }
     
     function validChatMessage() {
-      return request.resource.data.keys().hasAll(['exchangeId', 'senderId', 'senderEmail', 'message']) &&
+      let requiredKeys = ['exchangeId', 'senderId', 'senderEmail', 'message'];
+      let allKeys = request.resource.data.keys();
+      let hasImage = 'imageUrl' in request.resource.data;
+      
+      return allKeys.hasAll(requiredKeys) &&
+             // Allow optional image fields
+             allKeys.hasOnly(requiredKeys.concat(['imageUrl', 'imageType', 'createdAt'])) &&
              request.resource.data.message is string &&
-             request.resource.data.message.size() > 0 &&
-             request.resource.data.message.size() <= 1000;
+             request.resource.data.message.size() <= 1000 &&
+             // Message must be non-empty OR existing image
+             (request.resource.data.message.size() > 0 || hasImage);
     }
     
     // Users collection

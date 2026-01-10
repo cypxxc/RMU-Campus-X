@@ -95,6 +95,8 @@ export interface ChatMessage {
   senderEmail: string
   message: string
   createdAt: Timestamp
+  imageUrl?: string
+  imageType?: 'image/jpeg' | 'image/png' | 'image/webp'
 }
 
 export type ReportType = "item_report" | "exchange_report" | "chat_report" | "user_report"

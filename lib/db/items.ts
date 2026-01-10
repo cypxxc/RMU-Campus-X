@@ -20,13 +20,24 @@ import { getFirebaseDb } from "@/lib/firebase"
 import type { Item, ItemCategory, ItemStatus } from "@/types"
 import { apiCall, TIMEOUT_CONFIG, type ApiResponse } from "@/lib/api-wrapper"
 
-// Helper to generate keywords
+// Helper to generate keywords with prefixes
 const generateKeywords = (title: string, description: string): string[] => {
   const text = `${title} ${description}`.toLowerCase()
   // Split by whitespace and remove empty strings
   const words = text.split(/[\s,]+/).filter(w => w.length > 0)
-  // Remove duplicates
-  return Array.from(new Set(words))
+  
+  const keywords = new Set<string>()
+  words.forEach(word => {
+    // Add full word
+    keywords.add(word)
+    // Add prefixes (e.g. "notebook" -> "not", "note", "noteb"...)
+    // Min length 3 to avoid noise
+    for (let i = 3; i < word.length; i++) {
+      keywords.add(word.substring(0, i))
+    }
+  })
+  
+  return Array.from(keywords)
 }
 
 // Items
@@ -74,10 +85,13 @@ export const getItems = async (filters?: {
       }
       
       // Search logic for base filtering
+      let searchTerms: string[] = []
       if (filters?.searchQuery) {
-        const terms = filters.searchQuery.toLowerCase().split(/\s+/).filter(t => t.length > 0)
-        if (terms.length > 0) {
-           baseConstraints.push(where("searchKeywords", "array-contains", terms[0]))
+        searchTerms = filters.searchQuery.toLowerCase().split(/\s+/).filter(t => t.length > 0)
+        if (searchTerms.length > 0) {
+           // Improved: Use array-contains-any to find ANY matching term, then filter strict matches in-memory
+           // Limit to 10 terms due to Firestore constraint
+           baseConstraints.push(where("searchKeywords", "array-contains-any", searchTerms.slice(0, 10)))
         }
       }
 
@@ -89,7 +103,6 @@ export const getItems = async (filters?: {
         totalCount = countSnapshot.data().count
       } catch (error) {
         console.warn("Count query failed", error)
-        // Fallback: totalCount remains 0 or we could try to estimate
       }
 
       // 2. Get data
@@ -100,15 +113,12 @@ export const getItems = async (filters?: {
       const snapshot = await getDocs(q)
       let items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Item)
       
-      // In-memory refinement for additional search terms
-      if (filters?.searchQuery) {
-          const terms = filters.searchQuery.toLowerCase().split(/\s+/).filter(t => t.length > 0)
-          if (terms.length > 1) {
-              items = items.filter(item => {
-                  const combined = `${item.title} ${item.description}`.toLowerCase()
-                  return terms.every(term => combined.includes(term))
-              })
-          }
+      // In-memory refinement for ALL terms (Intersection)
+      if (searchTerms.length > 0) {
+          items = items.filter(item => {
+              const combined = `${item.title} ${item.description}`.toLowerCase()
+              return searchTerms.every(term => combined.includes(term))
+          })
       }
       
       const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null

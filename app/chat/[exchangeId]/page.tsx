@@ -36,6 +36,8 @@ import {
 import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
 import { ReportModal } from "@/components/report-modal"
+import { ChatImageUpload } from "@/components/chat/chat-image-upload"
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 
 
 export default function ChatPage({
@@ -50,6 +52,11 @@ export default function ChatPage({
   const [newMessage, setNewMessage] = useState("")
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  
+  // Image Upload State
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null)
+  
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportType, setReportType] = useState<"chat_report" | "user_report">("chat_report")
   const [reportTargetId, setReportTargetId] = useState<string | null>(null)
@@ -137,29 +144,67 @@ export default function ChatPage({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newMessage.trim() || !user || !exchange) return
+    if ((!newMessage.trim() && !selectedImageFile) || !user || !exchange) return
 
     setSending(true)
     try {
+      let imageUrl = undefined
+      let imageType = undefined
+
+      // Upload image if selected
+      if (selectedImageFile) {
+        const formData = new FormData()
+        formData.append('file', selectedImageFile)
+        formData.append('preset', 'chat')
+
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!uploadRes.ok) {
+           // Try to parse error
+           let errorMsg = 'Image upload failed'
+           try {
+             const errData = await uploadRes.json()
+             errorMsg = errData.error || errorMsg
+           } catch (e) {}
+           throw new Error(errorMsg)
+        }
+
+        const data = await uploadRes.json()
+        imageUrl = data.url
+        imageType = selectedImageFile.type as any
+      }
+
+      const messageText = newMessage.trim() || (imageUrl ? "ส่งรูปภาพ" : "")
+
       const db = getFirebaseDb()
       await addDoc(collection(db, "chatMessages"), {
         exchangeId,
         senderId: user.uid,
         senderEmail: user.email,
-        message: newMessage.trim(),
+        message: messageText,
+        imageUrl,
+        imageType,
         createdAt: serverTimestamp(),
       })
 
       setNewMessage("")
+      setSelectedImageFile(null)
+      setSelectedImagePreview(null)
       scrollToBottom()
 
       // Create notification for recipient
       const recipientId = user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
+      const notificationMessage = imageUrl ? 
+        (newMessage.trim() ? `ส่งรูปภาพและข้อความถึงคุณ: ${newMessage.trim()}` : `ส่งรูปภาพถึงคุณ`) : 
+        `ส่งข้อความถึงคุณ: ${newMessage.substring(0, 30)}...`
 
       await createNotification({
         userId: recipientId,
-        title: "ข้อความใหม่",
-        message: `คุณได้รับข้อความใหม่จากการแลกเปลี่ยน: ${exchange.itemTitle}`,
+        title: "ข้อความใหม่จาก " + (user.displayName || user.email?.split('@')[0]),
+        message: notificationMessage,
         type: "chat",
         relatedId: exchangeId,
         senderId: user.uid,
@@ -174,7 +219,7 @@ export default function ChatPage({
             recipientId,
             senderName: user.email?.split('@')[0] || 'ผู้ใช้',
             itemTitle: exchange.itemTitle,
-            messagePreview: newMessage.trim(),
+            messagePreview: imageUrl ? '[ส่งรูปภาพ]' : newMessage.trim(),
             exchangeId
           })
         }).catch(err => console.log('[LINE] Notify chat error:', err))
@@ -182,9 +227,10 @@ export default function ChatPage({
         console.log('[LINE] Notify chat error:', lineError)
       }
     } catch (error: any) {
+      console.error('Send message error:', error)
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error?.message || "ไม่สามารถส่งข้อความได้",
+        title: "ส่งข้อความไม่สำเร็จ",
+        description: error?.message || "โปรดลองใหม่อีกครั้ง",
         variant: "destructive",
       })
     } finally {
@@ -211,11 +257,6 @@ export default function ChatPage({
 
         // Notify both parties about completion via LINE (async, best effort)
         try {
-          // Notify owner
-          if (exchange.ownerId !== user?.uid) {
-             // Use firestore notification only, LINE is supplementary
-          }
-          
           // Send LINE to Owner
           fetch('/api/line/notify-chat', {
             method: 'POST',
@@ -278,12 +319,12 @@ export default function ChatPage({
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <Card className="h-[calc(100vh-12rem)]">
-          <CardHeader className="border-b bg-muted/10">
+        <Card className="h-[calc(100vh-12rem)] shadow-lg border-border/60">
+          <CardHeader className="border-b bg-muted/10 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 {itemImage ? (
-                  <div className="relative h-12 w-12 rounded-lg overflow-hidden border">
+                  <div className="relative h-12 w-12 rounded-lg overflow-hidden border bg-background">
                     <Image 
                       src={itemImage} 
                       alt={exchange.itemTitle}
@@ -298,36 +339,24 @@ export default function ChatPage({
                   </div>
                 )}
                 <div>
-                  <CardTitle className="text-lg">{exchange.itemTitle}</CardTitle>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap">
+                  <CardTitle className="text-lg leading-tight">{exchange.itemTitle}</CardTitle>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap mt-1">
                     {isOwner ? `คุยกับ ${exchange.requesterEmail}` : `คุยกับ ${exchange.ownerEmail}`}
                     {item && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary ml-2">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary ml-2 border border-primary/20">
                         {item.category}
                       </span>
                     )}
                   </p>
-                  {item && (
-                    <div className="mt-1 text-xs text-muted-foreground/80 space-y-0.5">
-                      {item.location && (
-                        <p className="flex items-center gap-1">
-                          📍 {item.location} {item.locationDetail && `(${item.locationDetail})`}
-                        </p>
-                      )}
-                      <p className="line-clamp-1 italic max-w-[200px] sm:max-w-md">
-                        "{item.description}"
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline" className="h-9">
-                      <AlertTriangle className="h-4 w-4 mr-2" />
-                      รายงาน
-                      <ChevronDown className="h-4 w-4 ml-2" />
+                    <Button size="sm" variant="outline" className="h-9 gap-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="hidden sm:inline">รายงาน</span>
+                      <ChevronDown className="h-3 w-3 opacity-50" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -355,16 +384,17 @@ export default function ChatPage({
                 </DropdownMenu>
 
                 {exchange.status === "completed" ? (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary/10 text-primary text-sm font-bold border border-primary/20 h-9">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-500/10 text-green-600 border border-green-500/20 text-sm font-bold h-9">
                     <CheckCheck className="h-4 w-4" />
-                    แลกเปลี่ยนสำเร็จ
+                    <span className="hidden sm:inline">แลกเปลี่ยนสำเร็จ</span>
+                    <span className="sm:hidden">สำเร็จ</span>
                   </div>
                 ) : (
                   <>
                     {!hasConfirmed && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button size="sm" className="h-9 font-bold">
+                          <Button size="sm" className="h-9 font-bold bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md transition-all">
                             <CheckCheck className="h-4 w-4 mr-2" />
                             ยืนยัน
                           </Button>
@@ -419,8 +449,8 @@ export default function ChatPage({
             </div>
           </CardHeader>
 
-          <CardContent className="flex flex-col h-full p-0">
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <CardContent className="flex flex-col h-full p-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-background/20">
               {messages.map((msg) => {
                 const isOwnMessage = msg.senderId === user?.uid
                 const msgDate = msg.createdAt?.toDate?.() || new Date()
@@ -428,12 +458,47 @@ export default function ChatPage({
                 return (
                   <div key={msg.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
                     <div
-                      className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                        isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                      className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
+                        isOwnMessage 
+                          ? "bg-primary text-primary-foreground rounded-br-none" 
+                          : "bg-white dark:bg-muted text-foreground border border-border/40 rounded-bl-none"
                       }`}
                     >
-                      <p className="text-sm leading-relaxed">{msg.message}</p>
-                      <p className="text-xs opacity-70 mt-1">
+                      {msg.imageUrl && (
+                        <div className="mb-2 rounded-lg overflow-hidden relative">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <div className="relative cursor-pointer hover:opacity-90 transition-opacity">
+                                <Image 
+                                  src={msg.imageUrl} 
+                                  alt="Sent image" 
+                                  width={300} 
+                                  height={200}
+                                  className="w-full h-auto object-cover max-h-[250px] rounded-lg bg-black/5"
+                                  unoptimized
+                                />
+                              </div>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-3xl p-0 overflow-hidden bg-transparent border-none shadow-none">
+                              <div className="relative w-full h-[80vh]">
+                                <Image
+                                  src={msg.imageUrl}
+                                  alt="Full view"
+                                  fill
+                                  className="object-contain"
+                                  unoptimized
+                                />
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                      )}
+                      
+                      {msg.message && (
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.message}</p>
+                      )}
+                      
+                      <p className={`text-[10px] mt-1 ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
                         {formatDistanceToNow(msgDate, { addSuffix: true, locale: th })}
                       </p>
                     </div>
@@ -443,16 +508,39 @@ export default function ChatPage({
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSendMessage} className="border-t p-4">
-              <div className="flex gap-2">
+            <form onSubmit={handleSendMessage} className="border-t p-3 sm:p-4 bg-background">
+              <div className="flex gap-2 items-end">
+                <ChatImageUpload 
+                  onImageSelected={(file, preview) => {
+                    setSelectedImageFile(file)
+                    setSelectedImagePreview(preview)
+                  }}
+                  onClear={() => {
+                    setSelectedImageFile(null)
+                    setSelectedImagePreview(null)
+                  }}
+                  selectedImage={selectedImagePreview}
+                  disabled={sending}
+                />
+                
                 <Input
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="พิมพ์ข้อความ..."
                   disabled={sending}
+                  className="min-h-[40px] max-h-[120px] py-2"
                 />
-                <Button type="submit" disabled={sending || !newMessage.trim()}>
-                  <Send className="h-4 w-4" />
+                <Button 
+                  type="submit" 
+                  disabled={sending || (!newMessage.trim() && !selectedImageFile)}
+                  className="h-10 w-10 p-0 shrink-0"
+                >
+                  {sending ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                  <span className="sr-only">ส่ง</span>
                 </Button>
               </div>
             </form>
