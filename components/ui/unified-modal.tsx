@@ -133,12 +133,12 @@ export function UnifiedModal({
           >
             <div className="flex items-start gap-4">
               {/* Icon */}
-              {icon && (
+              {icon && React.isValidElement(icon) && (
                 <div className="h-10 w-10 shrink-0 rounded-xl bg-primary/10 flex items-center justify-center">
-                  {React.cloneElement(icon as React.ReactElement, {
+                  {React.cloneElement(icon as React.ReactElement<any>, {
                     className: cn(
                       "text-primary",
-                      (icon as React.ReactElement).props.className
+                      (icon as React.ReactElement<any>).props.className
                     ),
                   })}
                 </div>
