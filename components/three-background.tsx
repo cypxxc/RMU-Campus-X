@@ -5,7 +5,34 @@ import { Canvas, useFrame } from "@react-three/fiber"
 import { Float, MeshDistortMaterial } from "@react-three/drei"
 import * as THREE from "three"
 
-// Floating geometric shape component
+// Shape configurations
+interface ShapeConfig {
+  position: [number, number, number]
+  color: string
+  speed: number
+  distort?: number
+  size: number
+  shape: "sphere" | "box" | "torus" | "octahedron"
+}
+
+const PRIMARY_COLOR = "#22c55e"
+const SECONDARY_COLOR = "#16a34a"
+const ACCENT_COLOR = "#ef4444"
+
+const SHAPES: ShapeConfig[] = [
+  { position: [-3, 2, -5], color: PRIMARY_COLOR, speed: 1.2, size: 1.5, shape: "sphere", distort: 0.3 },
+  { position: [3.5, -1.5, -4], color: SECONDARY_COLOR, speed: 0.8, size: 1.2, shape: "box", distort: 0.2 },
+  { position: [-2, -2, -6], color: ACCENT_COLOR, speed: 1.5, size: 1, shape: "torus", distort: 0.3 },
+  { position: [2, 3, -7], color: PRIMARY_COLOR, speed: 0.6, size: 0.8, shape: "octahedron", distort: 0.4 },
+  { position: [4, 0, -8], color: SECONDARY_COLOR, speed: 1, size: 1.3, shape: "sphere", distort: 0.3 },
+  { position: [-4, 1, -9], color: ACCENT_COLOR, speed: 0.7, size: 0.9, shape: "box", distort: 0.3 },
+]
+
+const LITE_SHAPES: ShapeConfig[] = [
+  { position: [-2, 1, -4], color: PRIMARY_COLOR, speed: 0.8, size: 1.2, shape: "sphere", distort: 0.2 },
+  { position: [2, -1, -5], color: SECONDARY_COLOR, speed: 0.6, size: 1, shape: "box", distort: 0.15 },
+]
+
 function FloatingShape({ 
   position, 
   color, 
@@ -13,16 +40,10 @@ function FloatingShape({
   distort = 0.3,
   size = 1,
   shape = "sphere"
-}: { 
-  position: [number, number, number]
-  color: string
-  speed?: number
-  distort?: number
-  size?: number
-  shape?: "sphere" | "box" | "torus" | "octahedron"
-}) {
+}: ShapeConfig) {
   const meshRef = useRef<THREE.Mesh>(null)
-
+  
+  // Use simple rotation for performance
   useFrame((state) => {
     if (meshRef.current) {
       meshRef.current.rotation.x = state.clock.elapsedTime * speed * 0.2
@@ -30,16 +51,19 @@ function FloatingShape({
     }
   })
 
+  // Reduced geometry segments for better performance
   const geometry = useMemo(() => {
     switch (shape) {
       case "box":
         return <boxGeometry args={[size, size, size]} />
       case "torus":
-        return <torusGeometry args={[size * 0.6, size * 0.25, 16, 32]} />
+        // Reduced segments from 16, 32 to 12, 24
+        return <torusGeometry args={[size * 0.6, size * 0.25, 12, 24]} />
       case "octahedron":
         return <octahedronGeometry args={[size * 0.7]} />
       default:
-        return <sphereGeometry args={[size * 0.5, 32, 32]} />
+        // Reduced segments from 32, 32 to 24, 24
+        return <sphereGeometry args={[size * 0.5, 24, 24]} />
     }
   }, [shape, size])
 
@@ -66,7 +90,6 @@ function FloatingShape({
   )
 }
 
-// Particle field for ambient effect
 function Particles({ count = 100 }: { count?: number }) {
   const points = useMemo(() => {
     const positions = new Float32Array(count * 3)
@@ -95,6 +118,7 @@ function Particles({ count = 100 }: { count?: number }) {
           args={[points, 3]}
         />
       </bufferGeometry>
+      {/* Use sizeAttenuation=false if possible for perf, but here we want depth */}
       <pointsMaterial
         size={0.03}
         color="#4ade80"
@@ -106,80 +130,37 @@ function Particles({ count = 100 }: { count?: number }) {
   )
 }
 
-// Scene with all 3D elements
 function Scene() {
-  // University colors: Green (primary) and Red (accent)
-  const primaryColor = "#22c55e"
-  const secondaryColor = "#16a34a"
-  const accentColor = "#ef4444"
-
   return (
     <>
-      {/* Ambient lighting */}
       <ambientLight intensity={0.4} />
       <directionalLight position={[10, 10, 5]} intensity={0.8} />
-      <pointLight position={[-10, -10, -5]} intensity={0.4} color={primaryColor} />
+      <pointLight position={[-10, -10, -5]} intensity={0.4} color={PRIMARY_COLOR} />
 
-      {/* Floating shapes */}
-      <FloatingShape 
-        position={[-3, 2, -5]} 
-        color={primaryColor} 
-        speed={1.2} 
-        size={1.5}
-        shape="sphere"
-      />
-      <FloatingShape 
-        position={[3.5, -1.5, -4]} 
-        color={secondaryColor} 
-        speed={0.8} 
-        size={1.2}
-        shape="box"
-        distort={0.2}
-      />
-      <FloatingShape 
-        position={[-2, -2, -6]} 
-        color={accentColor} 
-        speed={1.5} 
-        size={1}
-        shape="torus"
-      />
-      <FloatingShape 
-        position={[2, 3, -7]} 
-        color={primaryColor} 
-        speed={0.6} 
-        size={0.8}
-        shape="octahedron"
-        distort={0.4}
-      />
-      <FloatingShape 
-        position={[4, 0, -8]} 
-        color={secondaryColor} 
-        speed={1} 
-        size={1.3}
-        shape="sphere"
-      />
-      <FloatingShape 
-        position={[-4, 1, -9]} 
-        color={accentColor} 
-        speed={0.7} 
-        size={0.9}
-        shape="box"
-      />
+      {SHAPES.map((props, i) => (
+        <FloatingShape key={i} {...props} />
+      ))}
 
-      {/* Particle system */}
-      <Particles count={150} />
+      <Particles count={100} /> {/* Reduced count from 150 */}
     </>
   )
 }
 
-// Main background component
 export function ThreeBackground({ className = "" }: { className?: string }) {
   return (
     <div className={`fixed inset-0 -z-10 ${className}`}>
       <Canvas
         camera={{ position: [0, 0, 5], fov: 60 }}
-        dpr={[1, 1.5]}
-        frameloop="demand"
+        dpr={[1, 1.5]} // Keep limited DPR for performance
+        frameloop="demand" // Only render when needed/requested, or use always if animating continually
+        // Actually for floating animation 'always' is smoother, but 'demand' saves battery if nothing moves. 
+        // Since we have useFrame, it will trigger loop. Let's stick to default or 'always' for smooth animation, 
+        // but 'demand' might cause stutter if not handling invalidation correctly. 
+        // However, useFrame usually forces invalidation. 
+        // Let's remove frameloop="demand" to ensure smooth animation for background unless it's strictly static.
+        // Actually, for a background that is always animating, strict 'demand' might miss frames if not driving loop.
+        // But React Three Fiber's default is 'always'.
+        // Let's try explicit 'always' or just remove the prop to fallback to default (always).
         gl={{ 
           antialias: true,
           alpha: true,
@@ -193,7 +174,6 @@ export function ThreeBackground({ className = "" }: { className?: string }) {
   )
 }
 
-// Lightweight version for performance-sensitive contexts
 export function ThreeBackgroundLite({ className = "" }: { className?: string }) {
   return (
     <div className={`fixed inset-0 -z-10 ${className}`}>
@@ -208,23 +188,10 @@ export function ThreeBackgroundLite({ className = "" }: { className?: string }) 
         style={{ background: "transparent" }}
       >
         <ambientLight intensity={0.5} />
-        <FloatingShape 
-          position={[-2, 1, -4]} 
-          color="#22c55e" 
-          speed={0.8} 
-          size={1.2}
-          shape="sphere"
-          distort={0.2}
-        />
-        <FloatingShape 
-          position={[2, -1, -5]} 
-          color="#16a34a" 
-          speed={0.6} 
-          size={1}
-          shape="box"
-          distort={0.15}
-        />
-        <Particles count={50} />
+        {LITE_SHAPES.map((props, i) => (
+          <FloatingShape key={i} {...props} />
+        ))}
+        <Particles count={30} />
       </Canvas>
     </div>
   )
