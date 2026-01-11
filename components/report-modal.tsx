@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useAuth } from "@/components/auth-provider"
-import { createReport } from "@/lib/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useImageUpload } from "@/hooks/use-image-upload"
 import Image from "next/image"
@@ -23,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Info, X, Plus, AlertTriangle } from "lucide-react"
-import { REPORT_TYPE_LABELS } from "@/lib/constants"
+import { REPORT_REASONS, REPORT_TYPE_LABELS } from "@/lib/constants"
 
 type ReportType = "item_report" | "exchange_report" | "chat_report" | "user_report"
 
@@ -33,43 +32,6 @@ interface ReportModalProps {
   reportType: ReportType
   targetId: string
   targetTitle?: string
-}
-
-const REPORT_REASONS = {
-  item_report: [
-    { code: "item_fake_info", label: "ข้อมูลสิ่งของไม่ถูกต้องหรือเท็จ" },
-    { code: "item_inappropriate", label: "เนื้อหาไม่เหมาะสม" },
-    { code: "item_duplicate", label: "โพสต์ซ้ำ" },
-    { code: "item_spam", label: "สแปม" },
-    { code: "item_illegal", label: "สิ่งของผิดกฎหมาย" },
-    { code: "item_scam", label: "มิจฉาชีพ" },
-    { code: "other", label: "อื่นๆ (โปรดระบุ)" },
-  ],
-  exchange_report: [
-    { code: "exchange_no_show", label: "ไม่มาตามนัด" },
-    { code: "exchange_wrong_item", label: "สิ่งของไม่ตรงตามที่ตกลง" },
-    { code: "exchange_rude", label: "พูดจาหยาบคาย" },
-    { code: "exchange_unsafe", label: "พฤติกรรมไม่ปลอดภัย" },
-    { code: "exchange_scam", label: "มิจฉาชีพ" },
-    { code: "other", label: "อื่นๆ (โปรดระบุ)" },
-  ],
-  chat_report: [
-    { code: "chat_harassment", label: "คุกคามหรือก่อกวน" },
-    { code: "chat_spam", label: "ส่งข้อความสแปม" },
-    { code: "chat_inappropriate", label: "เนื้อหาไม่เหมาะสม" },
-    { code: "chat_scam", label: "พยายามหลอกลวง" },
-    { code: "chat_offensive", label: "พูดจาหยาบคายหรือดูถูก" },
-    { code: "other", label: "อื่นๆ (โปรดระบุ)" },
-  ],
-  user_report: [
-    { code: "user_fake_profile", label: "โปรไฟล์ปลอม" },
-    { code: "user_harassment", label: "คุกคามหรือก่อกวน" },
-    { code: "user_scam", label: "มิจฉาชีพ" },
-    { code: "user_inappropriate", label: "พฤติกรรมไม่เหมาะสม" },
-    { code: "user_spam", label: "สแปม" },
-    { code: "user_impersonation", label: "แอบอ้างเป็นผู้อื่น" },
-    { code: "other", label: "อื่นๆ (โปรดระบุ)" },
-  ],
 }
 
 export function ReportModal({ open, onOpenChange, reportType, targetId, targetTitle }: ReportModalProps) {
@@ -104,134 +66,22 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
 
     setLoading(true)
     try {
-      // Fetch reported user info based on report type
-      let reportedUserId = ""
-      let reportedUserEmail = ""
+      // Import the service dynamically or at the top level (better to dynamic here if we want to keep chunk size small, but top level is cleaner)
+      // Since we extracted it to a separate file, we can import it at top level, but for now let's use dynamic import
+      // to keep the main bundle light if this modal is lazy loaded
+      const { submitReport } = await import("@/lib/services/report-service")
       
-      if (reportType === "item_report") {
-        // For item reports, get the item owner
-        const { getFirebaseDb } = await import("@/lib/firebase")
-        const { doc, getDoc } = await import("firebase/firestore")
-        const db = getFirebaseDb()
-        const itemDoc = await getDoc(doc(db, "items", targetId))
-        if (itemDoc.exists()) {
-          reportedUserId = itemDoc.data().postedBy
-          reportedUserEmail = itemDoc.data().postedByEmail
-        }
-      } else if (reportType === "exchange_report") {
-        // For exchange reports, get the other party
-        const { getFirebaseDb } = await import("@/lib/firebase")
-        const { doc, getDoc } = await import("firebase/firestore")
-        const db = getFirebaseDb()
-        const exchangeDoc = await getDoc(doc(db, "exchanges", targetId))
-        if (exchangeDoc.exists()) {
-          const exchangeData = exchangeDoc.data()
-          // Report the other party (if reporter is owner, report requester and vice versa)
-          if (exchangeData.ownerId === user.uid) {
-            reportedUserId = exchangeData.requesterId
-            reportedUserEmail = exchangeData.requesterEmail
-          } else {
-            reportedUserId = exchangeData.ownerId
-            reportedUserEmail = exchangeData.ownerEmail
-          }
-        }
-      } else if (reportType === "chat_report") {
-        // For chat reports, targetId is the exchangeId - get the other party from exchange
-        const { getFirebaseDb } = await import("@/lib/firebase")
-        const { doc, getDoc } = await import("firebase/firestore")
-        const db = getFirebaseDb()
-        const exchangeDoc = await getDoc(doc(db, "exchanges", targetId))
-        if (exchangeDoc.exists()) {
-          const exchangeData = exchangeDoc.data()
-          // Report the other party in the chat
-          if (exchangeData.ownerId === user.uid) {
-            reportedUserId = exchangeData.requesterId
-            reportedUserEmail = exchangeData.requesterEmail
-          } else {
-            reportedUserId = exchangeData.ownerId
-            reportedUserEmail = exchangeData.ownerEmail
-          }
-        }
-      } else if (reportType === "user_report") {
-        // For user reports, targetId is already the userId
-        const { getFirebaseDb } = await import("@/lib/firebase")
-        const { doc, getDoc } = await import("firebase/firestore")
-        const db = getFirebaseDb()
-        const userDoc = await getDoc(doc(db, "users", targetId))
-        if (userDoc.exists()) {
-          reportedUserId = targetId
-          reportedUserEmail = userDoc.data().email
-        }
-      }
-
-      // Determine targetType from reportType
-      const targetTypeMap: Record<string, string> = {
-        item_report: "item",
-        exchange_report: "exchange",
-        chat_report: "chat",
-        user_report: "user",
-      }
-      const targetType = targetTypeMap[reportType] || "unknown"
-
-      // Build better targetTitle
-      let finalTargetTitle = targetTitle || ""
-      if (!finalTargetTitle && reportedUserEmail) {
-        finalTargetTitle = reportedUserEmail
-      }
-      if (!finalTargetTitle) {
-        finalTargetTitle = selectedReason?.label || "ไม่ระบุ"
-      }
-
-      const reportData: any = {
+      await submitReport({
         reportType,
-        targetType,
+        targetId,
+        targetTitle,
         reasonCode,
-        reason: selectedReason?.label || "",
-        description: description.trim() || "ไม่มีรายละเอียดเพิ่มเติม",
+        reasonLabel: selectedReason?.label || "",
+        description,
         reporterId: user.uid,
         reporterEmail: user.email || "",
-        reportedUserId,
-        reportedUserEmail,
-        targetId,
-        targetTitle: finalTargetTitle,
-        evidenceUrls: images,
-      }
-
-      await createReport(reportData)
-
-      // Send LINE notification to reported user (async, don't block)
-      if (reportedUserId) {
-        try {
-          fetch('/api/line/notify-user-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: reportedUserId,
-              action: 'reported',
-              reportType,
-              targetTitle: targetTitle || selectedReason?.label || 'เนื้อหาของคุณ'
-            })
-          }).catch(err => console.log('[LINE] Notify reported error:', err))
-        } catch (lineError) {
-          console.log('[LINE] Notify reported error:', lineError)
-        }
-      }
-
-      // Send LINE notification to all admins (async, don't block)
-      try {
-        fetch('/api/line/notify-admin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'new_report',
-            reportType,
-            targetTitle: targetTitle || selectedReason?.label || 'ไม่ระบุ',
-            reporterEmail: user.email || 'ไม่ระบุ'
-          })
-        }).catch(err => console.log('[LINE] Notify admin error:', err))
-      } catch (lineError) {
-        console.log('[LINE] Notify admin error:', lineError)
-      }
+        images
+      })
 
       toast({
         title: "ส่งรายงานสำเร็จ",

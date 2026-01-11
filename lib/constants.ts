@@ -166,6 +166,45 @@ export const REPORT_REASON_OPTIONS = [
 
 // ============ Support Ticket Constants ============
 
+export const REPORT_REASONS = {
+  item_report: [
+    { code: "item_fake_info", label: "ข้อมูลสิ่งของไม่ถูกต้องหรือเท็จ" },
+    { code: "item_inappropriate", label: "เนื้อหาไม่เหมาะสม" },
+    { code: "item_duplicate", label: "โพสต์ซ้ำ" },
+    { code: "item_spam", label: "สแปม" },
+    { code: "item_illegal", label: "สิ่งของผิดกฎหมาย" },
+    { code: "item_scam", label: "มิจฉาชีพ" },
+    { code: "other", label: "อื่นๆ (โปรดระบุ)" },
+  ],
+  exchange_report: [
+    { code: "exchange_no_show", label: "ไม่มาตามนัด" },
+    { code: "exchange_wrong_item", label: "สิ่งของไม่ตรงตามที่ตกลง" },
+    { code: "exchange_rude", label: "พูดจาหยาบคาย" },
+    { code: "exchange_unsafe", label: "พฤติกรรมไม่ปลอดภัย" },
+    { code: "exchange_scam", label: "มิจฉาชีพ" },
+    { code: "other", label: "อื่นๆ (โปรดระบุ)" },
+  ],
+  chat_report: [
+    { code: "chat_harassment", label: "คุกคามหรือก่อกวน" },
+    { code: "chat_spam", label: "ส่งข้อความสแปม" },
+    { code: "chat_inappropriate", label: "เนื้อหาไม่เหมาะสม" },
+    { code: "chat_scam", label: "พยายามหลอกลวง" },
+    { code: "chat_offensive", label: "พูดจาหยาบคายหรือดูถูก" },
+    { code: "other", label: "อื่นๆ (โปรดระบุ)" },
+  ],
+  user_report: [
+    { code: "user_fake_profile", label: "โปรไฟล์ปลอม" },
+    { code: "user_harassment", label: "คุกคามหรือก่อกวน" },
+    { code: "user_scam", label: "มิจฉาชีพ" },
+    { code: "user_inappropriate", label: "พฤติกรรมไม่เหมาะสม" },
+    { code: "user_spam", label: "สแปม" },
+    { code: "user_impersonation", label: "แอบอ้างเป็นผู้อื่น" },
+    { code: "other", label: "อื่นๆ (โปรดระบุ)" },
+  ],
+};
+
+// ============ Support Ticket Constants ============
+
 export const SUPPORT_CATEGORY_LABELS: Record<string, string> = {
   general: "ทั่วไป",
   bug: "แจ้งปัญหา",

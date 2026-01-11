@@ -1,0 +1,16 @@
+{
+  "name": "RMU-Campus X",
+  "short_name": "RMU Campus",
+  "description": "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของสำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/images/exchange.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -40,9 +40,9 @@ export const metadata: Metadata = {
     siteName: "RMU-Campus X",
   },
   robots: {
-    index: true,
     follow: true,
   },
+  manifest: "/manifest.json",
 }
 
 export const viewport: Viewport = {
