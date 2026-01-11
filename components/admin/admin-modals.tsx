@@ -519,9 +519,9 @@ interface EmptyStateProps {
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      {icon && (
+      {icon && React.isValidElement(icon) && (
         <div className="p-4 rounded-full bg-muted/50 mb-4">
-          {React.cloneElement(icon as React.ReactElement, {
+          {React.cloneElement(icon as React.ReactElement<any>, {
             className: "h-10 w-10 text-muted-foreground/50",
           })}
         </div>
