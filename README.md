@@ -85,7 +85,8 @@ User Action → React Component → API Route → Firebase/Service → Response
 | **Firebase** | 12.5.0 | Authentication & Database |
 | **Firebase Admin** | 13.6.0 | Server-side Operations |
 | **Cloudinary** | 2.8.0 | Image CDN & Optimization |
-| **LINE Messaging API** | - | Notifications & Chat |
+| **LINE Messaging API** | - | Notifications & Chat Integration |
+| **Google Gemini AI** | 1.5 Flash | AI Chatbot (Sharky) |
 | **Vercel** | - | Hosting & Deployment |
 
 ### Development & Testing
