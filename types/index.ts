@@ -18,6 +18,7 @@ export interface User {
   uid: string
   email: string
   displayName?: string
+  bio?: string
   photoURL?: string
   createdAt: Timestamp
   isAdmin?: boolean
@@ -49,6 +50,12 @@ export interface User {
     exchangeRequest: boolean             // แจ้งเตือนเมื่อมีคนขอของ
     exchangeStatus: boolean              // แจ้งเตือนเมื่อสถานะเปลี่ยน
     exchangeComplete: boolean            // แจ้งเตือนเมื่อแลกเปลี่ยนสำเร็จ
+  }
+
+  // Reviews System
+  rating?: {
+    average: number
+    count: number
   }
 }
 

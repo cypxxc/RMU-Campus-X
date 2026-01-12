@@ -1,6 +1,6 @@
 import type React from "react"
+import { AuthGuard } from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
-import { AuthProvider } from "@/components/auth-provider"
 
 export default function ProfileLayout({
   children,
@@ -8,9 +8,11 @@ export default function ProfileLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthProvider>
+    <AuthGuard>
       <Navbar />
-      {children}
-    </AuthProvider>
+      <div className="min-h-screen bg-background pt-16 pb-20 lg:pb-0">
+        {children}
+      </div>
+    </AuthGuard>
   )
 }

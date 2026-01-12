@@ -67,19 +67,17 @@ service cloud.firestore {
     // Users collection
     // NOTE: Allow public read for LINE webhook (uses REST API runQuery without auth)
     match /users/{userId} {
-      allow get: if true;   // Public read for individual user profiles
-      allow list: if true;  // Public query - needed for LINE webhook to find users by email
+      allow get: if true;   // Public read for individual user profiles (needed for posts)
+      allow list: if isSignedIn(); // Restricted list to signed in users
       allow create: if isSignedIn() && isOwner(userId) && isRMUEmail() &&
                       request.resource.data.uid == userId &&
                       request.resource.data.email == request.auth.token.email &&
                       request.resource.data.email.matches('.*@rmu[.]ac[.]th$');
       allow update: if (isOwner(userId) && 
-                        (isVerified() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt', 'lineUserId', 'lineNotifications'])) &&
+                        (isVerified() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'updatedAt', 'lineUserId', 'lineNotifications'])) &&
                         request.resource.data.uid == userId &&
                         request.resource.data.email == resource.data.email) ||
-                       isAdmin() ||
-                       // Allow LINE webhook to update ONLY lineUserId and lineNotifications (no auth)
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lineUserId', 'lineNotifications']);
+                       isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
     }
     
@@ -229,6 +227,14 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isAdmin();
       allow update, delete: if false;
+    }
+
+    // Favorites collection
+    match /favorites/{favoriteId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn(); // Filtered by userId in query
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
 }

@@ -5,6 +5,9 @@ import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
 import { QueryProvider } from "@/components/query-provider"
+import { AuthProvider } from "@/components/auth-provider"
+import { SiteFooter } from "@/components/site-footer"
+import { HelpBotWidget } from "@/components/help-bot/chat-widget"
 import "./globals.css"
 
 const geistSans = Geist({ 
@@ -60,19 +63,23 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="th" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="th" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`} data-scroll-behavior="smooth">
       <body className="font-sans antialiased bg-background text-foreground">
         <QueryProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            {children}
-            <Toaster />
-            <Analytics />
-          </ThemeProvider>
+          <AuthProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              {children}
+              <SiteFooter />
+              <Toaster />
+              <Analytics />
+              <HelpBotWidget />
+            </ThemeProvider>
+          </AuthProvider>
         </QueryProvider>
       </body>
     </html>

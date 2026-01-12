@@ -41,16 +41,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const { doc, getDoc, setDoc, serverTimestamp } = await import("firebase/firestore")
               const db = getFirebaseDb()
               
-              // Check admin status
-              const adminDoc = await getDoc(doc(db, "admins", user.uid))
-              const isUserAdmin = adminDoc.exists()
-              setIsAdmin(isUserAdmin)
+              // Parallel Fetch: Check admin status AND user document
+              const [adminDoc, userDocSnap] = await Promise.all([
+                getDoc(doc(db, "admins", user.uid)),
+                getDoc(doc(db, "users", user.uid))
+              ])
+              
+              setIsAdmin(adminDoc.exists())
               
               // Auto-create user document if not exists (critical for posting)
-              const userDocRef = doc(db, "users", user.uid)
-              const userDocSnap = await getDoc(userDocRef)
               if (!userDocSnap.exists()) {
-                await setDoc(userDocRef, {
+                await setDoc(doc(db, "users", user.uid), {
                   uid: user.uid,
                   email: user.email,
                   displayName: user.displayName || user.email?.split("@")[0] || "",
@@ -59,12 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   createdAt: serverTimestamp(),
                   updatedAt: serverTimestamp(),
                 })
+              } else {
+                // Check for auto-unsuspend efficiently
+                const userData = userDocSnap.data()
+                if (userData?.status === 'SUSPENDED') {
+                  const { checkAndAutoUnsuspend } = await import("@/lib/firestore")
+                  await checkAndAutoUnsuspend(user.uid, userData)
+                }
               }
-              
-              // Auto-unsuspend check
-              const { checkAndAutoUnsuspend } = await import("@/lib/firestore")
-              await checkAndAutoUnsuspend(user.uid)
-            } catch {
+            } catch (error) {
+              console.error("Auth init error:", error)
               setIsAdmin(false)
             }
           } else {

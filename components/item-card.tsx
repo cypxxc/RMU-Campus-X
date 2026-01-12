@@ -10,11 +10,13 @@ import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
 import Image from "next/image"
 import Link from "next/link"
+import { FavoriteButton } from "@/components/favorite-button"
 
 interface ItemCardProps {
   item: Item
   showRequestButton?: boolean
   onViewDetails?: (item: Item) => void
+  priority?: boolean
 }
 
 const categoryLabels: Record<string, string> = {
@@ -39,7 +41,7 @@ const statusColors: Record<string, string> = {
 }
 
 // ✅ Memoized to prevent re-renders when parent re-renders
-export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showRequestButton = true, onViewDetails }: ItemCardProps) {
+export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showRequestButton = true, onViewDetails, priority = false }: ItemCardProps) {
   const postedDate = item.postedAt?.toDate?.() || new Date()
 
   const handleCardClick = (e: React.MouseEvent) => {
@@ -63,20 +65,28 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
                 alt={item.title} 
                 fill 
                 className="object-cover transition-transform duration-300 group-hover:scale-105"
-                unoptimized
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                priority={priority}
               />
               {/* Image count badge */}
               {item.imageUrls && item.imageUrls.length > 1 && (
-                <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
-                  +{item.imageUrls.length - 1}
+                <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`มีรูปภาพเพิ่มเติมอีก ${item.imageUrls.length - 1} รูป`}>
+                  <span aria-hidden="true">+{item.imageUrls.length - 1}</span>
                 </div>
               )}
+              {/* Favorite Button */}
+              <div className="absolute top-2 left-2 z-10 transition-transform duration-200 hover:scale-110">
+                <FavoriteButton item={item} />
+              </div>
               {/* Gradient overlay */}
               <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </div>
           ) : (
-            <div className="aspect-4/3 w-full bg-muted flex items-center justify-center">
+            <div className="relative aspect-4/3 w-full bg-muted flex items-center justify-center">
               <Package className="h-12 w-12 text-muted-foreground/50" />
+               <div className="absolute top-2 left-2 z-10 transition-transform duration-200 hover:scale-110">
+                <FavoriteButton item={item} />
+              </div>
             </div>
           )}
         </div>
@@ -119,6 +129,18 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
             <Calendar className="h-3.5 w-3.5" />
             {formatDistanceToNow(postedDate, { addSuffix: true, locale: th })}
           </span>
+        </div>
+
+        {/* Poster Info */}
+        <div className="pt-2 mt-1 border-t flex items-center gap-2 relative z-20" onClick={(e) => e.stopPropagation()}>
+          <span className="text-xs text-muted-foreground">โพสต์โดย:</span>
+          <Link 
+            href={`/profile/${item.postedBy}`}
+            className="text-xs font-bold hover:text-primary hover:underline transition-colors flex items-center gap-1"
+            title="คลิกเพื่อดูโปรไฟล์"
+          >
+            {item.postedByName || "ผู้ใช้งาน"}
+          </Link>
         </div>
       </CardContent>
 

@@ -45,7 +45,6 @@ export function Logo({ size = "md", showIcon = true, href = "/dashboard", classN
             width={sizeConfig.iconPx}
             height={sizeConfig.iconPx}
             className="object-contain"
-            priority
           />
         </div>
       )}

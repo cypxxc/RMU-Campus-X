@@ -1,6 +1,8 @@
-import type React from "react"
+"use client"
+
+import { AuthGuard } from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
-import { AuthProvider } from "@/components/auth-provider"
+import { SiteBreadcrumb } from "@/components/site-breadcrumb"
 
 export default function DashboardLayout({
   children,
@@ -8,9 +10,18 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthProvider>
-      <Navbar />
-      {children}
-    </AuthProvider>
+    <AuthGuard>
+       <div className="min-h-screen bg-background">
+         <Navbar />
+         <div className="border-b">
+           <div className="container mx-auto px-4">
+              <SiteBreadcrumb />
+           </div>
+         </div>
+         <main className="container mx-auto px-4 py-8">
+           {children}
+         </main>
+       </div>
+    </AuthGuard>
   )
 }
