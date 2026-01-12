@@ -72,6 +72,7 @@ export default function ChatPage({
   const router = useRouter()
   const { toast } = useToast()
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // รอให้ auth โหลดเสร็จก่อน
@@ -154,7 +155,9 @@ export default function ChatPage({
   }
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight
+    }
   }
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -478,7 +481,7 @@ export default function ChatPage({
           </CardHeader>
 
           <CardContent className="flex flex-col h-full p-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-background/20">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-background/20" ref={scrollAreaRef}>
               {messages.map((msg) => {
                 const isOwnMessage = msg.senderId === user?.uid
                 const msgDate = msg.createdAt?.toDate?.() || new Date()
