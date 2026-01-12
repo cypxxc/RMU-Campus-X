@@ -35,7 +35,24 @@ export function EditProfileForm({
     setBio(initialBio)
   }, [initialDisplayName, initialBio])
 
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
   const handleSave = async () => {
+    setErrors({})
+    
+    // Validate with Zod
+    const { userProfileSchema } = await import("@/lib/schemas")
+    const result = userProfileSchema.safeParse({ displayName, bio })
+    
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {}
+      result.error.issues.forEach((issue) => {
+        if (issue.path[0]) fieldErrors[issue.path[0].toString()] = issue.message
+      })
+      setErrors(fieldErrors)
+      return
+    }
+
     setSaving(true)
     try {
       await onSave({ displayName, bio })
@@ -72,6 +89,7 @@ export function EditProfileForm({
             className="h-11 bg-muted/20"
           />
           <p className="text-[11px] text-muted-foreground">ชื่อนี้จะปรากฏเมื่อคุณแชทหรือประกาศสิ่งของ</p>
+          {errors.displayName && <p className="text-xs text-destructive mt-1">{errors.displayName}</p>}
         </div>
         
         <div className="space-y-2">
@@ -81,10 +99,13 @@ export function EditProfileForm({
             placeholder="แนะนำตัวสั้นๆ หรือบอกเวลาที่สะดวก..."
             value={bio}
             onChange={(e) => setBio(e.target.value)}
-            className="bg-muted/20 min-h-[100px] resize-none"
+            className={`bg-muted/20 min-h-[100px] resize-none ${errors.bio ? "border-destructive focus-visible:ring-destructive" : ""}`}
             maxLength={300}
           />
-          <p className="text-[11px] text-muted-foreground text-right">{bio.length}/300 ตัวอักษร</p>
+          <div className="flex justify-between items-start">
+             {errors.bio ? <p className="text-xs text-destructive">{errors.bio}</p> : <span />}
+             <p className="text-[11px] text-muted-foreground text-right">{bio.length}/300 ตัวอักษร</p>
+          </div>
         </div>
 
         <div className="space-y-2">

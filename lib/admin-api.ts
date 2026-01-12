@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { collection, query, where, getDocs, limit, startAfter, orderBy, addDoc, serverTimestamp } from 'firebase/firestore'
 import { getFirebaseDb } from './firebase'
-import { isAdmin } from './admin-auth'
+// import { isAdmin } from './admin-auth' // Removed, using server-side check
 
 /**
  * Standard API Response format
@@ -77,31 +77,63 @@ export function errorResponse(
 /**
  * Verify admin access
  */
+/**
+ * Verify admin access using Firebase ID Token
+ */
+import { verifyIdToken, getAdminDb } from './firebase-admin'
+import { getAuthToken } from './api-response'
+
 export async function verifyAdminAccess(request: NextRequest): Promise<{
   authorized: boolean
   user?: any
   error?: NextResponse
 }> {
   try {
-    // For now, get user from headers or session
-    // You'll need to implement proper session management
-    const userEmail = request.headers.get('x-user-email')
+    // 1. Get Token
+    const token = getAuthToken(request)
     
-    if (!userEmail) {
+    if (!token) {
       return {
         authorized: false,
         error: errorResponse(
           AdminErrorCode.UNAUTHORIZED,
-          'Authentication required',
+          'Authentication required (Bearer Token)',
           401
         ),
       }
     }
 
-    // Check admin role using admin-auth
-    const isAdminUser = await isAdmin(userEmail)
+    // 2. Verify Token
+    const decodedToken = await verifyIdToken(token)
+    if (!decodedToken) {
+      return {
+        authorized: false,
+        error: errorResponse(
+          AdminErrorCode.UNAUTHORIZED,
+          'Invalid or expired token',
+          401
+        ),
+      }
+    }
+    
+    const userEmail = decodedToken.email
+    if (!userEmail) {
+       return {
+        authorized: false,
+        error: errorResponse(
+          AdminErrorCode.FORBIDDEN,
+          'Token has no email',
+          403
+        ),
+      }
+    }
 
-    if (!isAdminUser) {
+    // 3. Check Admin Status in Firestore (using Admin SDK)
+    const db = getAdminDb()
+    const adminsRef = db.collection('admins')
+    const snapshot = await adminsRef.where('email', '==', userEmail).get()
+
+    if (snapshot.empty) {
       return {
         authorized: false,
         error: errorResponse(
@@ -112,9 +144,17 @@ export async function verifyAdminAccess(request: NextRequest): Promise<{
       }
     }
 
+    // 4. Get Role (Optional, for granular permissions)
+    const adminData = snapshot.docs[0]?.data() || {}
+    // You could attach adminData.role to returns if needed
+
     return {
       authorized: true,
-      user: { email: userEmail },
+      user: { 
+        uid: decodedToken.uid,
+        email: userEmail,
+        ...adminData 
+      },
     }
   } catch (error) {
     console.error('[Admin API] Auth error:', error)
@@ -122,7 +162,7 @@ export async function verifyAdminAccess(request: NextRequest): Promise<{
       authorized: false,
       error: errorResponse(
         AdminErrorCode.INTERNAL_ERROR,
-        'Internal server error',
+        'Internal server error during auth',
         500
       ),
     }

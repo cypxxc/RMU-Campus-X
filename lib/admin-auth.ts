@@ -3,8 +3,7 @@
  * Functions for verifying admin access and permissions
  */
 
-import { collection, query, where, getDocs } from 'firebase/firestore'
-import { getFirebaseDb } from './firebase'
+import { getAdminDb } from './firebase-admin'
 
 /**
  * Admin permissions by role
@@ -42,10 +41,9 @@ export type Permission = typeof ADMIN_PERMISSIONS[AdminRole][number]
  */
 export async function isAdmin(email: string): Promise<boolean> {
   try {
-    const db = getFirebaseDb()
-    const adminsRef = collection(db, 'admins')
-    const q = query(adminsRef, where('email', '==', email))
-    const snapshot = await getDocs(q)
+    const db = getAdminDb()
+    const adminsRef = db.collection('admins')
+    const snapshot = await adminsRef.where('email', '==', email).get()
     
     return !snapshot.empty
   } catch (error) {
@@ -59,10 +57,9 @@ export async function isAdmin(email: string): Promise<boolean> {
  */
 export async function getAdminRole(email: string): Promise<AdminRole | null> {
   try {
-    const db = getFirebaseDb()
-    const adminsRef = collection(db, 'admins')
-    const q = query(adminsRef, where('email', '==', email))
-    const snapshot = await getDocs(q)
+    const db = getAdminDb()
+    const adminsRef = db.collection('admins')
+    const snapshot = await adminsRef.where('email', '==', email).get()
     
     if (snapshot.empty) return null
     
@@ -101,10 +98,9 @@ export async function hasPermission(
  */
 export async function getAdminInfo(email: string) {
   try {
-    const db = getFirebaseDb()
-    const adminsRef = collection(db, 'admins')
-    const q = query(adminsRef, where('email', '==', email))
-    const snapshot = await getDocs(q)
+    const db = getAdminDb()
+    const adminsRef = db.collection('admins')
+    const snapshot = await adminsRef.where('email', '==', email).get()
     
     if (snapshot.empty) return null
     

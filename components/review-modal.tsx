@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useAuth } from "@/components/auth-provider"
-import { createReview } from "@/lib/db/reviews"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 import { StarRating } from "@/components/star-rating"
 import { Label } from "@/components/ui/label"

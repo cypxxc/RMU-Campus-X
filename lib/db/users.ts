@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   Timestamp
 } from "firebase/firestore"
+import { getAuth } from "firebase/auth"
 import { getFirebaseDb } from "@/lib/firebase"
 import type { User, UserStatus, UserWarning } from "@/types"
 import { createNotification } from "./notifications"
@@ -183,17 +184,25 @@ export const updateUserStatus = async (
     : process.env.NEXT_PUBLIC_BASE_URL || 'https://rmu-app-3-1-2569-wwn2.vercel.app'
   
   try {
-    fetch(`${baseUrl}/api/line/notify-user-action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        action: 'status_change',
-        status,
-        reason,
-        suspendedUntil: updates.suspendedUntil?.toDate?.()?.toISOString()
-      })
-    }).catch(err => console.log('[LINE] Notify status change error:', err))
+    const auth = getAuth()
+    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
+    
+    if (token) {
+      fetch(`${baseUrl}/api/line/notify-user-action`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          userId,
+          action: 'status_change',
+          status,
+          reason,
+          suspendedUntil: updates.suspendedUntil?.toDate?.()?.toISOString()
+        })
+      }).catch(err => console.log('[LINE] Notify status change error:', err))
+    }
   } catch (lineError) {
     console.log('[LINE] Notify status change error:', lineError)
   }
@@ -272,16 +281,24 @@ export const issueWarning = async (
     : process.env.NEXT_PUBLIC_BASE_URL || 'https://rmu-app-3-1-2569-wwn2.vercel.app'
   
   try {
-    fetch(`${baseUrl}/api/line/notify-user-action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        action: 'warning',
-        reason,
-        warningCount: newWarningCount
-      })
-    }).catch(err => console.log('[LINE] Notify warning error:', err))
+    const auth = getAuth()
+    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
+
+    if (token) {
+      fetch(`${baseUrl}/api/line/notify-user-action`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          userId,
+          action: 'warning',
+          reason,
+          warningCount: newWarningCount
+        })
+      }).catch(err => console.log('[LINE] Notify warning error:', err))
+    }
   } catch (lineError) {
     console.log('[LINE] Notify warning error:', lineError)
   }

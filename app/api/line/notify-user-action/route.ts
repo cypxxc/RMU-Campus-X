@@ -9,6 +9,7 @@ import {
   notifyUserWarning, 
   notifyAccountStatusChange 
 } from "@/lib/line"
+import { verifyAdminAccess } from "@/lib/admin-api"
 
 const FIREBASE_PROJECT = "resource-4e4fc"
 const FIREBASE_API_KEY = "AIzaSyAhtR1jX2lycnS2xYLhiAtMAjn5dLOYAZM"
@@ -40,6 +41,10 @@ async function firestoreGet(documentPath: string) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify Admin Access
+    const { authorized, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+
     const body: NotifyUserActionBody = await request.json()
     console.log("[LINE Notify User Action] Body:", body)
 
