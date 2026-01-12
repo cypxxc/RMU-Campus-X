@@ -47,16 +47,29 @@ export function ReviewModal({
 
     setLoading(true)
     try {
-      await createReview(
-        exchangeId,
-        user.uid,
-        targetUserId,
-        rating,
-        comment,
-        itemTitle,
-        user.displayName || user.email?.split("@")[0] || "User",
-        user.photoURL || undefined
-      )
+      const idToken = await user.getIdToken()
+      
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          exchangeId,
+          targetUserId,
+          rating,
+          comment,
+          itemTitle,
+          reviewerName: user.displayName || user.email?.split("@")[0] || "User",
+          reviewerAvatar: user.photoURL || undefined
+        })
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || "Failed to submit review")
+      }
 
       toast({
         title: "บันทึกรีวิวสำเร็จ",
