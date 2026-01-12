@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { notifyNewChatMessage, notifyExchangeStatusChange } from "@/lib/line"
 import type { ExchangeStatus } from "@/types"
+import { verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 
 const FIREBASE_PROJECT = "resource-4e4fc"
 const FIREBASE_API_KEY = "AIzaSyAhtR1jX2lycnS2xYLhiAtMAjn5dLOYAZM"
@@ -35,6 +36,16 @@ async function firestoreGet(documentPath: string) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify Authentication
+    const token = extractBearerToken(request.headers.get("Authorization"))
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const decoded = await verifyIdToken(token)
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
     const body: NotifyChatBody = await request.json()
     console.log("[LINE Notify Chat] Body:", body)
 

@@ -99,9 +99,34 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
     }
   }
 
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
+
+    setErrors({})
+
+    // Validate with Zod
+    const { itemSchema } = await import("@/lib/schemas")
+    const validationResult = itemSchema.safeParse({
+      title,
+      description,
+      category,
+      location,
+      locationDetail
+    })
+
+    if (!validationResult.success) {
+      const fieldErrors: Record<string, string> = {}
+      validationResult.error.issues.forEach((issue) => {
+        if (issue.path[0]) fieldErrors[issue.path[0].toString()] = issue.message
+      })
+      setErrors(fieldErrors)
+      // Force loading false just in case
+      setLoading(false)
+      return
+    }
 
     // Check rate limit
     if (isOnCooldown('createItem', user.uid)) {
@@ -234,7 +259,9 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               onChange={(e) => setTitle(e.target.value)}
               required
               disabled={loading}
+              className={errors.title ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
           </div>
 
           {/* Description */}
@@ -250,8 +277,9 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               rows={3}
               required
               disabled={loading}
-              className="resize-none"
+              className={`resize-none ${errors.description ? "border-destructive focus-visible:ring-destructive" : ""}`}
             />
+            {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
           </div>
 
           {/* Category and Location */}
@@ -283,7 +311,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
             <div className="space-y-2">
               <Label className="text-sm font-medium">สถานที่ <span className="text-destructive">*</span></Label>
               <Select value={location} onValueChange={setLocation} disabled={loading} required>
-                <SelectTrigger>
+                <SelectTrigger className={errors.location ? "border-destructive ring-destructive" : ""}>
                   <SelectValue placeholder="เลือกสถานที่" />
                 </SelectTrigger>
                 <SelectContent>
@@ -294,6 +322,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                   ))}
                 </SelectContent>
               </Select>
+               {errors.location && <p className="text-xs text-destructive">{errors.location}</p>}
             </div>
           </div>
 
@@ -309,7 +338,9 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                 value={locationDetail}
                 onChange={(e) => setLocationDetail(e.target.value)}
                 disabled={loading}
+                className={errors.locationDetail ? "border-destructive focus-visible:ring-destructive" : ""}
               />
+              {errors.locationDetail && <p className="text-xs text-destructive">{errors.locationDetail}</p>}
             </div>
 
             {location === "อื่นๆ (ระบุในรายละเอียด)" && (

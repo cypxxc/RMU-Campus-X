@@ -79,7 +79,7 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
     setRequesting(true)
     try {
       // สร้าง exchange ผ่าน client-side Firestore (มี auth)
-      const exchangeId = await createExchange({
+      const response = await createExchange({
         itemId: item.id,
         itemTitle: item.title,
         ownerId: item.postedBy,
@@ -90,6 +90,11 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
         ownerConfirmed: false,
         requesterConfirmed: false,
       })
+
+      if (!response.success || !response.data) {
+         throw new Error(response.error || "ไม่สามารถสร้างคำขอได้")
+      }
+      const exchangeId = response.data
 
       await updateItem(item.id, { status: "pending" })
       

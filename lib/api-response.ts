@@ -78,6 +78,9 @@ export const ApiErrors = {
 
   invalidToken: (message = "Invalid or expired token") =>
     errorResponse(message, 401, "INVALID_TOKEN"),
+    
+  conflict: (message = "Conflict") =>
+    errorResponse(message, 409, "CONFLICT"),
 }
 
 // ============ Error Handler Wrapper ============

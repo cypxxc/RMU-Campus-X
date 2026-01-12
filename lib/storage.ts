@@ -16,7 +16,8 @@ import { compressImage, shouldCompress, blobToFile, formatFileSize } from './ima
  */
 export const uploadToCloudinary = async (
   file: File, 
-  preset: 'item' | 'avatar' = 'item'
+  preset: 'item' | 'avatar' = 'item',
+  token?: string
 ): Promise<string> => {
   let fileToUpload: File = file
   
@@ -46,9 +47,15 @@ export const uploadToCloudinary = async (
   formData.append('file', fileToUpload)
   formData.append('preset', preset)
 
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const response = await fetch('/api/upload', {
     method: 'POST',
     body: formData,
+    headers,
   })
 
   if (!response.ok) {

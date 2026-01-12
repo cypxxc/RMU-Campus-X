@@ -1,6 +1,5 @@
 import {
   collection,
-  addDoc,
   updateDoc,
   deleteDoc,
   doc,
@@ -19,23 +18,60 @@ import { createNotification } from "./notifications"
 
 // Exchanges
 export const createExchange = async (exchangeData: Omit<Exchange, "id" | "createdAt" | "updatedAt">) => {
-  const db = getFirebaseDb()
-  const docRef = await addDoc(collection(db, "exchanges"), {
-    ...exchangeData,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
-  
-  // Notify owner of new request
-  await createNotification({
-    userId: exchangeData.ownerId,
-    title: "มีคำขอใหม่",
-    message: `มีผู้ขอแลกเปลี่ยน "${exchangeData.itemTitle}" ของคุณ`,
-    type: "exchange",
-    relatedId: docRef.id
-  })
+  return apiCall(
+    async () => {
+      const db = getFirebaseDb()
+      
+      const result = await runTransaction(db, async (transaction) => {
+        // 1. Check item availability
+        const itemRef = doc(db, "items", exchangeData.itemId)
+        const itemDoc = await transaction.get(itemRef)
+        
+        if (!itemDoc.exists()) {
+          throw new Error("Item not found")
+        }
+        
+        const item = itemDoc.data() as any
+        if (item.status !== "available") {
+          throw new Error(`Item is no longer available (status: ${item.status})`)
+        }
+        
+        // 2. Create Exchange
+        const newExchangeRef = doc(collection(db, "exchanges"))
+        transaction.set(newExchangeRef, {
+          ...exchangeData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+        
+        // 3. Update Item Status
+        transaction.update(itemRef, {
+          status: "pending",
+          updatedAt: serverTimestamp()
+        })
+        
+        return newExchangeRef.id
+      })
 
-  return docRef.id
+      // 4. Notify (outside transaction)
+      try {
+        await createNotification({
+          userId: exchangeData.ownerId,
+          title: "มีคำขอใหม่",
+          message: `มีผู้ขอแลกเปลี่ยน "${exchangeData.itemTitle}" ของคุณ`,
+          type: "exchange",
+          relatedId: result
+        })
+      } catch (error) {
+        console.error("[createExchange] Notification failed:", error)
+        // Consume error so it doesn't fail the transaction result
+      }
+
+      return result
+    },
+    'createExchange',
+    TIMEOUT_CONFIG.STANDARD
+  )
 }
 
 export const getExchangesByUser = async (userId: string) => {
@@ -183,85 +219,26 @@ export const confirmExchange = async (exchangeId: string, role: 'owner' | 'reque
 
 export const cancelExchange = async (
   exchangeId: string,
-  itemId: string,
+  _itemId: string, // Kept for signature compatibility
   userId: string,
   reason?: string,
 ) => {
-  const db = getFirebaseDb()
-
-  console.log("[cancelExchange] Starting cancellation:", { exchangeId, itemId, userId, reason })
-
-  try {
-    // First, get the exchange data and check other active exchanges
-    // These queries must be done OUTSIDE the transaction
-    const exchangeDoc = await getDoc(doc(db, "exchanges", exchangeId))
-    if (!exchangeDoc.exists()) {
-      throw new Error("Exchange not found")
-    }
-    const exchangeData = exchangeDoc.data() as Exchange
-
-    // Query all active exchanges for this item
-    const q = query(
-      collection(db, "exchanges"),
-      where("itemId", "==", itemId),
-      where("status", "in", ["pending", "accepted", "in_progress"]),
-    )
-    const snapshot = await getDocs(q)
-
-    console.log("[cancelExchange] Found active exchanges:", snapshot.docs.length)
-    console.log(
-      "[cancelExchange] Exchange IDs:",
-      snapshot.docs.map((doc) => ({ id: doc.id, status: doc.data().status })),
-    )
-
-    // Count active exchanges excluding the current one
-    const otherActiveExchanges = snapshot.docs.filter((doc) => doc.id !== exchangeId)
-
-    console.log("[cancelExchange] Other active exchanges (excluding current):", otherActiveExchanges.length)
-
-    // Use a transaction to ensure atomicity
-    await runTransaction(db, async (transaction) => {
-      const exchangeRef = doc(db, "exchanges", exchangeId)
-      const itemRef = doc(db, "items", itemId)
-
-      // Update exchange status to cancelled
-      console.log("[cancelExchange] Updating exchange to cancelled...")
-      transaction.update(exchangeRef, {
-        status: "cancelled",
-        cancelReason: reason || "ไม่ระบุเหตุผล",
-        cancelledBy: userId,
-        cancelledAt: serverTimestamp(),
+  return apiCall(
+    async () => {
+      const response = await fetch("/api/exchanges/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exchangeId, userId, reason })
       })
 
-      // If no other active exchanges, set item back to available
-      if (otherActiveExchanges.length === 0) {
-        console.log("[cancelExchange] No other active exchanges, setting item to available...")
-        transaction.update(itemRef, { 
-          status: "available",
-          updatedAt: serverTimestamp(),
-        })
-      } else {
-        console.log("[cancelExchange] Other active exchanges exist, keeping item as pending")
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to cancel exchange")
       }
-    })
-
-    console.log("[cancelExchange] Transaction completed successfully")
-
-    // Notify the other party (outside transaction)
-    const targetUserId = exchangeData.requesterId === userId ? exchangeData.ownerId : exchangeData.requesterId
-    await createNotification({
-      userId: targetUserId,
-      title: "รายการถูกยกเลิก",
-      message: `การแลกเปลี่ยน "${exchangeData.itemTitle}" ถูกยกเลิกโดยอีกฝ่าย`,
-      type: "exchange",
-      relatedId: exchangeId
-    })
-
-    console.log("[cancelExchange] Cancellation completed successfully")
-  } catch (error) {
-    console.error("[cancelExchange] Error during cancellation:", error)
-    throw error
-  }
+    },
+    'cancelExchange',
+    TIMEOUT_CONFIG.STANDARD
+  )
 }
 
 export const deleteExchange = async (exchangeId: string) => {

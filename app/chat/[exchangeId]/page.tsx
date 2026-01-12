@@ -175,9 +175,11 @@ export default function ChatPage({
         formData.append('file', selectedImageFile)
         formData.append('preset', 'chat')
 
+        const token = await user.getIdToken()
         const uploadRes = await fetch('/api/upload', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: { 'Authorization': `Bearer ${token}` }
         })
 
         if (!uploadRes.ok) {
@@ -230,9 +232,13 @@ export default function ChatPage({
 
       // Send LINE notification (async, don't block)
       try {
+        const token = await user.getIdToken()
         fetch('/api/line/notify-chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({
             recipientId,
             senderName: user.email?.split('@')[0] || 'ผู้ใช้',
@@ -276,30 +282,40 @@ export default function ChatPage({
         // Notify both parties about completion via LINE (async, best effort)
         try {
           // Send LINE to Owner
-          fetch('/api/line/notify-chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'status_change',
-              recipientUserId: exchange.ownerId,
-              itemTitle: exchange.itemTitle,
-              status: 'completed',
-              exchangeId
-            })
-          }).catch(err => console.log('[LINE] Notify owner error:', err))
+          if (user) {
+            user.getIdToken().then(token => {
+              fetch('/api/line/notify-chat', {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  type: 'status_change',
+                  recipientUserId: exchange.ownerId,
+                  itemTitle: exchange.itemTitle,
+                  status: 'completed',
+                  exchangeId
+                })
+              }).catch(err => console.log('[LINE] Notify owner error:', err))
 
-          // Send LINE to Requester
-          fetch('/api/line/notify-chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'status_change',
-              recipientUserId: exchange.requesterId,
-              itemTitle: exchange.itemTitle,
-              status: 'completed',
-              exchangeId
-            })
-          }).catch(err => console.log('[LINE] Notify requester error:', err))
+              // Send LINE to Requester
+              fetch('/api/line/notify-chat', {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  type: 'status_change',
+                  recipientUserId: exchange.requesterId,
+                  itemTitle: exchange.itemTitle,
+                  status: 'completed',
+                  exchangeId
+                })
+              }).catch(err => console.log('[LINE] Notify requester error:', err))
+          })
+        }
         } catch (lineError) {
           console.log('[LINE] Notify completion error:', lineError)
         }
@@ -320,7 +336,7 @@ export default function ChatPage({
     }
   }
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

@@ -12,7 +12,8 @@ import {
   startAfter,
   serverTimestamp,
   DocumentSnapshot,
-  getCountFromServer
+  getCountFromServer,
+  writeBatch
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import type { AppNotification } from "@/types"
@@ -102,11 +103,20 @@ export const markAllNotificationsAsRead = async (userId: string) => {
   const q = query(
     collection(db, "notifications"),
     where("userId", "==", userId),
-    where("isRead", "==", false)
+    where("isRead", "==", false),
+    limit(500) // Batch limit
   )
+  
   const snapshot = await getDocs(q)
-  const promises = snapshot.docs.map((doc) => updateDoc(doc.ref, { isRead: true }))
-  await Promise.all(promises)
+  
+  if (snapshot.empty) return
+
+  const batch = writeBatch(db)
+  snapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, { isRead: true })
+  })
+  
+  await batch.commit()
 }
 
 export const deleteNotification = async (notificationId: string) => {

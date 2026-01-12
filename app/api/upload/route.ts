@@ -4,6 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { cloudinary, UPLOAD_PRESETS, type UploadPreset } from '@/lib/cloudinary'
+import { verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 
 export const runtime = 'nodejs'
 
@@ -12,6 +13,16 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify Authentication
+    const token = extractBearerToken(request.headers.get("Authorization"))
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const decoded = await verifyIdToken(token)
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const preset = (formData.get('preset') as UploadPreset) || 'item'
