@@ -21,7 +21,7 @@ import { createAdminLog } from "./logs"
 
 // ============ User Profile Management ============
 
-export const updateUserProfile = async (userId: string, data: Partial<{ displayName: string, photoURL: string, email: string }>) => {
+export const updateUserProfile = async (userId: string, data: Partial<{ displayName: string, photoURL: string, email: string, bio: string }>) => {
   const db = getFirebaseDb()
   const userRef = doc(db, 'users', userId)
   
@@ -44,6 +44,28 @@ export const getUserProfile = async (userId: string) => {
   
   if (docSnap.exists()) {
     return { id: docSnap.id, ...docSnap.data() } as any as User
+  }
+  return null
+}
+
+export const getUserPublicProfile = async (userId: string) => {
+  const db = getFirebaseDb()
+  const userRef = doc(db, 'users', userId)
+  const docSnap = await getDoc(userRef)
+  
+  if (docSnap.exists()) {
+    const data = docSnap.data() as User
+    // Return only public fields
+    return {
+      uid: data.uid,
+      displayName: data.displayName,
+      bio: data.bio,
+      photoURL: data.photoURL,
+      createdAt: data.createdAt,
+      status: data.status,
+      rating: data.rating, 
+      // Add other safe fields if needed
+    }
   }
   return null
 }
@@ -347,15 +369,18 @@ export const getAllWarnings = async () => {
 /**
  * Check if a user's suspension has expired and auto-unsuspend them
  */
-export const checkAndAutoUnsuspend = async (userId: string): Promise<boolean> => {
+export const checkAndAutoUnsuspend = async (userId: string, existingUserData?: any): Promise<boolean> => {
   const db = getFirebaseDb()
   const userRef = doc(db, 'users', userId)
   
   try {
-    const userDoc = await getDoc(userRef)
-    if (!userDoc.exists()) return false
-    
-    const userData = userDoc.data()
+    let userData = existingUserData
+
+    if (!userData) {
+      const userDoc = await getDoc(userRef)
+      if (!userDoc.exists()) return false
+      userData = userDoc.data()
+    }
     
     // Only process SUSPENDED users
     if (userData.status !== 'SUSPENDED') return false

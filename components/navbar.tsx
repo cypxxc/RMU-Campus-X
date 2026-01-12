@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
-import { LogOut, Shield, Menu, User, Package, Home, Plus, HelpCircle } from "lucide-react"
+import { LogOut, Shield, Menu, User, Package, Home, Plus, HelpCircle, Heart } from "lucide-react"
 import { useAuth } from "./auth-provider"
 import { signOut } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
@@ -60,6 +60,7 @@ export function Navbar() {
     { href: "/dashboard", label: "หน้าหลัก", icon: Home },
     { href: "/profile", label: "โปรไฟล์", icon: User },
     { href: "/my-exchanges", label: "การแลกเปลี่ยน", icon: Package },
+    { href: "/favorites", label: "รายการโปรด", icon: Heart },
   ]
 
   const isActive = (href: string) => pathname === href
@@ -72,35 +73,38 @@ export function Navbar() {
           <Logo size="md" href="/dashboard" className="shrink-0" />
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-1">
+          <ul className="hidden md:flex items-center gap-1 list-none m-0 p-0">
             {user && navItems.map((item) => (
-              <Button
-                key={item.href}
-                variant={isActive(item.href) ? "secondary" : "ghost"}
-                size="sm"
-                asChild
-                className="gap-2"
-              >
-                <Link href={item.href}>
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              </Button>
+              <li key={item.href}>
+                <Button
+                  variant={isActive(item.href) ? "secondary" : "ghost"}
+                  size="sm"
+                  asChild
+                  className="gap-2"
+                >
+                  <Link href={item.href}>
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                </Button>
+              </li>
             ))}
             
-            {/* Support Button - Desktop (Opens Modal) */}
+            {/* Support Button - Desktop */}
             {user && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                onClick={() => setSupportModalOpen(true)}
-              >
-                <HelpCircle className="h-4 w-4" />
-                ช่วยเหลือ
-              </Button>
+              <li>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setSupportModalOpen(true)}
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  ช่วยเหลือ
+                </Button>
+              </li>
             )}
-          </div>
+          </ul>
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-2">

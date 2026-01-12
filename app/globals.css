@@ -727,6 +727,12 @@ img {
   content-visibility: auto;
 }
 
+/* Rendering Performance */
+.content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 1000px; /* Estimate height to prevent scrollbar jumping */
+}
+
 /* Hide Next.js Dev Indicator (black button at bottom-left) */
 #__next-devtools-indicator,
 [data-nextjs-dev-tools],

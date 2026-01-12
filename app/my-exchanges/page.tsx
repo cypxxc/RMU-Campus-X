@@ -268,7 +268,7 @@ export default function MyExchangesPage() {
         ) : (
           /* Exchange List */
           <>
-            <div className="space-y-4">
+            <div className="space-y-4 content-auto block">
               {exchanges
                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                 .map((exchange, index) => {

@@ -23,6 +23,7 @@ import { ReportModal } from "@/components/report-modal"
 import { useAccountStatus } from "@/hooks/use-account-status"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 import { CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS } from "@/lib/constants"
+import { FavoriteButton } from "@/components/favorite-button"
 
 interface ItemDetailViewProps {
   item: Item
@@ -255,11 +256,15 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
                     <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">โพสต์โดย</span>
                     <p className="font-semibold text-base wrap-break-word">
                       {item.postedByName ? (
-                        item.postedByName
+                         <Link href={`/profile/${item.postedBy}`} className="hover:text-primary hover:underline transition-colors block">
+                           {item.postedByName}
+                         </Link>
                       ) : posterLoading ? (
                         <span className="text-muted-foreground">กำลังโหลด...</span>
                       ) : (
-                        poster?.displayName || item.postedByEmail.split('@')[0]
+                        <Link href={`/profile/${item.postedBy}`} className="hover:text-primary hover:underline transition-colors block">
+                           {poster?.displayName || item.postedByEmail.split('@')[0]}
+                        </Link>
                       )}
                     </p>
                   </div>
@@ -299,6 +304,7 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
                 <AlertTriangle className="h-4 w-4" />
                 รายงาน
               </Button>
+              <FavoriteButton item={item} variant="button" className="h-12 w-full sm:w-auto" />
             </div>
           )}
 

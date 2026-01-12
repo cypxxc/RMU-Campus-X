@@ -38,6 +38,9 @@ import { th } from "date-fns/locale"
 import { ReportModal } from "@/components/report-modal"
 import { ChatImageUpload } from "@/components/chat/chat-image-upload"
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { ReviewModal } from "@/components/review-modal"
+import { checkExchangeReviewed } from "@/lib/db/reviews"
+import { Star } from "lucide-react"
 
 
 export default function ChatPage({
@@ -60,6 +63,11 @@ export default function ChatPage({
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportType, setReportType] = useState<"chat_report" | "user_report">("chat_report")
   const [reportTargetId, setReportTargetId] = useState<string | null>(null)
+  
+  // Review State
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [hasReviewed, setHasReviewed] = useState(false)
+
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -117,6 +125,13 @@ export default function ChatPage({
       setLoading(false)
     }
   }
+
+  // Check if user has already reviewed when exchange is completed
+  useEffect(() => {
+    if (exchange?.status === "completed" && user) {
+      checkExchangeReviewed(exchange.id, user.uid).then(setHasReviewed)
+    }
+  }, [exchange?.status, exchange?.id, user])
 
   const subscribeToMessages = () => {
     const db = getFirebaseDb()
@@ -384,10 +399,23 @@ export default function ChatPage({
                 </DropdownMenu>
 
                 {exchange.status === "completed" ? (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-500/10 text-green-600 border border-green-500/20 text-sm font-bold h-9">
-                    <CheckCheck className="h-4 w-4" />
-                    <span className="hidden sm:inline">แลกเปลี่ยนสำเร็จ</span>
-                    <span className="sm:hidden">สำเร็จ</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-500/10 text-green-600 border border-green-500/20 text-sm font-bold h-9">
+                      <CheckCheck className="h-4 w-4" />
+                      <span className="hidden sm:inline">แลกเปลี่ยนสำเร็จ</span>
+                      <span className="sm:hidden">สำเร็จ</span>
+                    </div>
+                    {!hasReviewed && (
+                      <Button 
+                        size="sm" 
+                        className="h-9 gap-1 bg-yellow-400 hover:bg-yellow-500 text-black font-bold shadow-sm"
+                        onClick={() => setShowReviewModal(true)}
+                      >
+                        <Star className="h-4 w-4 fill-black/20" />
+                        <span className="hidden sm:inline">เขียนรีวิว</span>
+                        <span className="sm:hidden">รีวิว</span>
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -495,7 +523,7 @@ export default function ChatPage({
                       )}
                       
                       {msg.message && (
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.message}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-wrap">{msg.message}</p>
                       )}
                       
                       <p className={`text-[10px] mt-1 ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
@@ -556,6 +584,18 @@ export default function ChatPage({
           reportType={reportType}
           targetId={reportTargetId}
           targetTitle={reportType === "chat_report" ? exchange.itemTitle : undefined}
+        />
+      )}
+
+      {/* Review Modal */}
+      {exchange && user && (
+        <ReviewModal
+          open={showReviewModal}
+          onOpenChange={setShowReviewModal}
+          exchangeId={exchangeId}
+          targetUserId={user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId}
+          itemTitle={exchange.itemTitle}
+          onSuccess={() => setHasReviewed(true)}
         />
       )}
     </div>

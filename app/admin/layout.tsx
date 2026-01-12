@@ -1,18 +1,18 @@
 "use client"
- 
+
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Navbar } from "@/components/navbar"
-import { AuthProvider } from "@/components/auth-provider"
 import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTriangle, History } from "lucide-react"
 import { useState, useEffect } from "react"
+
+import { AuthGuard } from "@/components/auth-guard"
+import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
- 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -52,7 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
  
   return (
-    <AuthProvider>
+    <AuthGuard requireAdmin>
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
         
@@ -135,6 +135,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </main>
         </div>
       </div>
-    </AuthProvider>
+    </AuthGuard>
   )
 }

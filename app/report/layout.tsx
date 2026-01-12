@@ -1,6 +1,6 @@
 import type React from "react"
 import { Navbar } from "@/components/navbar"
-import { AuthProvider } from "@/components/auth-provider"
+import { AuthGuard } from "@/components/auth-guard"
 
 export default function ReportLayout({
   children,
@@ -8,9 +8,11 @@ export default function ReportLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthProvider>
-      <Navbar />
-      {children}
-    </AuthProvider>
+    <AuthGuard>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        {children}
+      </div>
+    </AuthGuard>
   )
 }

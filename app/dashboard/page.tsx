@@ -174,7 +174,7 @@ export default function DashboardPage() {
           <main className="flex-1 min-w-0">
             {/* Results Header & Search */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-              <h2 className="text-sm font-medium text-muted-foreground order-2 sm:order-1 flex items-center gap-2">
+              <h2 className="text-sm font-medium text-muted-foreground order-2 sm:order-1 flex items-center gap-2" role="status" aria-live="polite">
                 {loading ? (
                   <>
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -246,7 +246,7 @@ export default function DashboardPage() {
             ) : (
               /* Items Grid */
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 content-auto">
                   {items.map((item, index) => (
                     <BounceWrapper 
                       key={item.id} 
@@ -257,6 +257,7 @@ export default function DashboardPage() {
                         item={item} 
                         showRequestButton={!!user} 
                         onViewDetails={(item) => setSelectedItem(item)}
+                        priority={index < 4}
                       />
                     </BounceWrapper>
                   ))}
