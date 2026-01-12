@@ -90,7 +90,7 @@ export function HelpBotWidget() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col items-end gap-2">
+    <div className="fixed bottom-4 right-4 z-100 flex flex-col items-end gap-2">
       {/* Toggle Button */}
       {!isOpen && (
         <Button
@@ -166,7 +166,7 @@ export function HelpBotWidget() {
                       )}
                     >
                       {m.content ? (
-                        <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+                        <div className="prose prose-sm dark:prose-invert max-w-none wrap-break-word">
                           <ReactMarkdown
                             components={{
                               // Styles for markdown elements to override Tailwind reset

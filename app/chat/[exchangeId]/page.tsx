@@ -200,8 +200,8 @@ export default function ChatPage({
         senderId: user.uid,
         senderEmail: user.email,
         message: messageText,
-        imageUrl,
-        imageType,
+        imageUrl: imageUrl || null,
+        imageType: imageType || null,
         createdAt: serverTimestamp(),
       })
 
