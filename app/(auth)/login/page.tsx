@@ -51,13 +51,28 @@ export default function LoginPage() {
       })
       router.push("/dashboard")
     } catch (error: any) {
+      let variant: "default" | "destructive" = "destructive"
+      let title = "เข้าสู่ระบบไม่สำเร็จ"
+      let description = "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
+
+      // Handle specific errors
+      if (error.message.includes("verify your email") || error.message.includes("กรุณายืนยันอีเมล")) {
+        title = "กรุณายืนยันอีเมล"
+        description = "เราได้ส่งลิงก์ยืนยันไปที่อีเมลของคุณแล้ว"
+      } else if (error.message.includes("Ghost Account") || error.message.includes("BANNED")) {
+         title = "เข้าใช้งานไม่ได้"
+         description = error.message // Use standard message from backend
+      } else if (error.code === 'auth/invalid-credential') {
+         description = "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
+      }
+
       toast({
-        title: "ยังไม่ได้สมัครสมาชิก",
-        description: "กรุณาไปที่หน้าสมัครสมาชิกเพื่อสร้างบัญชีใหม่",
-        variant: "destructive",
+        title,
+        description,
+        variant,
       })
-      // Redirect to register page
-      router.push('/register')
+      
+      // Only redirect for specific cases if needed, otherwise let them retry.
     } finally {
       setLoading(false)
     }

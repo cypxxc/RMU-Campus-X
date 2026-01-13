@@ -32,5 +32,23 @@ export const itemSchema = z.object({
   locationDetail: z.string().max(200, "รายละเอียดสถานที่ต้องไม่เกิน 200 ตัวอักษร").optional(),
 })
 
+
+// Registration Schema
+export const registrationSchema = z.object({
+  email: z
+    .string()
+    .email("รูปแบบอีเมลไม่ถูกต้อง")
+    .regex(/^\d{12}@rmu\.ac\.th$/, "ต้องเป็นอีเมลนักศึกษา RMU (รหัสนักศึกษา 12 หลัก @rmu.ac.th)"),
+  password: z
+    .string()
+    .min(6, "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร")
+    .max(100, "รหัสผ่านยาวเกินไป"),
+  confirmPassword: z.string()
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "รหัสผ่านไม่ตรงกัน",
+  path: ["confirmPassword"],
+})
+
 export type UserProfileFormData = z.infer<typeof userProfileSchema>
 export type ItemFormData = z.infer<typeof itemSchema>
+export type RegistrationFormData = z.infer<typeof registrationSchema>
