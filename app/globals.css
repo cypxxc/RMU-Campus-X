@@ -271,11 +271,30 @@
     cursor: text;
   }
 
-  /* Hide browser default password reveal button */
+  /* Hide browser default password reveal button - ALL browsers */
+  /* Edge/IE */
   input::-ms-reveal,
   input::-ms-clear {
-    display: none;
+    display: none !important;
+    visibility: hidden !important;
   }
+  
+  /* Chrome/Safari - password toggle and other decorations */
+  input::-webkit-credentials-auto-fill-button,
+  input::-webkit-clear-button,
+  input::-webkit-textfield-decoration-container {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  
+  /* Chrome 93+ password reveal button */
+  input[type="password"]::-webkit-password-reveal-button,
+  input[type="password"]::-webkit-contacts-auto-fill-button {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
 
   /* Interactive Hover Animations - GPU Accelerated */
   button:not(:disabled),

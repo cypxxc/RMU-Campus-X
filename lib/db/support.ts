@@ -35,42 +35,13 @@ export const createSupportTicket = async (
     updatedAt: serverTimestamp(),
   })
 
-  // Notify all admins about new support ticket
-  const adminsSnapshot = await getDocs(collection(db, "admins"))
-  const adminEmails = new Set(adminsSnapshot.docs.map(doc => doc.data().email))
-  const notifiedUserIds = new Set<string>()
-
-  const notifyPromises = Array.from(adminEmails).map(async (email) => {
-    // Get admin user ID from users collection by email
-    const usersQuery = query(collection(db, "users"), where("email", "==", email))
-    const usersSnapshot = await getDocs(usersQuery)
-    
-    if (!usersSnapshot.empty && usersSnapshot.docs[0]) {
-      const adminUserId = usersSnapshot.docs[0].data().uid
-      
-      // Prevent duplicate notifications if multiple emails map to same UID (unlikely but safe)
-      if (!notifiedUserIds.has(adminUserId)) {
-        notifiedUserIds.add(adminUserId)
-        
-        await createNotification({
-          userId: adminUserId,
-          title: "📩 Support Ticket ใหม่",
-          message: `"${ticketData.subject}" จาก ${ticketData.userEmail}`,
-          type: "support",
-          relatedId: docRef.id,
-        })
-      }
-    }
-  })
-  
-  await Promise.all(notifyPromises)
+  // Note: Admin notifications are handled separately via /api/line/notify-admin
+  // called from the UI component. This avoids direct admins collection access
+  // which requires admin privileges.
   
   return docRef.id
 }
 
-// Imports update already done in file? No, need to check imports.
-// Wait, I need to add 'limit', 'startAfter', 'getCountFromServer' to imports if not present.
-// The previous view_file showed imports.
 
 export const getSupportTickets = async (
   status?: SupportTicketStatus | SupportTicketStatus[],

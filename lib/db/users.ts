@@ -272,51 +272,8 @@ export const checkAndAutoUnsuspend = async (userId: string, existingUserData?: a
 }
 
 // ============ LINE Notification Helpers ============
-
-/**
- * Get all admin LINE User IDs for notifications
- */
-export const getAdminLineUserIds = async (): Promise<string[]> => {
-  const db = getFirebaseDb()
-  
-  // Get all admin emails from admins collection
-  const adminsSnapshot = await getDocs(collection(db, "admins"))
-  const adminEmails = adminsSnapshot.docs.map(doc => doc.data().email)
-  
-  if (adminEmails.length === 0) {
-    return []
-  }
-  
-  if (adminEmails.length === 0) {
-    return []
-  }
-  
-  // Find users with those emails who have LINE linked
-  // Optimization: Use 'in' query instead of loop (max 30 items per 'in' query)
-  const lineUserIds: string[] = []
-  
-  // Chunk emails into groups of 30
-  const chunkSize = 30
-  for (let i = 0; i < adminEmails.length; i += chunkSize) {
-    const chunk = adminEmails.slice(i, i + chunkSize)
-    
-    const usersQuery = query(
-      collection(db, "users"),
-      where("email", "in", chunk)
-    )
-    
-    const usersSnapshot = await getDocs(usersQuery)
-    
-    usersSnapshot.docs.forEach(doc => {
-      const userData = doc.data() as User
-      if (userData.lineUserId && userData.lineNotifications?.enabled) {
-        lineUserIds.push(userData.lineUserId)
-      }
-    })
-  }
-  
-  return lineUserIds
-}
+// Note: getAdminLineUserIds is implemented server-side in API routes
+// using Admin SDK to avoid client-side permission issues.
 
 export const getUserLineSettings = async (userId: string) => {
   const db = getFirebaseDb()

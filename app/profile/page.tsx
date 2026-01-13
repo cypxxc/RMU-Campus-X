@@ -201,26 +201,27 @@ export default function ProfilePage() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !user) return
 
     setUploadingImage(true)
     try {
-      const cloudinaryUrl = await uploadToCloudinary(file, 'avatar')
+      // Get auth token for upload API
+      const token = await user.getIdToken()
+      const cloudinaryUrl = await uploadToCloudinary(file, 'avatar', token)
       setProfileImage(cloudinaryUrl)
-      if (user) {
-        await updateUserProfile(user.uid, { 
-          photoURL: cloudinaryUrl,
-          email: user.email || ""
-        })
-        toast({ title: "อัปโหลดรูปโปรไฟล์สำเร็จ" })
-        loadProfile()
-      }
+      await updateUserProfile(user.uid, { 
+        photoURL: cloudinaryUrl,
+        email: user.email || ""
+      })
+      toast({ title: "อัปโหลดรูปโปรไฟล์สำเร็จ" })
+      loadProfile()
     } catch (error: any) {
       toast({ title: "เกิดข้อผิดพลาดในการอัปโหลด", description: error.message, variant: "destructive" })
     } finally {
       setUploadingImage(false)
     }
   }
+
 
   const handleDeleteItem = async () => {
     if (!deleteDialog.itemId) return

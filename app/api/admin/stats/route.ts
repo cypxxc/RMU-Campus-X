@@ -1,6 +1,8 @@
 /**
  * Admin Stats API
  * GET /api/admin/stats
+ * 
+ * OPTIMIZED: Uses count aggregations and limited queries instead of fetching all documents
  */
 
 import { NextRequest } from 'next/server'
@@ -25,27 +27,57 @@ export async function GET(request: NextRequest) {
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
     const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate())
 
-    // Fetch all collections using Admin SDK syntax
-    const [usersSnap, itemsSnap, reportsSnap, exchangesSnap] = await Promise.all([
-      db.collection('users').get(),
-      db.collection('items').get(),
-      db.collection('reports').get(),
-      db.collection('exchanges').get(),
+    // Use Promise.all for parallel count queries (much faster than fetching all docs)
+    const [
+      // User counts
+      totalUsersCount,
+      activeUsersCount,
+      suspendedUsersCount,
+      bannedUsersCount,
+      // Item counts  
+      totalItemsCount,
+      activeItemsCount,
+      completedItemsCount,
+      // Report counts
+      totalReportsCount,
+      pendingReportsCount,
+      resolvedReportsCount,
+      // Exchange counts
+      totalExchangesCount,
+      completedExchangesCount,
+    ] = await Promise.all([
+      // Users
+      db.collection('users').count().get().then(s => s.data().count),
+      db.collection('users').where('status', '==', 'ACTIVE').count().get().then(s => s.data().count),
+      db.collection('users').where('status', '==', 'SUSPENDED').count().get().then(s => s.data().count),
+      db.collection('users').where('status', '==', 'BANNED').count().get().then(s => s.data().count),
+      // Items
+      db.collection('items').count().get().then(s => s.data().count),
+      db.collection('items').where('status', '==', 'available').count().get().then(s => s.data().count),
+      db.collection('items').where('status', '==', 'completed').count().get().then(s => s.data().count),
+      // Reports
+      db.collection('reports').count().get().then(s => s.data().count),
+      db.collection('reports').where('status', '==', 'new').count().get().then(s => s.data().count),
+      db.collection('reports').where('status', '==', 'resolved').count().get().then(s => s.data().count),
+      // Exchanges
+      db.collection('exchanges').count().get().then(s => s.data().count),
+      db.collection('exchanges').where('status', '==', 'completed').count().get().then(s => s.data().count),
     ])
 
-    // Calculate user stats
-    const totalUsers = usersSnap.size
-    const activeUsers = usersSnap.docs.filter(doc => doc.data().status === 'ACTIVE').length
-    const suspendedUsers = usersSnap.docs.filter(doc => doc.data().status === 'SUSPENDED').length
-    const bannedUsers = usersSnap.docs.filter(doc => doc.data().status === 'BANNED').length
+    // For growth calculations, fetch limited recent documents only
+    const [usersRecent, itemsRecent, exchangesRecent] = await Promise.all([
+      db.collection('users').orderBy('createdAt', 'desc').limit(200).get(),
+      db.collection('items').orderBy('postedAt', 'desc').limit(200).get(),
+      db.collection('exchanges').orderBy('createdAt', 'desc').limit(200).get(),
+    ])
 
-    // Users this month vs last month
-    const usersThisMonth = usersSnap.docs.filter(doc => {
+    // Calculate growth from limited sample
+    const usersThisMonth = usersRecent.docs.filter(doc => {
       const createdAt = doc.data().createdAt?.toDate?.() || new Date(0)
       return createdAt >= lastMonth
     }).length
     
-    const usersLastMonth = usersSnap.docs.filter(doc => {
+    const usersLastMonth = usersRecent.docs.filter(doc => {
       const createdAt = doc.data().createdAt?.toDate?.() || new Date(0)
       return createdAt >= twoMonthsAgo && createdAt < lastMonth
     }).length
@@ -54,17 +86,12 @@ export async function GET(request: NextRequest) {
       ? ((usersThisMonth - usersLastMonth) / usersLastMonth * 100).toFixed(1)
       : '0'
 
-    // Calculate item stats
-    const totalItems = itemsSnap.size
-    const activeItems = itemsSnap.docs.filter(doc => doc.data().status === 'available').length
-    const completedItems = itemsSnap.docs.filter(doc => doc.data().status === 'completed').length
-
-    const itemsThisMonth = itemsSnap.docs.filter(doc => {
+    const itemsThisMonth = itemsRecent.docs.filter(doc => {
       const postedAt = doc.data().postedAt?.toDate?.() || new Date(0)
       return postedAt >= lastMonth
     }).length
 
-    const itemsLastMonth = itemsSnap.docs.filter(doc => {
+    const itemsLastMonth = itemsRecent.docs.filter(doc => {
       const postedAt = doc.data().postedAt?.toDate?.() || new Date(0)
       return postedAt >= twoMonthsAgo && postedAt < lastMonth
     }).length
@@ -73,24 +100,16 @@ export async function GET(request: NextRequest) {
       ? ((itemsThisMonth - itemsLastMonth) / itemsLastMonth * 100).toFixed(1)
       : '0'
 
-    // Calculate report stats
-    const totalReports = reportsSnap.size
-    const pendingReports = reportsSnap.docs.filter(doc => doc.data().status === 'new').length
-    const resolvedReports = reportsSnap.docs.filter(doc => doc.data().status === 'resolved').length
-
-    // Calculate exchange stats
-    const totalExchanges = exchangesSnap.size
-    const completedExchanges = exchangesSnap.docs.filter(doc => doc.data().status === 'completed').length
-    const exchangeRate = totalExchanges > 0
-      ? ((completedExchanges / totalExchanges) * 100).toFixed(1)
+    const exchangeRate = totalExchangesCount > 0
+      ? ((completedExchangesCount / totalExchangesCount) * 100).toFixed(1)
       : '0'
 
-    const exchangesThisMonth = exchangesSnap.docs.filter(doc => {
+    const exchangesThisMonth = exchangesRecent.docs.filter(doc => {
       const createdAt = doc.data().createdAt?.toDate?.() || new Date(0)
       return createdAt >= lastMonth
     }).length
 
-    const exchangesLastMonth = exchangesSnap.docs.filter(doc => {
+    const exchangesLastMonth = exchangesRecent.docs.filter(doc => {
       const createdAt = doc.data().createdAt?.toDate?.() || new Date(0)
       return createdAt >= twoMonthsAgo && createdAt < lastMonth
     }).length
@@ -101,28 +120,28 @@ export async function GET(request: NextRequest) {
 
     return successResponse({
       users: {
-        total: totalUsers,
-        active: activeUsers,
-        suspended: suspendedUsers,
-        banned: bannedUsers,
+        total: totalUsersCount,
+        active: activeUsersCount,
+        suspended: suspendedUsersCount,
+        banned: bannedUsersCount,
         growth: `${userGrowth}%`,
         trend: parseFloat(userGrowth) >= 0 ? 'up' : 'down',
       },
       items: {
-        total: totalItems,
-        active: activeItems,
-        completed: completedItems,
+        total: totalItemsCount,
+        active: activeItemsCount,
+        completed: completedItemsCount,
         growth: `${itemGrowth}%`,
         trend: parseFloat(itemGrowth) >= 0 ? 'up' : 'down',
       },
       reports: {
-        total: totalReports,
-        pending: pendingReports,
-        resolved: resolvedReports,
+        total: totalReportsCount,
+        pending: pendingReportsCount,
+        resolved: resolvedReportsCount,
       },
       exchanges: {
-        total: totalExchanges,
-        completed: completedExchanges,
+        total: totalExchangesCount,
+        completed: completedExchangesCount,
         rate: `${exchangeRate}%`,
         growth: `${exchangeGrowth}%`,
         trend: parseFloat(exchangeGrowth) >= 0 ? 'up' : 'down',

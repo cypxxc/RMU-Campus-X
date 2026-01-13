@@ -1,26 +1,60 @@
 {
   "name": "RMU-Campus X",
-  "short_name": "RMU Campus",
+  "short_name": "Campus X",
   "description": "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของสำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม",
-  "start_url": "/",
+  "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0a",
+  "theme_color": "#3b82f6",
+  "categories": ["education", "social", "utilities"],
+  "lang": "th",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/images/exchange.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
       "src": "/images/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/images/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "สำรวจสิ่งของ",
+      "short_name": "สำรวจ",
+      "description": "ดูสิ่งของทั้งหมดที่พร้อมแลกเปลี่ยน",
+      "url": "/dashboard",
+      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "การแลกเปลี่ยนของฉัน",
+      "short_name": "แลกเปลี่ยน",
+      "description": "ดูรายการแลกเปลี่ยนของคุณ",
+      "url": "/my-exchanges",
+      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "แจ้งเตือน",
+      "short_name": "แจ้งเตือน",
+      "description": "ดูการแจ้งเตือนทั้งหมด",
+      "url": "/notifications",
+      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }
+

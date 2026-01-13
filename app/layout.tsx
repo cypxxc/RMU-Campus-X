@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { QueryProvider } from "@/components/query-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { SiteFooter } from "@/components/site-footer"
-import { HelpBotWidget } from "@/components/help-bot/chat-widget"
+import { LazyHelpBot } from "@/components/lazy-help-bot"
 import "./globals.css"
 
 const geistSans = Geist({ 
@@ -77,7 +77,7 @@ export default function RootLayout({
               <SiteFooter />
               <Toaster />
               <Analytics />
-              <HelpBotWidget />
+              <LazyHelpBot />
             </ThemeProvider>
           </AuthProvider>
         </QueryProvider>
@@ -85,3 +85,4 @@ export default function RootLayout({
     </html>
   )
 }
+

@@ -8,7 +8,8 @@ import {
   query,
   where,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  limit
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import type { Report, ReportStatus, ReportType } from "@/types"
@@ -213,9 +214,13 @@ export const getReportStatistics = async (): Promise<ApiResponse<{
   )
 }
 
-export const getReports = async () => {
+export const getReports = async (maxResults: number = 200) => {
   const db = getFirebaseDb()
-  const q = query(collection(db, "reports"), orderBy("createdAt", "desc"))
+  const q = query(
+    collection(db, "reports"), 
+    orderBy("createdAt", "desc"),
+    limit(maxResults)
+  )
   const snapshot = await getDocs(q)
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Report)
 }

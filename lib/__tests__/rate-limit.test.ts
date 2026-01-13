@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { 
   getRemainingCooldown, 
   isOnCooldown, 
@@ -11,7 +12,7 @@ const originalDateNow = Date.now
 describe('Rate Limit Utilities', () => {
   beforeEach(() => {
     // Reset mocks before each test
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   afterAll(() => {
@@ -54,12 +55,12 @@ describe('Rate Limit Utilities', () => {
       
       // Mock Date.now
       const mockNow = 1000000
-      Date.now = jest.fn(() => mockNow)
+      Date.now = vi.fn(() => mockNow)
       
       recordAction(action, userId)
       
       // Advance time by 30 seconds
-      Date.now = jest.fn(() => mockNow + 30000)
+      Date.now = vi.fn(() => mockNow + 30000)
       
       // createItem has 60 second cooldown, so 30 seconds should remain
       const remaining = getRemainingCooldown(action, userId)

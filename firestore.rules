@@ -178,10 +178,17 @@ service cloud.firestore {
     }
     
     match /favorites/{favoriteId} {
-      allow read: if isOwner(resource.data.userId);
+      // favoriteId format: {userId}_{itemId}
+      // Allow read if user owns this favorite (based on favoriteId prefix or doc data)
+      allow read: if isAuthenticated() && 
+        (favoriteId.split('_')[0] == request.auth.uid || 
+         (resource != null && resource.data.userId == request.auth.uid));
+      // Allow create if userId in data matches auth user
       allow create: if isOwner(request.resource.data.userId);
-      allow delete: if isOwner(resource.data.userId);
+      // Allow delete if user owns this favorite
+      allow delete: if resource.data.userId == request.auth.uid;
     }
+
     
     match /drafts/{draftId} {
       // CREATE uses request.resource (incoming data, document doesn't exist yet)
@@ -194,9 +201,11 @@ service cloud.firestore {
     // 👮 ADMIN & SYSTEM LOGS
     // ----------------------------------------------------------------------------
     match /admins/{userId} {
-      allow read: if isAdmin();
+      // Allow users to check their own admin status, or full read for admins
+      allow read: if isOwner(userId) || isAdmin();
       allow write: if false; // Manual setup only
     }
+
 
     // Admin Logs: Read-only for admins. Writes happen via Admin SDK (Server).
     match /adminLogs/{logId} {

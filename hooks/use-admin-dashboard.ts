@@ -21,11 +21,16 @@ interface UserWithReports extends User {
  */
 export function useAdminDashboardData() {
   // Items query - poll every 30s instead of real-time
+  // Limited to 200 recent items for dashboard overview
   const itemsQuery = useQuery({
     queryKey: ['admin', 'items'],
     queryFn: async () => {
       const db = getFirebaseDb()
-      const q = query(collection(db, 'items'), orderBy('postedAt', 'desc'))
+      const q = query(
+        collection(db, 'items'), 
+        orderBy('postedAt', 'desc'),
+        limit(200) // Limit for dashboard overview
+      )
       const snapshot = await getDocs(q)
       return snapshot.docs.map(doc => ({ 
         id: doc.id, 
@@ -38,14 +43,15 @@ export function useAdminDashboardData() {
   })
 
   // Flagged users query - optimized with parallel fetching
+  // Limited to users with reports or non-ACTIVE status
   const flaggedUsersQuery = useQuery({
     queryKey: ['admin', 'flagged-users'],
     queryFn: async () => {
       const db = getFirebaseDb()
       
-      // Parallel fetch instead of nested query
+      // Parallel fetch - limit users for performance
       const [usersSnapshot, reports] = await Promise.all([
-        getDocs(collection(db, 'users')),
+        getDocs(query(collection(db, 'users'), limit(500))), // Limit users
         getReports()
       ])
       

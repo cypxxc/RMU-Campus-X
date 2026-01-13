@@ -11,10 +11,8 @@ const nextConfig = {
   },
   
   // Image optimization - enable for Cloudinary CDN
-  // Note: Legacy Base64 images will still work but won't be optimized
   images: {
-    unoptimized: false, // Enable optimization for Cloudinary URLs
-    // กำหนด domains ที่อนุญาตสำหรับ external images
+    unoptimized: false,
     remotePatterns: [
       {
         protocol: 'https',
@@ -26,11 +24,9 @@ const nextConfig = {
       },
     ],
   },
-
   
   // Experimental features for better performance
   experimental: {
-    // Optimize package imports
     optimizePackageImports: [
       'lucide-react',
       '@radix-ui/react-icons',
@@ -38,7 +34,7 @@ const nextConfig = {
     ],
   },
   
-  // Disable dev tools indicator (black button at bottom-left)
+  // Disable dev tools indicator
   devIndicators: {
     appIsrStatus: false,
     buildActivity: false,
@@ -66,7 +62,6 @@ const nextConfig = {
         ],
       },
       {
-        // Cache static assets
         source: '/(.*)\\.(ico|png|svg|jpg|jpeg|gif|webp|woff|woff2)',
         headers: [
           {
@@ -80,3 +75,4 @@ const nextConfig = {
 }
 
 export default nextConfig
+

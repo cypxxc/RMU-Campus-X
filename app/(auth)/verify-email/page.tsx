@@ -56,15 +56,31 @@ export default function VerifyEmailPage() {
         })
       }
     } catch (error: any) {
+      // Handle specific Firebase errors
+      let errorTitle = "เกิดข้อผิดพลาด"
+      let errorDesc = error.message
+      
+      if (error.code === "auth/too-many-requests") {
+        errorTitle = "ส่งคำขอมากเกินไป"
+        errorDesc = "กรุณารอสักครู่แล้วลองใหม่อีกครั้ง (ประมาณ 1-2 นาที)"
+      } else if (error.code === "auth/user-not-found") {
+        errorTitle = "ไม่พบผู้ใช้"
+        errorDesc = "กรุณาสมัครสมาชิกใหม่อีกครั้ง"
+      } else if (error.code === "auth/network-request-failed") {
+        errorTitle = "เครือข่ายขัดข้อง"
+        errorDesc = "กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต"
+      }
+      
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error.message,
+        title: errorTitle,
+        description: errorDesc,
         variant: "destructive",
       })
     } finally {
       setLoading(false)
     }
   }
+
 
   const handleCheckVerification = async () => {
     setChecking(true)
