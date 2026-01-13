@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { registerUser, validateRMUEmail } from "@/lib/auth"
+import { registerUser } from "@/lib/auth"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,20 +42,15 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Validate email format (12-digit student ID @rmu.ac.th)
-    if (!validateRMUEmail(email)) {
-    toast({
-      title: "อีเมลไม่ถูกต้อง",
-      description: "อีเมลต้องเป็นตัวเลข 12 หลักตามด้วย @rmu.ac.th",
-      variant: "destructive",
-    })
-    return
-  }
 
-    if (password !== confirmPassword) {
+    // Use strict schema validation
+    const { registrationSchema } = await import("@/lib/schemas")
+    const validation = registrationSchema.safeParse({ email, password, confirmPassword })
+
+    if (!validation.success) {
       toast({
-        title: "รหัสผ่านไม่ตรงกัน",
-        description: "กรุณาตรวจสอบรหัสผ่านอีกครั้ง",
+        title: "ข้อมูลไม่ถูกต้อง",
+        description: validation.error.errors[0]?.message || "ข้อมูลไม่ถูกต้อง",
         variant: "destructive",
       })
       return
