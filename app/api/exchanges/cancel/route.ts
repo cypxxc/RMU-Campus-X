@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return ApiErrors.unauthorized("Missing authentication token")
     }
     
-    const decodedToken = await verifyIdToken(token)
+    const decodedToken = await verifyIdToken(token, true) // Force Firestore Status Check
     if (!decodedToken) {
       return ApiErrors.unauthorized("Invalid authentication token")
     }

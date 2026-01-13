@@ -2,7 +2,6 @@ import {
   collection,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -199,8 +198,31 @@ export const updateItem = async (id: string, data: Partial<Item>): Promise<ApiRe
 export const deleteItem = async (id: string): Promise<ApiResponse<void>> => {
   return apiCall(
     async () => {
-      const db = getFirebaseDb()
-      await deleteDoc(doc(db, "items", id))
+      // db unused
+      // const db = getFirebaseDb()
+      
+      // We need to pass Auth Token to API
+      // Wait.. lib/db/items runs on client.
+      // fetch needs token.
+      
+      // Dynamic import to avoid circular dep issues if any, or just standard import
+      const { getAuth } = await import("firebase/auth")
+      const auth = getAuth()
+      const token = await auth.currentUser?.getIdToken()
+      
+      if (!token) throw new Error("Authentication required")
+
+      const response = await fetch(`/api/items/${id}/delete`, {
+          method: 'DELETE',
+          headers: {
+              'Authorization': `Bearer ${token}`
+          }
+      })
+
+      if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || "Failed to delete item")
+      }
     },
     'deleteItem',
     TIMEOUT_CONFIG.STANDARD

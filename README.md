@@ -152,6 +152,13 @@ rmu-campus-x/
 │   │   ├── reports.ts                # Reports
 │   │   └── logs.ts                   # Activity Logs
 │   │
+│   ├── services/                     # Business Logic Services
+│   │   ├── admin/                    # Admin Services
+│   │   │   └── user-cleanup.ts       # User Deletion Logic
+│   │   ├── client-line-service.ts    # Client-side LINE Notifications
+│   │   ├── report-service.ts         # Report Submission Logic
+│   │   └── logger.ts                 # Logger Service
+│   │
 │   ├── firebase.ts                   # Firebase Client Config
 │   ├── firebase-admin.ts             # Firebase Admin Config
 │   ├── cloudinary.ts                 # Cloudinary Config

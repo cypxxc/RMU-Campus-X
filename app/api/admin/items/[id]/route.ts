@@ -60,7 +60,30 @@ export async function DELETE(
     const { id } = await params
     const db = getAdminDb()
     
-    await db.collection('items').doc(id).delete()
+    const itemRef = db.collection('items').doc(id)
+    const itemSnap = await itemRef.get()
+    
+    if (!itemSnap.exists) {
+        return errorResponse(AdminErrorCode.NOT_FOUND, "Item not found", 404)
+    }
+
+    // Guard: Check for active exchanges
+    const exchangesQuery = db.collection('exchanges')
+        .where('itemId', '==', id)
+        .where('status', 'in', ['pending', 'accepted', 'in_progress'])
+        .limit(1)
+        
+    const activeExchanges = await exchangesQuery.get()
+    
+    if (!activeExchanges.empty) {
+        return errorResponse(
+            AdminErrorCode.CONFLICT,
+            "Cannot delete item with active exchanges. Please cancel exchanges first.",
+            409
+        )
+    }
+
+    await itemRef.delete()
 
     return successResponse({ success: true })
   } catch (error) {

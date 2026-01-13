@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { AlertCircle, RefreshCw, Home } from "lucide-react"
 import Link from "next/link"
 
+import { SystemLogger } from "@/lib/services/logger"
+// ...
 export default function GlobalError({
   error,
   reset,
@@ -13,8 +15,8 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log error สำหรับ monitoring (ไม่แสดง stack trace ให้ผู้ใช้)
-    console.error("[GlobalError]", error.message)
+    // Log error using SystemLogger
+    SystemLogger.logError(error, 'GlobalError', 'CRITICAL')
   }, [error])
 
   return (

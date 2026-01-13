@@ -40,6 +40,14 @@ function initAdminApp(): App {
         )
       }
 
+      // Sanity check key format
+      if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+         console.error('FIREBASE_ADMIN_PRIVATE_KEY is missing standard header. Check .env formatting.')
+      }
+      if (privateKey.length < 100) {
+         console.error('FIREBASE_ADMIN_PRIVATE_KEY is suspiciously short.')
+      }
+
       adminApp = initializeApp({
         credential: cert({
           projectId,
@@ -79,14 +87,44 @@ export function getAdminAuth(): Auth {
  * @param token - Firebase ID token from Authorization header
  * @returns Decoded token with user info, or null if invalid
  */
-export async function verifyIdToken(token: string) {
+export async function verifyIdToken(token: string, checkStatus: boolean = false) {
   try {
     const auth = getAdminAuth()
     const decodedToken = await auth.verifyIdToken(token)
+
+    if (checkStatus) {
+      const db = getAdminDb()
+      const userDoc = await db.collection("users").doc(decodedToken.uid).get()
+      
+      if (!userDoc.exists) {
+        console.warn(`[Auth] User ${decodedToken.uid} verified but has no profile (Ghost Account?)`)
+        return null // or throw specific error
+      }
+      
+      const userData = userDoc.data()
+      if (userData?.status !== 'ACTIVE' && userData?.status !== 'WARNING') {
+         console.warn(`[Auth] User ${decodedToken.uid} verified but status is ${userData?.status}`)
+         return null
+      }
+    }
+
     return decodedToken
   } catch (error) {
     console.error('[Firebase Admin] Token verification failed:', error)
     return null
+  }
+}
+
+/**
+ * Debug version that throws errors instead of returning null
+ */
+export async function verifyIdTokenDebug(token: string) {
+  try {
+    const auth = getAdminAuth()
+    return await auth.verifyIdToken(token)
+  } catch (error) {
+    console.error('[Firebase Admin Debug] Token verification failed:', error)
+    throw error // Rethrow to let caller handle/display it
   }
 }
 

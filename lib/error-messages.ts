@@ -109,12 +109,16 @@ export function createUserError(
 /**
  * Log error สำหรับ development (ซ่อน stack ใน production)
  */
+import { SystemLogger } from './services/logger'
+
+/**
+ * Log error สำหรับ development และ Production
+ */
 export function logError(context: string, error: unknown): void {
-  if (process.env.NODE_ENV === "development") {
-    console.error(`[${context}]`, error)
-  } else {
-    // Production: log แค่ message
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(`[${context}] ${message}`)
-  }
+  // Use SystemLogger to handle logging logic (console + firestore + alerts)
+  SystemLogger.logError(error, context, 'ERROR').catch(err => {
+    // Fallback if logger fails
+    console.error(`[${context}] Original Error:`, error)
+    console.error(`[${context}] Logger Error:`, err)
+  })
 }

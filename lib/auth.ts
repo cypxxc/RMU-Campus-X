@@ -142,19 +142,25 @@ export const updateUserPassword = async (user: User, newPassword: string) => {
   await updatePassword(user, newPassword)
 }
 
-export const deleteUserAccount = async (user: User) => {
-  // 1. Delete Firestore Data
-  const { getFirebaseDb } = await import("./firebase")
-  const { doc, deleteDoc } = await import("firebase/firestore")
-  const db = getFirebaseDb()
+// user param is kept for signature compatibility but not used directly here
+export const deleteUserAccount = async (_user: User) => {
+  const auth = getFirebaseAuth()
+  const token = await auth.currentUser?.getIdToken()
   
-  // Delete user document
-  await deleteDoc(doc(db, "users", user.uid))
-  
-  // Note: We might want to keep or archive items/exchanges, 
-  // or use a Cloud Function to clean them up recursively.
-  // For now, we just delete the user record.
+  if (!token) throw new Error("Authentication required")
 
-  // 2. Delete Auth User
-  await deleteUser(user)
+  const response = await fetch('/api/users/me/delete', {
+      method: 'DELETE',
+      headers: {
+          'Authorization': `Bearer ${token}`
+      }
+  })
+
+  if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || "Failed to delete account")
+  }
+  
+  // Sign out locally
+  await firebaseSignOut(auth)
 }

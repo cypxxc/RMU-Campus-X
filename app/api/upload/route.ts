@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    const decoded = await verifyIdToken(token)
+    const decoded = await verifyIdToken(token, true) // Force Firestore Status Check
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }

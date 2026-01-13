@@ -1,7 +1,6 @@
 import {
   collection,
   updateDoc,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -104,39 +103,38 @@ export const updateExchange = async (id: string, data: Partial<Exchange>) => {
   const db = getFirebaseDb()
   const docRef = doc(db, "exchanges", id)
   
-  // Get current data to check status change
-  const currentDoc = await getDoc(docRef)
-  const currentData = currentDoc.data() as Exchange
+  // Guard: specific fields only
+  if (data.status) {
+      throw new Error("Use specialized functions (respondToExchange, confirmExchange) to change status")
+  }
   
   await updateDoc(docRef, {
     ...data,
     updatedAt: serverTimestamp(),
   })
+}
 
-// Notify on status change
-  if (data.status && data.status !== currentData.status) {
-    let title = ""
-    let message = ""
-    let targetUserId = currentData.requesterId
+export const respondToExchange = async (
+    exchangeId: string,
+    action: 'accept' | 'reject',
+    userId: string
+) => {
+    return apiCall(
+        async () => {
+            const response = await fetch("/api/exchanges/respond", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ exchangeId, action, userId })
+            })
 
-    if (data.status === 'accepted') {
-      title = "รับคำขอแล้ว"
-      message = `เจ้าของสิ่งของ "ตกลง" แลกเปลี่ยน "${currentData.itemTitle}" กับคุณแล้ว`
-    } else if (data.status === 'rejected') {
-      title = "คำขอถูกปฏิเสธ"
-      message = `เสียใจด้วย เจ้าของสิ่งของ "ปฏิเสธ" คำขอแลกเปลี่ยน "${currentData.itemTitle}"`
-    }
-
-    if (title && message) {
-      await createNotification({
-        userId: targetUserId,
-        title,
-        message,
-        type: "exchange",
-        relatedId: id
-      })
-    }
-  }
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || "Failed to respond to exchange")
+            }
+        },
+        'respondToExchange',
+        TIMEOUT_CONFIG.STANDARD
+    )
 }
 
 /**
@@ -246,27 +244,37 @@ export const cancelExchange = async (
   )
 }
 
+import { writeBatch } from "firebase/firestore"
+
 export const deleteExchange = async (exchangeId: string) => {
-  const db = getFirebaseDb()
+  return apiCall(
+    async () => {
+      const db = getFirebaseDb()
+      console.log("[deleteExchange] Starting atomic deletion:", exchangeId)
 
-  console.log("[deleteExchange] Starting deletion:", exchangeId)
+      // 1. Get all chat messages
+      const messagesQuery = query(collection(db, "chatMessages"), where("exchangeId", "==", exchangeId))
+      const messagesSnapshot = await getDocs(messagesQuery)
 
-  // Delete all chat messages for this exchange
-  console.log("[deleteExchange] Deleting chat messages...")
-  const messagesQuery = query(collection(db, "chatMessages"), where("exchangeId", "==", exchangeId))
-  const messagesSnapshot = await getDocs(messagesQuery)
+      // 2. Create Batch
+      const batch = writeBatch(db)
 
-  console.log("[deleteExchange] Found chat messages:", messagesSnapshot.docs.length)
+      // 3. Add Message Deletes to Batch
+      messagesSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref)
+      })
 
-  // Delete messages in batch
-  const deletePromises = messagesSnapshot.docs.map((doc) => deleteDoc(doc.ref))
-  await Promise.all(deletePromises)
+      // 4. Add Exchange Delete to Batch
+      const exchangeRef = doc(db, "exchanges", exchangeId)
+      batch.delete(exchangeRef)
 
-  console.log("[deleteExchange] Chat messages deleted")
-
-  // Delete the exchange
-  console.log("[deleteExchange] Deleting exchange...")
-  await deleteDoc(doc(db, "exchanges", exchangeId))
-
-  console.log("[deleteExchange] Exchange deleted successfully")
+      // 5. Commit Batch
+      console.log(`[deleteExchange] Committing batch for ${messagesSnapshot.size + 1} operations...`)
+      await batch.commit()
+      
+      console.log("[deleteExchange] Atomic deletion successful")
+    },
+    'deleteExchange',
+    TIMEOUT_CONFIG.STANDARD
+  )
 }

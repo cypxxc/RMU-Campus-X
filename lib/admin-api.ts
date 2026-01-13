@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { collection, query, where, getDocs, limit, startAfter, orderBy, addDoc, serverTimestamp } from 'firebase/firestore'
 import { getFirebaseDb } from './firebase'
+import { SystemLogger } from './services/logger'
 // import { isAdmin } from './admin-auth' // Removed, using server-side check
 
 /**
@@ -36,6 +37,7 @@ export enum AdminErrorCode {
   NOT_FOUND = 'NOT_FOUND',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
+  CONFLICT = 'CONFLICT',
 }
 
 /**
@@ -157,7 +159,7 @@ export async function verifyAdminAccess(request: NextRequest): Promise<{
       },
     }
   } catch (error) {
-    console.error('[Admin API] Auth error:', error)
+    await SystemLogger.logError(error, 'AdminAPI:Auth', 'CRITICAL')
     return {
       authorized: false,
       error: errorResponse(
@@ -267,27 +269,4 @@ export async function buildPaginatedQuery(
   }
 }
 
-/**
- * Log admin action for audit trail
- */
-export async function logAdminAction(
-  adminEmail: string,
-  action: string,
-  targetType: string,
-  targetId: string,
-  details?: any
-) {
-  try {
-    const db = getFirebaseDb()
-    await addDoc(collection(db, 'adminLogs'), {
-      adminEmail,
-      action,
-      targetType,
-      targetId,
-      details: details || {},
-      timestamp: serverTimestamp(),
-    })
-  } catch (error) {
-    console.error('[Admin] Failed to log action:', error)
-  }
-}
+// function logAdminAction removed. Use createAdminLog from @/lib/db/logs instead.

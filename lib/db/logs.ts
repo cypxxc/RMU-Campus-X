@@ -29,10 +29,15 @@ export interface AdminLog {
   actionType: AdminActionType
   adminId: string
   adminEmail: string
-  targetType: 'user' | 'item' | 'report' | 'ticket' | 'exchange'
+  targetType: 'user' | 'item' | 'report' | 'ticket' | 'exchange' | 'system'
   targetId: string
   targetInfo?: string
   description: string
+  // Audit Fields
+  status: 'success' | 'failed'
+  reason?: string // Error message or manual note
+  beforeState?: Record<string, any> // Data snapshot before action
+  afterState?: Record<string, any> // Data snapshot after action
   metadata?: Record<string, any>
   createdAt: any
 }
@@ -45,12 +50,21 @@ export const createAdminLog = async (
 ): Promise<string> => {
   const db = getFirebaseDb()
   
-  const docRef = await addDoc(collection(db, "adminLogs"), {
-    ...logData,
-    createdAt: serverTimestamp(),
-  })
-  
-  return docRef.id
+  try {
+    const docRef = await addDoc(collection(db, "adminLogs"), {
+      ...logData,
+      createdAt: serverTimestamp(),
+    })
+    return docRef.id
+  } catch (error) {
+    console.error("Failed to write admin log:", error)
+    // Critical: If logging fails, we should ideally alert or throw, depending on strictness.
+    // Given the requirement "If no log... action failed standard", catching here prevents app crash 
+    // but risks "action without log". 
+    // However, since this is called *after* or *during* action, rethrowing might be safer 
+    // to ensure the UI shows a failure if logging fails.
+    throw error 
+  }
 }
 
 /**
