@@ -271,6 +271,12 @@
     cursor: text;
   }
 
+  /* Hide browser default password reveal button */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none;
+  }
+
   /* Interactive Hover Animations - GPU Accelerated */
   button:not(:disabled),
   a:not([aria-disabled="true"]),
