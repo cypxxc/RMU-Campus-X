@@ -16,18 +16,18 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         CLIENT LAYER                             │
+│                         CLIENT LAYER                            │
 ├─────────────────────────────────────────────────────────────────┤
-│  Next.js 16 (App Router)  │  React 18  │  TailwindCSS 4        │
+│  Next.js 16 (App Router)  │  React 18  │  TailwindCSS 4         │
 │  ────────────────────────────────────────────────────────────── │
-│  • Server Components (RSC)                                       │
+│  • Server Components (RSC)                                      │
 │  • Client Components for Interactivity                          │
-│  • Streaming & Suspense                                          │
+│  • Streaming & Suspense                                         │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       API LAYER (Next.js)                        │
+│                       API LAYER (Next.js)                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  /api/admin/*     │  /api/exchanges/*   │  /api/line/*          │
 │  /api/reports/*   │  /api/support/*     │  /api/upload/*        │
@@ -39,7 +39,7 @@
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      SERVICE LAYER                               │
+│                      SERVICE LAYER                              │
 ├─────────────────────────────────────────────────────────────────┤
 │  Firebase          │  Cloudinary      │  LINE Messaging API     │
 │  ─────────────────────────────────────────────────────────────  │
