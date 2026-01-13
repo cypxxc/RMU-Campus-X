@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { collection, query, where, getDocs, limit, startAfter, orderBy, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, query, where, getDocs, limit, startAfter, orderBy } from 'firebase/firestore'
 import { getFirebaseDb } from './firebase'
 import { SystemLogger } from './services/logger'
 // import { isAdmin } from './admin-auth' // Removed, using server-side check
