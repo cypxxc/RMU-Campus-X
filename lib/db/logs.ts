@@ -1,15 +1,14 @@
 import { 
   collection, 
-  addDoc, 
   getDocs, 
   query, 
   where, 
   orderBy, 
   limit, 
-  serverTimestamp,
   QueryConstraint 
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
+
 
 export type AdminActionType = 
   | 'user_warning'
@@ -44,28 +43,44 @@ export interface AdminLog {
 
 /**
  * Create an admin activity log entry
+ * Uses server-side API for audit trail integrity (Admin SDK bypasses rules)
  */
 export const createAdminLog = async (
-  logData: Omit<AdminLog, 'id' | 'createdAt'>
+  logData: Omit<AdminLog, 'id' | 'createdAt' | 'adminId' | 'adminEmail'>
 ): Promise<string> => {
-  const db = getFirebaseDb()
-  
   try {
-    const docRef = await addDoc(collection(db, "adminLogs"), {
-      ...logData,
-      createdAt: serverTimestamp(),
+    // Get auth token for API call
+    const { getAuth } = await import("firebase/auth")
+    const auth = getAuth()
+    const token = await auth.currentUser?.getIdToken()
+    
+    if (!token) {
+      throw new Error("Authentication required for admin logging")
+    }
+
+    const response = await fetch('/api/admin/log', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(logData)
     })
-    return docRef.id
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || "Failed to create admin log")
+    }
+
+    const result = await response.json()
+    return result.data?.logId || 'logged'
   } catch (error) {
     console.error("Failed to write admin log:", error)
-    // Critical: If logging fails, we should ideally alert or throw, depending on strictness.
-    // Given the requirement "If no log... action failed standard", catching here prevents app crash 
-    // but risks "action without log". 
-    // However, since this is called *after* or *during* action, rethrowing might be safer 
-    // to ensure the UI shows a failure if logging fails.
+    // Critical: Rethrow to ensure UI shows failure if logging fails
     throw error 
   }
 }
+
 
 /**
  * Get admin activity logs with optional filters

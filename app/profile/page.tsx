@@ -96,11 +96,16 @@ export default function ProfilePage() {
     if (!user) return
     setLoadingExchanges(true)
     try {
-      const exchanges = await getExchangesByUser(user.uid)
-      const completed = exchanges.filter(e => e.status === 'completed')
-      setCompletedExchanges(completed)
+      const result = await getExchangesByUser(user.uid)
+      if (result.success && result.data) {
+        const completed = result.data.exchanges.filter(e => e.status === 'completed')
+        setCompletedExchanges(completed)
+      } else {
+        setCompletedExchanges([])
+      }
     } catch (error) {
       console.error("Error loading completed exchanges:", error)
+      setCompletedExchanges([])
     } finally {
       setLoadingExchanges(false)
     }

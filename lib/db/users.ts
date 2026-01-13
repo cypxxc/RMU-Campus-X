@@ -1,6 +1,5 @@
 import {
   collection,
-  addDoc,
   updateDoc,
   doc,
   getDoc,
@@ -10,14 +9,12 @@ import {
   where,
   orderBy,
   limit,
-  serverTimestamp,
-  Timestamp
+  serverTimestamp
 } from "firebase/firestore"
 import { getAuth } from "firebase/auth"
 import { getFirebaseDb } from "@/lib/firebase"
 import type { User, UserStatus, UserWarning } from "@/types"
 import { createNotification } from "./notifications"
-import { createAdminLog } from "./logs"
 import { notifyUserStatusChange, notifyUserWarning } from "@/lib/services/client-line-service"
 
 // ============ User Profile Management ============
@@ -73,236 +70,90 @@ export const getUserPublicProfile = async (userId: string) => {
 
 // ============ User Status & Warning Management ============
 
+// Refactored to use API Routes (Bypassing Rules via Admin SDK)
 export const updateUserStatus = async (
   userId: string,
   status: UserStatus,
-  adminId: string,
-  adminEmail: string,
+  _adminId: string, // Kept for interface compatibility
+  _adminEmail: string, // Kept for interface compatibility
   reason?: string,
   suspendDays?: number,
   suspendMinutes?: number
 ) => {
-  const db = getFirebaseDb()
-  const userRef = doc(db, 'users', userId)
+  const auth = getAuth()
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
   
-  // 1. Capture Before State
-  const userDoc = await getDoc(userRef)
-  if (!userDoc.exists()) {
-     // Create minimal if missing (edge case)
-     await setDoc(userRef, {
-      uid: userId,
-      status: 'ACTIVE',
-      warningCount: 0,
-      createdAt: serverTimestamp(),
-    })
-  }
-  const beforeState = userDoc.exists() ? userDoc.data() : { status: 'NEW (Auto-created)' }
+  if (!token) throw new Error("Unauthorized: Login required")
 
-  try {
-    const updates: any = {
+  const response = await fetch(`/api/admin/users/${userId}/status`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
       status,
-      updatedAt: serverTimestamp(),
-    }
-
-    if (status === 'SUSPENDED' && (suspendDays !== undefined || suspendMinutes !== undefined)) {
-      const suspendUntil = new Date()
-      if (suspendDays && suspendDays > 0) suspendUntil.setDate(suspendUntil.getDate() + suspendDays)
-      if (suspendMinutes && suspendMinutes > 0) suspendUntil.setMinutes(suspendUntil.getMinutes() + suspendMinutes)
-      
-      updates.suspendedUntil = Timestamp.fromDate(suspendUntil)
-      updates.restrictions = { canPost: false, canExchange: false, canChat: false }
-    }
-
-    if (status === 'BANNED') {
-      updates.bannedReason = reason
-      updates.restrictions = { canPost: false, canExchange: false, canChat: false }
-    }
-
-    if (status === 'ACTIVE') {
-      updates.warningCount = 0
-      updates.restrictions = { canPost: true, canExchange: true, canChat: true }
-      updates.suspendedUntil = null
-      updates.bannedReason = null
-    }
-
-    // 2. Perform Action
-    await updateDoc(userRef, updates)
-    
-    // 3. Capture After State (Constructed from updates to avoid extra read, or read again if strict)
-    // For strictness, let's use the updates object combined with known state, 
-    // but reading again ensures we see exactly what DB has. 
-    // Optimization: We know what we sent.
-    const afterState = { ...beforeState, ...updates }
-
-    // 4. Log Failure/Success Actions
-    
-    // Notify the user
-    let statusText = status === 'ACTIVE' ? 'ได้รับสิทธิ์ใช้งานปกติ' : status === 'SUSPENDED' ? 'ถูกระงับการใช้งานชั่วคราว' : 'ถูกระงับการใช้งานถาวร'
-    let msg = `บัญชีของคุณได้ถูกเปลี่ยนสถานะเป็น: ${statusText}`
-    if (reason) msg += ` เนื่องด้วยเหตุผล: ${reason}`
-
-    await createNotification({
-      userId: userId,
-      title: "อัปเดตสถานะบัญชี",
-      message: msg,
-      type: status === 'ACTIVE' ? 'system' : 'warning',
-      relatedId: userId
+      reason,
+      suspendDays,
+      suspendMinutes
     })
+  })
 
-    if (status !== 'ACTIVE') {
-        const warningAction = status === 'WARNING' ? 'WARNING' : status === 'SUSPENDED' ? 'SUSPEND' : 'BAN'
-        await addDoc(collection(db, 'userWarnings'), {
-            userId,
-            reason: reason || 'Status updated by admin',
-            issuedBy: adminId,
-            issuedByEmail: adminEmail,
-            issuedAt: serverTimestamp(),
-            action: warningAction,
-            resolved: false,
-        })
-    }
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to update user status")
+  }
 
-    // 5. Create Audit Log (Success)
-    await createAdminLog({
-      actionType: status === 'ACTIVE' ? 'user_activate' : status === 'SUSPENDED' ? 'user_suspend' : 'user_ban',
-      adminId,
-      adminEmail,
-      targetType: 'user',
-      targetId: userId,
-      targetInfo: (beforeState as any)?.email || userId,
-      description: `เปลี่ยนสถานะเป็น ${status}${reason ? `: ${reason}` : ''}`,
-      status: 'success',
-      reason: reason,
-      beforeState: beforeState as Record<string, any>,
-      afterState: afterState as Record<string, any>,
-      metadata: { status, reason, suspendDays, suspendMinutes }
-    })
+  const result = await response.json()
 
-    // Send LINE notification (Async, non-blocking)
-    notifyUserStatusChange(userId, status, reason, updates.suspendedUntil?.toDate?.()?.toISOString())
+  // Trigger LINE Notification (Client-side trigger for now)
+  // Note: ideally this should be server-side too, but keeping parity.
+  notifyUserStatusChange(userId, status, reason, result.suspendedUntil)
       .catch(err => console.error("Failed to send LINE notification:", err))
 
-  } catch (error: any) {
-    // 6. Log Failure
-    console.error("Update User Status Failed:", error)
-    await createAdminLog({
-      actionType: status === 'ACTIVE' ? 'user_activate' : status === 'SUSPENDED' ? 'user_suspend' : 'user_ban',
-      adminId,
-      adminEmail,
-      targetType: 'user',
-      targetId: userId,
-      targetInfo: userId,
-      description: `Failed to update status to ${status}`,
-      status: 'failed',
-      reason: error.message,
-      beforeState: beforeState as Record<string, any>,
-      afterState: undefined, // State didn't change
-      metadata: { error: error.toString() }
-    })
-    throw error // Re-throw to UI
-  }
+  return result
 }
-
-// Helper for LINE notification removed (refactored to lib/services/client-line-service.ts)
 
 // Issue warning - Admin approval required
 export const issueWarning = async (
   userId: string,
-  userEmail: string,
+  _userEmail: string, // Unused in API but kept for signature
   reason: string,
-  adminId: string,
-  adminEmail: string,
+  _adminId: string,
+  _adminEmail: string,
   relatedReportId?: string,
   relatedItemId?: string
 ) => {
-  const db = getFirebaseDb()
-  const userRef = doc(db, 'users', userId)
-  const userDoc = await getDoc(userRef)
+  const auth = getAuth()
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
   
-  if (!userDoc.exists()) throw new Error('User not found')
-  
-  const beforeState = userDoc.data()
-  
-  try {
-    const currentWarnings = beforeState.warningCount || 0
-    const newWarningCount = currentWarnings + 1
+  if (!token) throw new Error("Unauthorized: Login required")
 
-    const updates: any = {
-      warningCount: newWarningCount,
-      lastWarningDate: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }
-
-    // Capture After State
-    const afterState = { ...beforeState, ...updates }
-
-    // 1. Update User
-    await updateDoc(userRef, updates)
-
-    // 2. Create Warning Record
-    const warningData: any = {
-      userId,
-      userEmail,
+  const response = await fetch(`/api/admin/users/${userId}/warning`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
       reason,
-      issuedBy: adminId,
-      issuedByEmail: adminEmail,
-      issuedAt: serverTimestamp(),
-      action: 'WARNING',
-      resolved: false,
-    }
-    
-    if (relatedReportId) warningData.relatedReportId = relatedReportId
-    if (relatedItemId) warningData.relatedItemId = relatedItemId
-    
-    await addDoc(collection(db, 'userWarnings'), warningData)
-
-    // 3. Notify User
-    await createNotification({
-      userId,
-      title: 'ได้รับคำเตือน',
-      message: `${reason} (คำเตือนครั้งที่ ${newWarningCount})`,
-      type: 'warning',
+      relatedReportId,
+      relatedItemId
     })
+  })
 
-    // 4. Audit Log (Success)
-    await createAdminLog({
-      actionType: 'user_warning',
-      adminId,
-      adminEmail,
-      targetType: 'user',
-      targetId: userId,
-      targetInfo: userEmail,
-      description: `ออกคำเตือนครั้งที่ ${newWarningCount}: ${reason}`,
-      status: 'success',
-      reason: reason,
-      beforeState: beforeState as Record<string, any>,
-      afterState: afterState as Record<string, any>,
-      metadata: { warningCount: newWarningCount, relatedReportId, relatedItemId }
-    })
-
-    // Send LINE notification (Async)
-    notifyUserWarning(userId, reason, newWarningCount)
-      .catch(err => console.error("Failed to send LINE warning:", err))
-
-  } catch (error: any) {
-    // 5. Audit Log (Failure)
-    console.error("Issue Warning Failed:", error)
-    await createAdminLog({
-      actionType: 'user_warning',
-      adminId,
-      adminEmail,
-      targetType: 'user',
-      targetId: userId,
-      targetInfo: userEmail,
-      description: `Failed to issue warning`,
-      status: 'failed',
-      reason: error.message,
-      beforeState: beforeState as Record<string, any>,
-      afterState: undefined,
-      metadata: { error: error.toString() }
-    })
-    throw error // Re-throw
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to issue warning")
   }
+
+  const result = await response.json()
+
+  // Send LINE notification
+  notifyUserWarning(userId, reason, result.warningCount)
+      .catch(err => console.error("Failed to send LINE warning:", err))
+  
+  return result
 }
 
 // Helper for LINE warning removed (refactored to lib/services/client-line-service.ts)
@@ -436,22 +287,32 @@ export const getAdminLineUserIds = async (): Promise<string[]> => {
     return []
   }
   
+  if (adminEmails.length === 0) {
+    return []
+  }
+  
   // Find users with those emails who have LINE linked
+  // Optimization: Use 'in' query instead of loop (max 30 items per 'in' query)
   const lineUserIds: string[] = []
   
-  for (const email of adminEmails) {
+  // Chunk emails into groups of 30
+  const chunkSize = 30
+  for (let i = 0; i < adminEmails.length; i += chunkSize) {
+    const chunk = adminEmails.slice(i, i + chunkSize)
+    
     const usersQuery = query(
       collection(db, "users"),
-      where("email", "==", email)
+      where("email", "in", chunk)
     )
+    
     const usersSnapshot = await getDocs(usersQuery)
     
-    if (!usersSnapshot.empty) {
-      const userData = usersSnapshot.docs[0]!.data() as User
+    usersSnapshot.docs.forEach(doc => {
+      const userData = doc.data() as User
       if (userData.lineUserId && userData.lineNotifications?.enabled) {
         lineUserIds.push(userData.lineUserId)
       }
-    }
+    })
   }
   
   return lineUserIds

@@ -10,7 +10,10 @@ import {
   orderBy,
   serverTimestamp,
   arrayUnion,
-  Timestamp
+  Timestamp,
+  limit,
+  startAfter,
+  getCountFromServer
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import type { SupportTicket, SupportTicketStatus } from "@/types"
@@ -65,25 +68,56 @@ export const createSupportTicket = async (
   return docRef.id
 }
 
-export const getSupportTickets = async (status?: SupportTicketStatus) => {
+// Imports update already done in file? No, need to check imports.
+// Wait, I need to add 'limit', 'startAfter', 'getCountFromServer' to imports if not present.
+// The previous view_file showed imports.
+
+export const getSupportTickets = async (
+  status?: SupportTicketStatus | SupportTicketStatus[],
+  pageSize: number = 20,
+  lastDoc: any = null
+): Promise<{ tickets: SupportTicket[]; lastDoc: any; hasMore: boolean; totalCount: number }> => {
   const db = getFirebaseDb()
   
-  let q
+  // Base constraints
+  const constraints: any[] = [orderBy("createdAt", "desc")]
+  
   if (status) {
-    q = query(
-      collection(db, "support_tickets"),
-      where("status", "==", status),
-      orderBy("createdAt", "desc")
-    )
-  } else {
-    q = query(
-      collection(db, "support_tickets"),
-      orderBy("createdAt", "desc")
-    )
+    if (Array.isArray(status)) {
+       constraints.unshift(where("status", "in", status))
+    } else {
+       constraints.unshift(where("status", "==", status))
+    }
   }
   
+  // 1. Get Count
+  let totalCount = 0
+  try {
+     const countQ = query(collection(db, "support_tickets"), ...constraints.filter(c => c.type !== 'limit' && c.type !== 'startAfter')) 
+     const countSnap = await getCountFromServer(countQ)
+     totalCount = countSnap.data().count
+  } catch (e) {
+     console.warn("Count failed", e)
+  }
+
+  // 2. Add Pagination
+  constraints.push(limit(pageSize))
+  if (lastDoc) {
+    constraints.push(startAfter(lastDoc))
+  }
+
+  const q = query(collection(db, "support_tickets"), ...constraints)
+  
   const snapshot = await getDocs(q)
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SupportTicket)
+  const tickets = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SupportTicket)
+  const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null
+  
+  return {
+    tickets,
+    lastDoc: lastVisible,
+    hasMore: snapshot.docs.length === pageSize,
+    totalCount
+  }
 }
 
 export const getUserSupportTickets = async (userId: string) => {
@@ -136,12 +170,10 @@ export const updateTicketStatus = async (
     relatedId: ticketId,
   })
 
-  // Log admin action (only if admin info is provided)
+  // Log admin action (only if admin is making the change)
   if (adminId && adminEmail) {
     await createAdminLog({
       actionType: 'ticket_status_change',
-      adminId,
-      adminEmail,
       targetType: 'ticket',
       targetId: ticketId,
       targetInfo: ticketData.subject,
@@ -193,8 +225,6 @@ export const replyToTicket = async (
   // Log admin action
   await createAdminLog({
     actionType: 'ticket_reply',
-    adminId,
-    adminEmail,
     targetType: 'ticket',
     targetId: ticketId,
     targetInfo: ticketData.subject,

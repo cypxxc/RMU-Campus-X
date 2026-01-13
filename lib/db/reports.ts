@@ -88,11 +88,9 @@ export const updateReportStatus = async (
     relatedId: reportId
   })
 
-  // Log admin action
+  // Log admin action (adminId/adminEmail extracted from token server-side)
   await createAdminLog({
     actionType: status === 'resolved' ? 'report_resolve' : 'report_status_change',
-    adminId,
-    adminEmail,
     targetType: 'report',
     targetId: reportId,
     targetInfo: reportData.targetTitle || reportData.reportType,

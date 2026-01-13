@@ -1,60 +1,175 @@
-import { ShieldCheck } from "lucide-react"
+import Link from "next/link"
+import { Lock, Eye, Database, Share2, ShieldAlert, FileText, ChevronLeft, Cookie, Server } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export default function PrivacyPage() {
+  const lastUpdated = new Date().toLocaleDateString('th-TH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="flex items-center gap-4 mb-8">
-        <div className="p-3 bg-primary/10 rounded-full text-primary">
-          <ShieldCheck className="h-8 w-8" />
-        </div>
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 py-12 px-4 sm:px-6">
+      <div className="max-w-4xl mx-auto space-y-6">
+
+        {/* Navigation */}
         <div>
-          <h1 className="text-3xl font-bold">นโยบายความเป็นส่วนตัว</h1>
-          <p className="text-muted-foreground">RMU-Campus X ให้ความสำคัญกับข้อมูลส่วนบุคคลของคุณ</p>
+          <Link href="/">
+            <Button variant="ghost" className="gap-2 pl-0 hover:pl-2 transition-all">
+              <ChevronLeft className="h-4 w-4" />
+              กลับสู่หน้าหลัก
+            </Button>
+          </Link>
         </div>
-      </div>
-      
-      <div className="prose prose-sm sm:prose-base dark:prose-invert max-w-none bg-card p-6 sm:p-8 rounded-xl border shadow-sm space-y-8">
-        <section>
-          <h3>1. ข้อมูลที่เราเก็บรวบรวม</h3>
-          <p>เราเก็บรวบรวมข้อมูลเพื่อให้บริการที่ดีที่สุดแก่คุณ:</p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li><strong>ข้อมูลบัญชี:</strong> ชื่อ, อีเมล (จาก Google/RMU email), รูปโปรไฟล์</li>
-            <li><strong>ข้อมูลการใช้งาน:</strong> ประวัติการโพสต์, การแลกเปลี่ยน, และการแชท</li>
-            <li><strong>ข้อมูลทางเทคนิค:</strong> IP Address, Browser ที่ใช้ (เพื่อความปลอดภัย)</li>
-          </ul>
-        </section>
 
-        <section>
-          <h3>2. การใช้ข้อมูลของคุณ</h3>
-          <p>เราใช้ข้อมูลเพื่อ:</p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>ยืนยันตัวตนว่าคุณคือนักศึกษา RMU จริง</li>
-            <li>อำนวยความสะดวกในการติดต่อสื่อสารระหว่างผู้ให้และผู้รับ</li>
-            <li>ปรับปรุงประสิทธิภาพและความปลอดภัยของระบบ</li>
-            <li>ป้องกันการฉ้อโกงและการใช้งานผิดวัตถุประสงค์</li>
-          </ul>
-        </section>
+        {/* Main Content */}
+        <Card className="border-none shadow-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+          <CardHeader className="text-center pb-8 pt-10">
+            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+              <Lock className="w-8 h-8 text-primary" />
+            </div>
+            <CardTitle className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+              นโยบายความเป็นส่วนตัว
+            </CardTitle>
+            <CardDescription className="text-base mt-2">
+              RMU-Campus X Platform
+            </CardDescription>
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-4 bg-muted/50 py-1.5 px-4 rounded-full w-fit mx-auto">
+              <FileText className="w-4 h-4" />
+              <span>อัปเดตล่าสุด: {lastUpdated}</span>
+            </div>
+          </CardHeader>
+          
+          <Separator />
 
-        <section>
-          <h3>3. การเปิดเผยข้อมูล</h3>
-          <p>
-            เรา <strong>ไม่</strong> ขายข้อมูลส่วนตัวของคุณให้แก่บุคคลภายนอก ข้อมูลบางส่วน (เช่น ชื่อ, รูปโปรไฟล์) 
-            จะถูกแสดงให้ผู้ใช้ท่านอื่นเห็นเพื่อการใช้งานระบบแลกเปลี่ยนเท่านั้น
-          </p>
-        </section>
+          <CardContent className="p-0">
+            <ScrollArea className="h-[600px] p-6 sm:p-10">
+              <div className="space-y-10 pr-4">
+                
+                {/* Introduction */}
+                <section className="space-y-4">
+                  <p className="text-muted-foreground leading-relaxed">
+                    RMU-Campus X ให้ความสำคัญกับความเป็นส่วนตัวของคุณอย่างสูงสุด นโยบายนี้อธิบายถึงวิธีการที่เราเก็บรวบรวม 
+                    ใช้ และปกป้องข้อมูลส่วนบุคคลของคุณในขณะที่คุณใช้งานแพลตฟอร์มของเรา
+                  </p>
+                </section>
 
-        <section>
-          <h3>4. สิทธิ์ของคุณ</h3>
-          <p>คุณมีสิทธิ์ในการ:</p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>เข้าถึงและแก้ไขข้อมูลส่วนตัวของคุณได้ตลอดเวลาผ่านหน้าโปรไฟล์</li>
-            <li>ขอลบข้อมูลบัญชีถาวร (Delete Account) ได้ผ่านเมนูการตั้งค่า</li>
-            <li>สอบถามเกี่ยวกับข้อมูลที่เราเก็บรักษาไว้</li>
-          </ul>
-        </section>
+                {/* Section 1 */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <Database className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold">1. ข้อมูลที่เราเก็บรวบรวม</h3>
+                  </div>
+                  <div className="pl-14 space-y-2 text-muted-foreground">
+                    <p>เราเก็บรวบรวมข้อมูลเพื่อให้บริการที่ดีที่สุดแก่คุณ:</p>
+                    <ul className="list-disc list-outside ml-4 space-y-1">
+                      <li><span className="font-medium text-foreground">ข้อมูลบัญชี:</span> ชื่อ, อีเมล (@rmu.ac.th), รูปโปรไฟล์ (จาก Google)</li>
+                      <li><span className="font-medium text-foreground">ข้อมูลการใช้งาน:</span> ประวัติการโพสต์, การแลกเปลี่ยน, และการสนทนาในระบบ</li>
+                      <li><span className="font-medium text-foreground">ข้อมูลทางเทคนิค:</span> IP Address, ประเภทอุปกรณ์, และการเข้าถึงระบบ</li>
+                    </ul>
+                  </div>
+                </section>
 
-        <div className="mt-8 pt-8 border-t text-sm text-muted-foreground">
-          หากมีข้อสงสัยเกี่ยวกับนโยบายความเป็นส่วนตัว สามารถติดต่อได้ที่ <a href="mailto:contact@rmu.ac.th" className="text-primary hover:underline">contact@rmu.ac.th</a>
+                {/* Section 2 */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <Eye className="w-6 h-6 text-green-600 dark:text-green-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold">2. การใช้ข้อมูลของคุณ</h3>
+                  </div>
+                  <div className="pl-14 space-y-2 text-muted-foreground">
+                     <p>เราใช้ข้อมูลของคุณเพื่อ:</p>
+                     <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                      {[
+                        "ยืนยันตัวตนว่าเป็นนักศึกษา RMU",
+                        "จัดการรายการสิ่งของและการแลกเปลี่ยน",
+                        "ติดต่อสื่อสารเกี่ยวกับสถานะคำขอ",
+                        "ปรับปรุงประสบการณ์การใช้งาน",
+                        "ดูแลความปลอดภัยและป้องกันการทุจริต",
+                        "ส่งแจ้งเตือนที่สำคัญ"
+                      ].map((item, i) => (
+                        <div key={i} className="flex items-center gap-2 bg-muted/30 p-2 rounded border text-sm">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                {/* Section 3 */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                      <Share2 className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold">3. การเปิดเผยข้อมูล</h3>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed pl-14">
+                    เรา <span className="text-red-500 font-medium">ไม่ขาย</span> ข้อมูลส่วนบุคคลของคุณให้กับบุคคลภายนอก 
+                    ข้อมูลของคุณจะถูกเปิดเผยเฉพาะกับคู่กรณีในการแลกเปลี่ยน (เช่น ชื่อและช่องทางติดต่อ) เมื่อการแลกเปลี่ยนได้รับการยืนยันแล้วเท่านั้น 
+                    หรือเมื่อมีการร้องขอตามกฎหมาย
+                  </p>
+                </section>
+
+                {/* Section 4 */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                      <ShieldAlert className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold">4. ความปลอดภัยของข้อมูล</h3>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed pl-14">
+                    เราใช้มาตรการความปลอดภัยมาตรฐานอุตสาหกรรม (Firebase Authentication & Security Rules) เพื่อปกป้องข้อมูลของคุณจาการเข้าถึงโดยไม่ได้รับอนุญาต 
+                    อย่างไรก็ตาม การส่งข้อมูลผ่านอินเทอร์เน็ตไม่มีความปลอดภัย 100%
+                  </p>
+                </section>
+
+                 {/* Section 5 */}
+                 <section className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-pink-50 dark:bg-pink-900/20 rounded-lg">
+                      <Cookie className="w-6 h-6 text-pink-600 dark:text-pink-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold">5. บันทึกและคุกกี้</h3>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed pl-14">
+                    เราใช้คุกกี้เพื่อจดจำสถานะการเข้าสู่ระบบและการตั้งค่าของคุณ เพื่อให้คุณใช้งานเว็บไซต์ได้อย่างต่อเนื่อง
+                  </p>
+                </section>
+
+                 {/* Section 6 */}
+                 <section className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <Server className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold">6. การลบบัญชีและข้อมูล</h3>
+                  </div>
+                  <div className="pl-14 p-4 bg-muted/30 rounded-lg border-l-4 border-gray-500 text-muted-foreground text-sm leading-relaxed">
+                    คุณมีสิทธิ์ในการลบบัญชีผู้ใช้และข้อมูลส่วนตัวของคุณออกจากระบบได้ตลอดเวลา ผ่านเมนูตั้งค่าในหน้าโปรไฟล์ 
+                    เมื่อทำการลบแล้ว ข้อมูลจะไม่สามารถกู้คืนได้
+                  </div>
+                </section>
+
+                <div className="pt-8 text-center text-sm text-muted-foreground">
+                  <p>หากมีข้อสงสัยเกี่ยวกับนโยบายความเป็นส่วนตัว ติดต่อเราได้ที่หน้า <Link href="/contact" className="text-primary hover:underline underline-offset-4">ติดต่อเรา</Link></p>
+                </div>
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+        
+        <div className="text-center text-sm text-muted-foreground/60">
+          &copy; {new Date().getFullYear()} RMU-Campus X. All rights reserved.
         </div>
       </div>
     </div>

@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, query, where, getDocs, onSnapshot, orderBy } from "firebase/firestore"
+import { collection, query, where, getDocs, DocumentSnapshot } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
-import { replyToTicket, updateTicketStatus, getUserProfile } from "@/lib/firestore"
-import type { SupportTicket, User } from "@/types"
+import { replyToTicket, updateTicketStatus, getUserProfile, getSupportTickets } from "@/lib/firestore"
+import type { SupportTicket, User, SupportTicketStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -73,16 +73,26 @@ const getStatusBadge = (status: string) => {
   )
 }
 
+interface PaginationState {
+  data: SupportTicket[]
+  lastDoc: DocumentSnapshot | null
+  hasMore: boolean
+  totalCount: number
+  loading: boolean
+}
+
 export default function AdminSupportPage() {
-  const [tickets, setTickets] = useState<SupportTicket[]>([])
-  const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null)
   const [ticketUser, setTicketUser] = useState<User | null>(null)
   const [ticketReply, setTicketReply] = useState("")
   const [processing, setProcessing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [isDataLoaded, setIsDataLoaded] = useState(false)
 
+  // Separate state for each tab to preserve data when switching
+  const [pendingState, setPendingState] = useState<PaginationState>({ data: [], lastDoc: null, hasMore: true, totalCount: 0, loading: false })
+  const [historyState, setHistoryState] = useState<PaginationState>({ data: [], lastDoc: null, hasMore: true, totalCount: 0, loading: false })
 
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -117,34 +127,47 @@ export default function AdminSupportPage() {
       }
 
       setIsAdmin(true)
-      setupRealTimeListener()
+      loadTickets('pending', true) // Initial load
+      loadTickets('history', true)
+      setIsDataLoaded(true)
     } catch (error) {
       console.error("[AdminSupport] Error checking admin:", error)
       router.push("/dashboard")
     }
   }
 
-  const setupRealTimeListener = () => {
-    const db = getFirebaseDb()
+  const loadTickets = async (tab: 'pending' | 'history', reset = false) => {
+    const currentState = tab === 'pending' ? pendingState : historyState
+    const setState = tab === 'pending' ? setPendingState : setHistoryState
     
-    const unsubscribe = onSnapshot(
-      query(collection(db, "support_tickets"), orderBy("createdAt", "desc")),
-      (snapshot) => {
-        const ticketsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as SupportTicket[]
-        
-        setTickets(ticketsData)
-        setLoading(false)
-      },
-      (error) => {
-        console.error("[AdminSupport] Listener error:", error)
-        setLoading(false)
-      }
-    )
+    if (currentState.loading) return
 
-    return () => unsubscribe()
+    setState(prev => ({ ...prev, loading: true }))
+
+    try {
+      const statusFilters: SupportTicketStatus[] = tab === 'pending' 
+        ? ['new', 'in_progress'] 
+        : ['resolved', 'closed']
+
+      const { tickets, lastDoc, hasMore, totalCount } = await getSupportTickets(
+        statusFilters, 
+        10, 
+        reset ? null : currentState.lastDoc
+      )
+
+      setState(prev => ({
+        data: reset ? tickets : [...prev.data, ...tickets],
+        lastDoc,
+        hasMore,
+        totalCount,
+        loading: false
+      }))
+
+    } catch (error) {
+      console.error(`[AdminSupport] Error loading ${tab} tickets:`, error)
+      setState(prev => ({ ...prev, loading: false }))
+      toast({ title: "โหลดข้อมูลล้มเหลว", variant: "destructive" })
+    }
   }
 
   const handleSendReply = async () => {
@@ -157,46 +180,60 @@ export default function AdminSupportPage() {
       toast({ title: "ตอบกลับสำเร็จ" })
       setTicketReply("")
       
-      // Refresh ticket data
+      // Update local state locally for immediate feedback
+      // Note: This won't refresh the list, but updates the opened modal if we re-fetch ticket
+      // Usually we might want to refresh the specific ticket
+      
       const db = getFirebaseDb()
       const { doc, getDoc } = await import("firebase/firestore")
       const ticketDoc = await getDoc(doc(db, "support_tickets", selectedTicket.id))
+      
       if (ticketDoc.exists()) {
-        setSelectedTicket({ id: ticketDoc.id, ...ticketDoc.data() } as SupportTicket)
+        const newData = { id: ticketDoc.id, ...ticketDoc.data() } as SupportTicket
+        setSelectedTicket(newData)
+        
+        // Update in list
+        const updateInList = (list: SupportTicket[]) => list.map(t => t.id === newData.id ? newData : t)
+        setPendingState(prev => ({ ...prev, data: updateInList(prev.data) }))
+        setHistoryState(prev => ({ ...prev, data: updateInList(prev.data) }))
       }
+      
     } catch (error: any) {
       toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
     } finally {
       setProcessing(false)
     }
   }
+  
+  const refreshAll = () => {
+      loadTickets('pending', true)
+      loadTickets('history', true)
+  }
 
+  // Filter logic for search (client-side filtering of loaded data as requested in plan, or server side? Plan said Server pagination.)
+  // We can't easily Mix Server Pagination + Client Search without refetching. 
+  // For now, let's filter the LOADED data. If robust search is needed, we need a search index like Algolia or a specific search query.
+  // Given constraints, I will rely on Firestore simple queries. Or filter loaded data.
+  // The UI shows "Search Ticket...". If I use server pagination, I can't search entire collection client side.
+  // I will just filter the *visible* tickets for now, as implementing full text search on Firestore is complex/costly without 3rd party.
+  
+  const getFilteredData = (data: SupportTicket[]) => {
+      if (!searchQuery) return data
+      const q = searchQuery.toLowerCase()
+      return data.filter(t => 
+        (t.subject || "").toLowerCase().includes(q) ||
+        (t.userEmail || "").toLowerCase().includes(q) ||
+        (t.description || "").toLowerCase().includes(q)
+      )
+  }
 
-
-  if (loading || !isAdmin) {
+  if (!isDataLoaded && !isAdmin) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
-
-  // Filter Logic
-  const filteredTickets = tickets.filter(t => {
-    const q = searchQuery.toLowerCase()
-    return (
-      (t.subject || "").toLowerCase().includes(q) ||
-      (t.userEmail || "").toLowerCase().includes(q) ||
-      (t.description || "").toLowerCase().includes(q)
-    )
-  })
-
-  const newCount = tickets.filter(t => t.status === 'new').length
-  const inProgressCount = tickets.filter(t => t.status === 'in_progress').length
-  
-  const pendingTickets = filteredTickets.filter(t => ['new', 'in_progress'].includes(t.status))
-  const historyTickets = filteredTickets.filter(t => ['resolved', 'closed'].includes(t.status))
-
 
   return (
     <div className="min-h-screen bg-background py-6">
@@ -217,7 +254,7 @@ export default function AdminSupportPage() {
             <p className="text-muted-foreground">จัดการคำร้องและตอบกลับผู้ใช้</p>
           </div>
         </div>
-        <Button onClick={() => setupRealTimeListener()} variant="outline" className="gap-2">
+        <Button onClick={refreshAll} variant="outline" className="gap-2">
           <RefreshCw className="h-4 w-4" />
           รีเฟรช
         </Button>
@@ -231,7 +268,8 @@ export default function AdminSupportPage() {
                 <Inbox className="h-5 w-5 text-primary" />
              </div>
              <div>
-               <div className="text-2xl font-bold">{tickets.length}</div>
+               {/* Approximate totals based on what we fetched / know */}
+               <div className="text-2xl font-bold">{pendingState.totalCount + historyState.totalCount}</div>
                <p className="text-xs text-muted-foreground">ทั้งหมด</p>
              </div>
           </CardContent>
@@ -242,8 +280,12 @@ export default function AdminSupportPage() {
                 <Inbox className="h-5 w-5 text-blue-600" />
              </div>
              <div>
-               <div className="text-2xl font-bold text-foreground">{newCount}</div>
-               <p className="text-xs text-muted-foreground">ใหม่</p>
+               {/* Note: This count is only accurate if we fetch status specific counts, but our paginated result returns totalCount for that query! */}
+               <div className="text-2xl font-bold text-foreground">
+                   {/* Approximate or need specific count queries. For now using what we have loaded or known total from query */}
+                   {pendingState.data.filter(t => t.status === 'new').length}
+               </div>
+               <p className="text-xs text-muted-foreground">ใหม่ (โหลดแล้ว)</p>
              </div>
           </CardContent>
         </Card>
@@ -253,7 +295,9 @@ export default function AdminSupportPage() {
                 <Clock className="h-5 w-5 text-yellow-600" />
              </div>
              <div>
-               <div className="text-2xl font-bold text-foreground">{inProgressCount}</div>
+               <div className="text-2xl font-bold text-foreground">
+                   {pendingState.data.filter(t => t.status === 'in_progress').length}
+               </div>
                <p className="text-xs text-muted-foreground">กำลังดำเนินการ</p>
              </div>
           </CardContent>
@@ -265,7 +309,7 @@ export default function AdminSupportPage() {
              </div>
              <div>
                <div className="text-2xl font-bold text-foreground">
-                 {tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length}
+                   {historyState.totalCount}
                </div>
                <p className="text-xs text-muted-foreground">เสร็จสิ้น</p>
              </div>
@@ -280,14 +324,11 @@ export default function AdminSupportPage() {
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
               รายการ Tickets
-              <Badge variant="secondary" className="ml-2 px-3 py-1">
-                {filteredTickets.length} รายการ
-              </Badge>
             </CardTitle>
             <div className="relative w-full md:w-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="ค้นหา Ticket..."
+                placeholder="ค้นหา Ticket (ในรายการ)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 bg-background w-full md:w-[300px]"
@@ -301,18 +342,21 @@ export default function AdminSupportPage() {
               <TabsList className="bg-muted/50 p-1">
                 <TabsTrigger value="pending" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                    รอดำเนินการ 
-                   <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-muted-foreground/10 text-foreground">{pendingTickets.length}</Badge>
+                   <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-muted-foreground/10 text-foreground">{pendingState.totalCount}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="history" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                    ประวัติ
-                   <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-muted-foreground/10 text-foreground">{historyTickets.length}</Badge>
+                   <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-muted-foreground/10 text-foreground">{historyState.totalCount}</Badge>
                 </TabsTrigger>
               </TabsList>
             </div>
 
             <TabsContent value="pending" className="m-0">
-               <TicketsTable 
-                 data={pendingTickets} 
+               <TicketsList 
+                 data={getFilteredData(pendingState.data)} 
+                 loading={pendingState.loading}
+                 hasMore={pendingState.hasMore}
+                 onLoadMore={() => loadTickets('pending')}
                  onView={async (ticket) => {
                     setSelectedTicket(ticket)
                     try {
@@ -323,13 +367,15 @@ export default function AdminSupportPage() {
                     }
                  }} 
                  emptyMessage="ไม่มี Tickets รอดำเนินการ"
-                 searchQuery={searchQuery}
                />
             </TabsContent>
             
             <TabsContent value="history" className="m-0">
-               <TicketsTable 
-                 data={historyTickets} 
+               <TicketsList 
+                 data={getFilteredData(historyState.data)} 
+                 loading={historyState.loading}
+                 hasMore={historyState.hasMore}
+                 onLoadMore={() => loadTickets('history')}
                  onView={async (ticket) => {
                     setSelectedTicket(ticket)
                     try {
@@ -340,7 +386,6 @@ export default function AdminSupportPage() {
                     }
                  }} 
                  emptyMessage="ไม่มีประวัติ Tickets"
-                 searchQuery={searchQuery}
                />
             </TabsContent>
           </Tabs>
@@ -540,26 +585,21 @@ export default function AdminSupportPage() {
   )
 }
 
-function TicketsTable({ 
+function TicketsList({ 
   data, 
+  loading,
+  hasMore,
+  onLoadMore,
   onView, 
   emptyMessage,
-  searchQuery
 }: { 
   data: SupportTicket[], 
+  loading: boolean,
+  hasMore: boolean,
+  onLoadMore: () => void,
   onView: (ticket: SupportTicket) => void, 
   emptyMessage: string,
-  searchQuery?: string
 }) {
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
-  const totalPages = Math.ceil(data.length / itemsPerPage)
-  
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [data.length])
-
-  const paginatedData = data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   return (
      <div>
@@ -584,13 +624,10 @@ function TicketsTable({
                     <h3 className="text-lg font-semibold text-foreground mb-1">
                       {emptyMessage}
                     </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {searchQuery ? "ลองเปลี่ยนคำค้นหาใหม่" : "เมื่อมีผู้ใช้แจ้งปัญหาจะแสดงที่นี่"}
-                    </p>
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedData.map((ticket) => (
+                data.map((ticket) => (
                   <TableRow key={ticket.id} className="hover:bg-muted/50 border-b last:border-0 bg-card">
                     <TableCell>
                       <div>
@@ -623,41 +660,12 @@ function TicketsTable({
           </Table>
        </div>
        
-       {data.length > itemsPerPage && (
-        <div className="flex items-center justify-center gap-2 p-4 pt-6">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            ก่อนหน้า
-          </Button>
-          <div className="flex items-center gap-1">
-             {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
-                  Math.max(0, currentPage - 3),
-                  Math.min(totalPages, currentPage + 2)
-             ).map(page => (
-               <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "ghost"}
-                  size="sm"
-                  className="w-8 h-8"
-                  onClick={() => setCurrentPage(page)}
-               >
-                 {page}
+       {hasMore && (
+           <div className="flex justify-center p-4">
+               <Button variant="outline" size="sm" onClick={onLoadMore} disabled={loading}>
+                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "โหลดเพิ่มเติม"}
                </Button>
-             ))}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >
-            ถัดไป
-          </Button>
-        </div>
+           </div>
        )}
      </div>
   )

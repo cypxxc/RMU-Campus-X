@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, query, where, getDocs, onSnapshot, orderBy } from "firebase/firestore"
+import { collection, query, where, getDocs, DocumentSnapshot } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
-import { deleteItem, updateItem, createAdminLog } from "@/lib/firestore"
+import { deleteItem, updateItem, createAdminLog, getItems } from "@/lib/firestore"
 import type { Item, ItemStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
@@ -55,8 +55,13 @@ export default function AdminItemsPage() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
   const [processing, setProcessing] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 12
+  
+  // Pagination
+  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [isLoadMore, setIsLoadMore] = useState(false)
+  const [totalCount, setTotalCount] = useState(0)
+  const pageSize = 20
 
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -91,35 +96,60 @@ export default function AdminItemsPage() {
       }
 
       setIsAdmin(true)
-      setupRealTimeListener()
+      loadItems(true)
     } catch (error) {
       console.error("[AdminItems] Error checking admin:", error)
       router.push("/dashboard")
     }
   }
 
-  const setupRealTimeListener = () => {
-    const db = getFirebaseDb()
-    
-    const unsubscribe = onSnapshot(
-      query(collection(db, "items"), orderBy("postedAt", "desc")),
-      (snapshot) => {
-        const itemsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Item[]
-        
-        setItems(itemsData)
-        setLoading(false)
-      },
-      (error) => {
-        console.error("[AdminItems] Listener error:", error)
-        setLoading(false)
+  const loadItems = async (reset = false) => {
+    try {
+      if (reset) {
+        setLoading(true)
+        setLastDoc(null)
+      } else {
+        setIsLoadMore(true)
       }
-    )
 
-    return () => unsubscribe()
+      const { data, error } = await getItems({
+        pageSize,
+        lastDoc: reset ? undefined : (lastDoc || undefined),
+        searchQuery: searchQuery || undefined
+      })
+
+      if (error) {
+        throw new Error(error)
+      }
+
+      if (data) {
+        if (reset) {
+          setItems(data.items)
+        } else {
+          setItems(prev => [...prev, ...data.items])
+        }
+        setLastDoc(data.lastDoc)
+        setHasMore(data.hasMore)
+        setTotalCount(data.totalCount)
+      }
+
+    } catch (error) {
+      console.error("[AdminItems] Error loading items:", error)
+      toast({ title: "โหลดข้อมูลล้มเหลว", variant: "destructive" })
+    } finally {
+      setLoading(false)
+      setIsLoadMore(false)
+    }
   }
+
+  // Reload when search changes (with debounce)
+  useEffect(() => {
+    if (!isAdmin) return
+    const timer = setTimeout(() => {
+      loadItems(true)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   const handleDeleteItem = async () => {
     if (!deleteDialog.itemId || !user) return
@@ -143,6 +173,10 @@ export default function AdminItemsPage() {
       } as any)
 
       toast({ title: "ลบสิ่งของสำเร็จ" })
+      
+      // Remove from list locally
+      setItems(prev => prev.filter(i => i.id !== deleteDialog.itemId))
+      
       setDeleteDialog({ open: false, itemId: null })
     } catch (error: any) {
       toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
@@ -175,7 +209,13 @@ export default function AdminItemsPage() {
       } as any)
 
       toast({ title: `เปลี่ยนสถานะเป็น ${statusLabels[newStatus]}` })
-      setSelectedItem(null)
+       // Update locally
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus } : i))
+      
+      if (selectedItem?.id === itemId) {
+        setSelectedItem(prev => prev ? { ...prev, status: newStatus } : null)
+      }
+      
     } catch (error: any) {
       toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
     } finally {
@@ -183,7 +223,7 @@ export default function AdminItemsPage() {
     }
   }
 
-  if (loading || !isAdmin) {
+  if (loading && items.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -191,16 +231,11 @@ export default function AdminItemsPage() {
     )
   }
 
-  const filteredItems = items.filter(item =>
-    item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.id.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
+  // Count new items (last 24h) from fetched items
   const newCount = items.filter(i => {
-    const postedAt = (i.postedAt as any)?.toDate?.() || new Date()
-    const hoursAgo = (Date.now() - postedAt.getTime()) / (1000 * 60 * 60)
-    return hoursAgo <= 24
+     const postedAt = (i.postedAt as any)?.toDate?.() || new Date(0) // Safe access
+     const hoursAgo = (Date.now() - postedAt.getTime()) / (1000 * 60 * 60)
+     return hoursAgo <= 24
   }).length
 
   return (
@@ -220,13 +255,13 @@ export default function AdminItemsPage() {
             <p className="text-muted-foreground">ดูแลและจัดการสิ่งของทั้งหมดในระบบ</p>
           </div>
         </div>
-        <Button onClick={() => setupRealTimeListener()} variant="outline" className="gap-2">
+        <Button onClick={() => loadItems(true)} variant="outline" className="gap-2">
           <RefreshCw className="h-4 w-4" />
           รีเฟรช
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats (Approximate based on loaded data + totalCount) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
@@ -234,11 +269,12 @@ export default function AdminItemsPage() {
                 <Package className="h-5 w-5 text-primary" />
              </div>
              <div>
-               <div className="text-2xl font-bold">{items.length}</div>
+               <div className="text-2xl font-bold">{totalCount}</div>
                <p className="text-xs text-muted-foreground">สิ่งของทั้งหมด</p>
              </div>
           </CardContent>
         </Card>
+        {/* Note: New Count is only from loaded items, hard to get total new without specific query */}
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
              <div className="p-2 bg-blue-100 rounded-lg">
@@ -246,10 +282,11 @@ export default function AdminItemsPage() {
              </div>
              <div>
                <div className="text-2xl font-bold text-foreground">{newCount}</div>
-               <p className="text-xs text-muted-foreground">ใหม่ (24 ชม.)</p>
+               <p className="text-xs text-muted-foreground">ใหม่ (ในหน้านี้)</p>
              </div>
           </CardContent>
         </Card>
+        {/* Status counts are approximated from loaded list or would need separate counters */}
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
              <div className="p-2 bg-green-100 rounded-lg">
@@ -259,7 +296,7 @@ export default function AdminItemsPage() {
                <div className="text-2xl font-bold text-foreground">
                  {items.filter(i => i.status === 'available').length}
                </div>
-               <p className="text-xs text-muted-foreground">พร้อมให้</p>
+               <p className="text-xs text-muted-foreground">พร้อมให้ (โหลดแล้ว)</p>
              </div>
           </CardContent>
         </Card>
@@ -272,7 +309,7 @@ export default function AdminItemsPage() {
                <div className="text-2xl font-bold text-foreground">
                  {items.filter(i => i.status === 'completed').length}
                </div>
-               <p className="text-xs text-muted-foreground">เสร็จสิ้น</p>
+               <p className="text-xs text-muted-foreground">เสร็จสิ้น (โหลดแล้ว)</p>
              </div>
           </CardContent>
         </Card>
@@ -284,7 +321,7 @@ export default function AdminItemsPage() {
           <Package className="h-5 w-5 text-primary" />
           รายการสิ่งของ
           <Badge variant="secondary" className="ml-2 px-3 py-1">
-            {filteredItems.length} รายการ
+            {totalCount} รายการ
           </Badge>
         </h2>
         <div className="relative w-full md:w-auto">
@@ -300,7 +337,7 @@ export default function AdminItemsPage() {
 
       {/* Items Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 contain-paint">
-        {filteredItems.length === 0 ? (
+        {items.length === 0 ? (
            <div className="col-span-full py-16 text-center bg-linear-to-b from-transparent to-muted/20 rounded-xl border border-dashed">
             <div className="p-4 rounded-full bg-muted/50 w-fit mx-auto mb-4">
               <Package className="h-12 w-12 text-muted-foreground/50" />
@@ -313,9 +350,7 @@ export default function AdminItemsPage() {
             </p>
           </div>
         ) : (
-          filteredItems
-            .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-            .map((item) => (
+          items.map((item) => (
             <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow group">
               <div className="relative aspect-video bg-muted">
                 {item.imageUrl ? (
@@ -372,41 +407,24 @@ export default function AdminItemsPage() {
         )}
       </div>
       
-      {/* Pagination */}
-      {filteredItems.length > itemsPerPage && (
-        <div className="flex items-center justify-center gap-2 mt-6">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            ก่อนหน้า
-          </Button>
-          <div className="flex items-center gap-1">
-            {Array.from({ length: Math.ceil(filteredItems.length / itemsPerPage) }, (_, i) => i + 1).slice(
-              Math.max(0, currentPage - 3),
-              Math.min(Math.ceil(filteredItems.length / itemsPerPage), currentPage + 2)
-            ).map(page => (
-              <Button
-                key={page}
-                variant={currentPage === page ? "default" : "ghost"}
-                size="sm"
-                className="w-8 h-8"
-                onClick={() => setCurrentPage(page)}
-              >
-                {page}
-              </Button>
-            ))}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredItems.length / itemsPerPage), p + 1))}
-            disabled={currentPage === Math.ceil(filteredItems.length / itemsPerPage)}
-          >
-            ถัดไป
-          </Button>
+      {/* Load More Button */}
+      {hasMore && (
+        <div className="flex justify-center mt-8">
+            <Button 
+                variant="outline" 
+                onClick={() => loadItems(false)} 
+                disabled={isLoadMore}
+                className="w-full max-w-[200px]"
+            >
+                {isLoadMore ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        กำลังโหลด...
+                    </>
+                ) : (
+                    "โหลดเพิ่มเติม"
+                )}
+            </Button>
         </div>
       )}
 

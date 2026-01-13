@@ -19,15 +19,69 @@ import { getFirebaseDb } from "@/lib/firebase"
 import type { AppNotification } from "@/types"
 
 // Notifications
+// For cross-user notifications (e.g., system sending to another user), uses server API
+// For self-notifications, can use direct write (allowed by rules)
 export const createNotification = async (notificationData: Omit<AppNotification, "id" | "createdAt" | "isRead">) => {
-  const db = getFirebaseDb()
-  const docRef = await addDoc(collection(db, "notifications"), {
-    ...notificationData,
-    isRead: false,
-    createdAt: serverTimestamp(),
-  })
-  return docRef.id
+  // Check if this is a cross-user notification (current user != target user)
+  // If we have auth, check if we're the target
+  let isSelfNotification = false
+  
+  try {
+    const { getAuth } = await import("firebase/auth")
+    const auth = getAuth()
+    const currentUserId = auth.currentUser?.uid
+    
+    if (currentUserId && currentUserId === notificationData.userId) {
+      isSelfNotification = true
+    }
+  } catch {
+    // If auth check fails, assume cross-user (use API)
+    isSelfNotification = false
+  }
+  
+  if (isSelfNotification) {
+    // Self-notification: direct write allowed by rules
+    const db = getFirebaseDb()
+    const docRef = await addDoc(collection(db, "notifications"), {
+      ...notificationData,
+      isRead: false,
+      createdAt: serverTimestamp(),
+    })
+    return docRef.id
+  } else {
+    // Cross-user notification: use API (Admin SDK)
+    try {
+      const { getAuth } = await import("firebase/auth")
+      const auth = getAuth()
+      const token = await auth.currentUser?.getIdToken()
+      
+      if (!token) {
+        throw new Error("Authentication required for notifications")
+      }
+      
+      const response = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(notificationData)
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create notification")
+      }
+      
+      const result = await response.json()
+      return result.data?.notificationId || 'notified'
+    } catch (error) {
+      console.error("[createNotification] API call failed:", error)
+      throw error
+    }
+  }
 }
+
 
 interface GetNotificationsOptions {
   pageSize?: number

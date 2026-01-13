@@ -24,7 +24,10 @@ export const validateRMUEmail = (email: string): boolean => {
   return result.success
 }
 
-export const registerUser = async (email: string, password: string) => {
+export const registerUser = async (rawEmail: string, password: string) => {
+  // Normalize email
+  const email = rawEmail.trim().toLowerCase();
+
   // 1. Strict Validation using Zod
   const validation = registrationSchema.safeParse({ email, password, confirmPassword: password })
   if (!validation.success) {
@@ -38,6 +41,7 @@ export const registerUser = async (email: string, password: string) => {
   try {
     // 2. Create Auth User
     userCredential = await createUserWithEmailAndPassword(auth, email, password)
+    console.log("[Register] User Created:", userCredential.user.uid, userCredential.user.email);
   } catch (authError: any) {
     console.error("[Register] Auth Error:", authError)
     throw authError // Let the caller handle auth errors (e.g. email in use)
@@ -46,6 +50,12 @@ export const registerUser = async (email: string, password: string) => {
   // 3. Atomic Profile Creation
   try {
     await sendEmailVerification(userCredential.user)
+
+    // Verify Auth State before Write
+    const currentUser = auth.currentUser;
+    console.log("[Register] Current Auth User before DB Write:", currentUser?.uid);
+    
+    if (!currentUser) throw new Error("Auth state lost before DB write");
 
     // Create user document in Firestore
     const db = getFirebaseDb()
