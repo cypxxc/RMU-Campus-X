@@ -179,7 +179,8 @@ export const updateUserStatus = async (
     })
 
     // Send LINE notification (Async, non-blocking)
-    sendLineStatusNotification(userId, status, reason, updates.suspendedUntil)
+    notifyUserStatusChange(userId, status, reason, updates.suspendedUntil?.toDate?.()?.toISOString())
+      .catch(err => console.error("Failed to send LINE notification:", err))
 
   } catch (error: any) {
     // 6. Log Failure
@@ -280,7 +281,8 @@ export const issueWarning = async (
     })
 
     // Send LINE notification (Async)
-    sendLineWarningNotification(userId, reason, newWarningCount)
+    notifyUserWarning(userId, reason, newWarningCount)
+      .catch(err => console.error("Failed to send LINE warning:", err))
 
   } catch (error: any) {
     // 5. Audit Log (Failure)
