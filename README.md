@@ -448,7 +448,7 @@ interface ApiResponse<T> {
 
 | ชื่อ | รหัสนักศึกษา | หน้าที่ |
 |------|-------------|---------|
-| [ชื่อนักศึกษา] | [รหัส] | Full-Stack Developer |
+| [Chayaphon] | [653120100120] | Full-Stack Developer |
 
 ---
 

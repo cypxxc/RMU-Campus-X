@@ -97,6 +97,8 @@ export const updateReportStatus = async (
     targetId: reportId,
     targetInfo: reportData.targetTitle || reportData.reportType,
     description: `เปลี่ยนสถานะรายงานเป็น: ${status}${note ? ` - ${note}` : ''}`,
+    status: 'success',
+    reason: note,
     metadata: { status, note: note || null, reportType: reportData.reportType }
   })
 }

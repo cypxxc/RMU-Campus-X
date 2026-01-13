@@ -146,6 +146,7 @@ export const updateTicketStatus = async (
       targetId: ticketId,
       targetInfo: ticketData.subject,
       description: `เปลี่ยนสถานะ Ticket เป็น: ${statusLabels[status]}`,
+      status: 'success',
       metadata: { status, category: ticketData.category }
     })
   }
@@ -198,6 +199,7 @@ export const replyToTicket = async (
     targetId: ticketId,
     targetInfo: ticketData.subject,
     description: `ตอบกลับ Ticket: ${reply.substring(0, 100)}${reply.length > 100 ? '...' : ''}`,
+    status: 'success',
     metadata: { category: ticketData.category }
   })
 }
