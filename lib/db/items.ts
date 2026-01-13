@@ -178,6 +178,12 @@ export const updateItem = async (id: string, data: Partial<Item>): Promise<ApiRe
       // If title or description is updated, regenerate keywords
       if (data.title || data.description) {
           const currentData = docSnap.data() as Item
+          
+          // Guard: Prevent editing if item is pending
+          if (currentData.status === 'pending') {
+              throw new Error("Cannot edit item details while an exchange is pending")
+          }
+
           const newTitle = data.title || currentData.title
           const newDesc = data.description || currentData.description
           updates.searchKeywords = generateKeywords(newTitle, newDesc)

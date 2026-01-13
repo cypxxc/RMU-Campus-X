@@ -155,6 +155,11 @@ export const confirmExchange = async (exchangeId: string, role: 'owner' | 'reque
         
         const exchange = exchangeDoc.data() as Exchange
         
+        // Guard: Only allow confirmation if status is acceptable
+        if (!['in_progress', 'accepted'].includes(exchange.status)) {
+            throw new Error(`Cannot confirm exchange in status: ${exchange.status}`)
+        }
+        
         // 2. Update confirmation status
         const updates: Partial<Exchange> = {
           updatedAt: serverTimestamp() as any

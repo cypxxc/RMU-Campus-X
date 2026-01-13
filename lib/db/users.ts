@@ -309,26 +309,38 @@ export const deleteUserAndData = async (userId: string) => {
   console.log("[deleteUserAndData] Starting full delete for:", userId)
 
   try {
-    // 1. Delete User Document
-    await deleteDoc(doc(db, "users", userId))
+    // Collect all references to delete
+    const refsToDelete: any[] = []
 
-    // 2. Delete Items
+    // 1. User Document
+    refsToDelete.push(doc(db, "users", userId))
+
+    // 2. Items
     const itemsQ = query(collection(db, "items"), where("ownerId", "==", userId))
     const itemsSnap = await getDocs(itemsQ)
-    const itemDeletes = itemsSnap.docs.map(d => deleteDoc(d.ref))
-    await Promise.all(itemDeletes)
+    itemsSnap.docs.forEach(d => refsToDelete.push(d.ref))
 
-    // 3. Delete Exchanges (as requester or owner)
+    // 3. Exchanges (as requester or owner)
     const exchangesQ1 = query(collection(db, "exchanges"), where("requesterId", "==", userId))
     const exchangesQ2 = query(collection(db, "exchanges"), where("ownerId", "==", userId))
     const [exchangesSnap1, exchangesSnap2] = await Promise.all([getDocs(exchangesQ1), getDocs(exchangesQ2)])
-    const exchangeDeletes = [
-      ...exchangesSnap1.docs.map(d => deleteDoc(d.ref)),
-      ...exchangesSnap2.docs.map(d => deleteDoc(d.ref))
-    ]
-    await Promise.all(exchangeDeletes)
+    
+    // Add unique exchange refs
+    const exchangeIds = new Set()
+    exchangesSnap1.docs.forEach(d => {
+      if (!exchangeIds.has(d.id)) {
+        refsToDelete.push(d.ref)
+        exchangeIds.add(d.id)
+      }
+    })
+    exchangesSnap2.docs.forEach(d => {
+      if (!exchangeIds.has(d.id)) {
+        refsToDelete.push(d.ref)
+        exchangeIds.add(d.id)
+      }
+    })
 
-    // 4. Delete Reports (Critical for Ghost Fix - delete if reporter OR reported)
+    // 4. Reports (Reporter or Target or ReportedUser)
     const reportsQ1 = query(collection(db, "reports"), where("reporterId", "==", userId))
     const reportsQ2 = query(collection(db, "reports"), where("reportedUserId", "==", userId))
     const reportsQ3 = query(collection(db, "reports"), where("targetId", "==", userId))
@@ -339,16 +351,35 @@ export const deleteUserAndData = async (userId: string) => {
       getDocs(reportsQ3)
     ])
     
-    // Use Set to avoid duplicate deletes if queries overlap
-    const uniqueReportRefs = new Set([...reportsSnap1.docs, ...reportsSnap2.docs, ...reportsSnap3.docs].map(d => d.ref.path))
-    const uniqueReportDeletes = Array.from(uniqueReportRefs).map(path => deleteDoc(doc(db, path)))
-    await Promise.all(uniqueReportDeletes)
+    const reportIds = new Set()
+    const addUniqueReport = (d: any) => {
+        if (!reportIds.has(d.id)) {
+            refsToDelete.push(d.ref)
+            reportIds.add(d.id)
+        }
+    }
+    reportsSnap1.docs.forEach(addUniqueReport)
+    reportsSnap2.docs.forEach(addUniqueReport)
+    reportsSnap3.docs.forEach(addUniqueReport)
 
-    // 5. Delete Warnings
+    // 5. Warnings
     const warningsQ = query(collection(db, "userWarnings"), where("userId", "==", userId))
     const warningsSnap = await getDocs(warningsQ)
-    const warningDeletes = warningsSnap.docs.map(d => deleteDoc(d.ref))
-    await Promise.all(warningDeletes)
+    warningsSnap.docs.forEach(d => refsToDelete.push(d.ref))
+
+    console.log(`[deleteUserAndData] Found ${refsToDelete.length} documents to delete`)
+
+    // Batch delete in chunks of 500
+    const { writeBatch } = await import("firebase/firestore")
+    const CHUNK_SIZE = 500
+    
+    for (let i = 0; i < refsToDelete.length; i += CHUNK_SIZE) {
+      const chunk = refsToDelete.slice(i, i + CHUNK_SIZE)
+      const batch = writeBatch(db)
+      chunk.forEach(ref => batch.delete(ref))
+      await batch.commit()
+      console.log(`[deleteUserAndData] Batch ${Math.floor(i / CHUNK_SIZE) + 1} committed`)
+    }
 
     console.log("[deleteUserAndData] Cleanup complete")
   } catch (error) {
