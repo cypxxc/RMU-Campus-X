@@ -161,6 +161,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check Secrets availability
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "::error::VERCEL_TOKEN is MISSING! Please make sure you added it under 'Repository Secrets' (not Variables)."
+            exit 1
+          fi
+          echo "VERCEL_TOKEN found (starts with: $(echo ${{ secrets.VERCEL_TOKEN }} | cut -c1-4)...)"
+
       - name: Deploy to Vercel
         uses: amondnet/vercel-action@v25
         with:
