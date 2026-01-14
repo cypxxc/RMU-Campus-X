@@ -257,6 +257,58 @@ rmu-campus-x/
 | **Batch Queries** | รวม queries เพื่อลด reads |
 | **Image Caching** | Service Worker cache รูปจาก Cloudinary |
 
+### 10. Testing & Quality Assurance
+
+- **Unit Tests** - Jest สำหรับทดสอบ functions หลัก
+- **Security Tests** - ทดสอบ input validation & sanitization
+- **Database Tests** - ทดสอบ Firestore operations
+- **Coverage Reports** - ดู code coverage ด้วย `npm run test:coverage`
+
+```bash
+# Run tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+```
+
+### 11. Monitoring & Error Tracking (`lib/monitoring.ts`)
+
+- **Error Logging** - บันทึก errors แบบศูนย์กลาง
+- **Performance Tracking** - จับเวลา operations
+- **Log Levels** - debug, info, warn, error, fatal
+- **Exception Capturing** - รองรับ Sentry integration
+
+```typescript
+import { error, startTimer, captureException } from '@/lib/monitoring'
+
+// Log error
+error('Operation failed', new Error('Something went wrong'), { userId: '123' })
+
+// Track performance
+const endTimer = startTimer('fetchUsers')
+// ... do work
+endTimer() // logs duration
+```
+
+### 12. Security Utilities (`lib/security.ts`)
+
+| Function | Description |
+|----------|-------------|
+| `sanitizeHtml()` | ป้องกัน XSS attacks |
+| `sanitizeText()` | ลบ control characters |
+| `isValidRMUEmail()` | ตรวจสอบ email RMU |
+| `sanitizeUrl()` | ตรวจสอบ URL ปลอดภัย |
+| `hasSuspiciousPatterns()` | ตรวจจับ SQL injection |
+| `sanitizeFilename()` | ทำความสะอาดชื่อไฟล์ |
+
+### 13. Accessibility (`lib/a11y.ts`)
+
+- **Keyboard Navigation** - รองรับ Arrow keys, Tab, Enter
+- **Focus Management** - Focus trap สำหรับ modals
+- **Screen Reader** - Announce messages via `aria-live`
+- **Reduced Motion** - ตรวจจับ user preferences
+
 ---
 
 
