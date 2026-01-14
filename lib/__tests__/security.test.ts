@@ -5,7 +5,6 @@
 import {
   sanitizeHtml,
   sanitizeText,
-  sanitizeEmail,
   isValidRMUEmail,
   isValidEmail,
   truncateString,
