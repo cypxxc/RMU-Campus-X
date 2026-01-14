@@ -229,7 +229,7 @@ export function HelpBotWidget() {
             </form>
             
             {/* Quick Suggestions */}
-            {messages.length <= 1 && !isLoading && (
+            {!isLoading && (
               <div className="flex flex-wrap gap-1.5 w-full">
                 {[
                   "ระบบนี้ใช้งานยังไง?",
