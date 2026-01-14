@@ -169,6 +169,7 @@ export default function AdminItemsPage() {
         targetId: deleteDialog.itemId,
         targetInfo: itemToDelete?.title || "Unknown Item",
         description: `ลบสิ่งของ: ${itemToDelete?.title || deleteDialog.itemId}`,
+        status: 'success',
         metadata: { category: itemToDelete?.category }
       } as any)
 
@@ -202,6 +203,7 @@ export default function AdminItemsPage() {
         targetId: itemId,
         targetInfo: itemToUpdate?.title || "Unknown Item",
         description: `เปลี่ยนสถานะเป็น: ${statusLabels[newStatus]}`,
+        status: 'success',
         metadata: { 
           from: itemToUpdate?.status,
           to: newStatus 
