@@ -7,6 +7,7 @@ import { useState, useCallback } from "react"
 import { uploadToCloudinary, validateImageFile } from "@/lib/storage"
 import { useToast } from "@/hooks/use-toast"
 import { IMAGE_UPLOAD_CONFIG } from "@/lib/constants"
+import { getFirebaseAuth } from "@/lib/firebase"
 
 export interface UseImageUploadOptions {
   maxImages?: number
@@ -61,6 +62,10 @@ export function useImageUpload(options: UseImageUploadOptions = {}): UseImageUpl
     setUploadProgress(0)
 
     try {
+      // Get auth token for API authentication
+      const auth = getFirebaseAuth()
+      const token = await auth.currentUser?.getIdToken()
+      
       const newImages: string[] = []
       let uploadCount = 0
       const totalFiles = files.length
@@ -78,8 +83,8 @@ export function useImageUpload(options: UseImageUploadOptions = {}): UseImageUpl
           continue
         }
 
-        // Upload to Cloudinary
-        const cloudinaryUrl = await uploadToCloudinary(file, folder)
+        // Upload to Cloudinary with auth token
+        const cloudinaryUrl = await uploadToCloudinary(file, folder, token)
         newImages.push(cloudinaryUrl)
         uploadCount++
         setUploadProgress(Math.round((uploadCount / totalFiles) * 100))
