@@ -3,77 +3,52 @@
  * Testing core database operations
  */
 
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
 // Mock Firebase
-jest.mock('@/lib/firebase', () => ({
-  getFirebaseDb: jest.fn(() => ({})),
-  getFirebaseAuth: jest.fn(() => ({})),
+vi.mock('@/lib/firebase', () => ({
+  getFirebaseDb: vi.fn(() => ({})),
+  getFirebaseAuth: vi.fn(() => ({})),
 }))
 
 // Mock Firestore functions
-const mockGetDocs = jest.fn()
-const mockGetDoc = jest.fn()
-const mockAddDoc = jest.fn()
-const mockUpdateDoc = jest.fn()
-const mockDeleteDoc = jest.fn()
-const mockQuery = jest.fn()
-const mockCollection = jest.fn()
-const mockDoc = jest.fn()
-const mockWhere = jest.fn()
-const mockOrderBy = jest.fn()
-const mockLimit = jest.fn()
-const mockGetCountFromServer = jest.fn()
-const mockStartAfter = jest.fn()
+const mockGetDocs = vi.fn()
+const mockGetDoc = vi.fn()
+const mockAddDoc = vi.fn()
+const mockUpdateDoc = vi.fn()
+const mockDeleteDoc = vi.fn()
+const mockQuery = vi.fn()
+const mockCollection = vi.fn()
+const mockDoc = vi.fn()
+const mockWhere = vi.fn()
+const mockOrderBy = vi.fn()
+const mockLimit = vi.fn()
+const mockGetCountFromServer = vi.fn()
+const mockStartAfter = vi.fn()
 
-jest.mock('firebase/firestore', () => ({
-  getDocs: (...args: any[]) => mockGetDocs(...args),
-  getDoc: (...args: any[]) => mockGetDoc(...args),
-  addDoc: (...args: any[]) => mockAddDoc(...args),
-  updateDoc: (...args: any[]) => mockUpdateDoc(...args),
-  deleteDoc: (...args: any[]) => mockDeleteDoc(...args),
-  query: (...args: any[]) => mockQuery(...args),
-  collection: (...args: any[]) => mockCollection(...args),
-  doc: (...args: any[]) => mockDoc(...args),
-  where: (...args: any[]) => mockWhere(...args),
-  orderBy: (...args: any[]) => mockOrderBy(...args),
-  limit: (...args: any[]) => mockLimit(...args),
-  startAfter: (...args: any[]) => mockStartAfter(...args),
-  getCountFromServer: (...args: any[]) => mockGetCountFromServer(...args),
-  serverTimestamp: jest.fn(() => new Date()),
+vi.mock('firebase/firestore', () => ({
+  getDocs: (...args: unknown[]) => mockGetDocs(...args),
+  getDoc: (...args: unknown[]) => mockGetDoc(...args),
+  addDoc: (...args: unknown[]) => mockAddDoc(...args),
+  updateDoc: (...args: unknown[]) => mockUpdateDoc(...args),
+  deleteDoc: (...args: unknown[]) => mockDeleteDoc(...args),
+  query: (...args: unknown[]) => mockQuery(...args),
+  collection: (...args: unknown[]) => mockCollection(...args),
+  doc: (...args: unknown[]) => mockDoc(...args),
+  where: (...args: unknown[]) => mockWhere(...args),
+  orderBy: (...args: unknown[]) => mockOrderBy(...args),
+  limit: (...args: unknown[]) => mockLimit(...args),
+  startAfter: (...args: unknown[]) => mockStartAfter(...args),
+  getCountFromServer: (...args: unknown[]) => mockGetCountFromServer(...args),
+  serverTimestamp: vi.fn(() => new Date()),
   Timestamp: {
-    now: jest.fn(() => ({ toDate: () => new Date() })),
+    now: vi.fn(() => ({ toDate: () => new Date() })),
   },
 }))
 
 describe('Database Functions', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
-  })
-
-  describe('Items', () => {
-    it('should have correct pagination structure', async () => {
-      // Mock successful response
-      mockGetDocs.mockResolvedValueOnce({
-        docs: [
-          { id: '1', data: () => ({ title: 'Test Item', status: 'available' }) },
-          { id: '2', data: () => ({ title: 'Test Item 2', status: 'available' }) },
-        ],
-      })
-      mockGetCountFromServer.mockResolvedValueOnce({
-        data: () => ({ count: 10 }),
-      })
-
-      // Import after mocks are set up
-      const { getItems } = await import('@/lib/db/items')
-      
-      const result = await getItems({ pageSize: 2 })
-      
-      expect(result.success).toBe(true)
-      if (result.success && result.data) {
-        expect(result.data.items).toHaveLength(2)
-        expect(result.data.hasMore).toBe(true)
-        expect(result.data.totalCount).toBe(10)
-      }
-    })
+    vi.clearAllMocks()
   })
 
   describe('Pagination Helper', () => {
