@@ -117,8 +117,8 @@
   --destructive: oklch(0.5 0.18 25);
   --destructive-foreground: oklch(0.95 0.02 260);
 
-  /* Borders - Visible but subtle Navy */
-  --border: oklch(0.25 0.05 260);
+  /* Borders - Very subtle, almost invisible in dark mode */
+  --border: oklch(0.22 0.03 260);
   --input: oklch(0.25 0.05 260);
   --ring: oklch(0.6 0.16 255);
 
@@ -278,7 +278,7 @@
     display: none !important;
     visibility: hidden !important;
   }
-  
+
   /* Chrome/Safari - password toggle and other decorations */
   input::-webkit-credentials-auto-fill-button,
   input::-webkit-clear-button,
@@ -287,14 +287,13 @@
     visibility: hidden !important;
     pointer-events: none !important;
   }
-  
+
   /* Chrome 93+ password reveal button */
   input[type="password"]::-webkit-password-reveal-button,
   input[type="password"]::-webkit-contacts-auto-fill-button {
     display: none !important;
     visibility: hidden !important;
   }
-
 
   /* Interactive Hover Animations - GPU Accelerated */
   button:not(:disabled),

@@ -53,7 +53,7 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
 
   return (
     <Card 
-      className="group overflow-hidden card-hover border-border/60 animate-fade-in cursor-pointer"
+      className="group overflow-hidden card-hover animate-fade-in cursor-pointer hover:border-primary/30 transition-all duration-300"
       onClick={handleCardClick}
     >
       <CardHeader className="p-0">
