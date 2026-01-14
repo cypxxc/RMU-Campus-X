@@ -212,7 +212,7 @@ export const deleteItem = async (id: string): Promise<ApiResponse<void>> => {
       
       if (!token) throw new Error("Authentication required")
 
-      const response = await fetch(`/api/items/${id}/delete`, {
+      const response = await fetch(`/api/items/${id}`, {
           method: 'DELETE',
           headers: {
               'Authorization': `Bearer ${token}`
