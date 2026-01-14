@@ -16,11 +16,15 @@ export async function POST(request: NextRequest) {
     // Verify Authentication
     const token = extractBearerToken(request.headers.get("Authorization"))
     if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      console.error('[Upload API] No token provided')
+      return NextResponse.json({ error: "กรุณาเข้าสู่ระบบก่อนอัปโหลดรูปภาพ" }, { status: 401 })
     }
-    const decoded = await verifyIdToken(token, true) // Force Firestore Status Check
+    
+    // Only verify token, don't check Firestore status (user might be uploading during registration)
+    const decoded = await verifyIdToken(token, false)
     if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+      console.error('[Upload API] Token verification failed')
+      return NextResponse.json({ error: "Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่" }, { status: 401 })
     }
 
     const formData = await request.formData()
