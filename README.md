@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Firebase](https://img.shields.io/badge/Firebase-12.5-orange?logo=firebase)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/Tests-133%20passed-success)]()
 
 ---
 
@@ -93,10 +93,11 @@ User Action → React Component → API Route → Firebase/Service → Response
 
 | เทคโนโลยี | เวอร์ชัน | การใช้งาน |
 |-----------|----------|-----------|
-| **Jest** | 30.2.0 | Unit Testing |
-| **Playwright** | 1.57.0 | E2E Testing |
+| **Vitest** | 4.0.17 | Unit Testing (69 tests) |
+| **Playwright** | 1.57.0 | E2E Testing (64 tests, 4 browsers) |
 | **ESLint** | 8.57.1 | Code Linting |
 | **Zod** | 3.25.76 | Schema Validation |
+| **GitHub Actions** | - | CI/CD Pipeline |
 
 ---
 
@@ -523,9 +524,27 @@ interface ApiResponse<T> {
 
 ---
 
-## 📄 License
+## 📊 ระบบ Monitoring & DevOps
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### CI/CD Pipeline (GitHub Actions)
+- ✅ TypeScript check อัตโนมัติ
+- ✅ Unit tests (Vitest)
+- ✅ E2E tests (Playwright)
+- ✅ Security scan
+- ✅ Auto-deploy to Vercel
+
+### ระบบใหม่ที่เพิ่มเข้ามา
+| ระบบ | ไฟล์ | รายละเอียด |
+|------|------|------------|
+| **Error Tracking** | `lib/error-tracker.ts` | Sentry-ready error logging |
+| **Login Protection** | `lib/login-tracker.ts` | ป้องกัน brute force attack |
+| **Session Management** | `lib/session-manager.ts` | จัดการ sessions หลายอุปกรณ์ |
+| **Caching** | `lib/cache.ts` | In-memory cache with TTL |
+| **Feature Flags** | `lib/feature-flags.ts` | เปิด/ปิด features ได้ |
+| **Search Engine** | `lib/search.ts` | Fuzzy search + relevance scoring |
+| **Image Gallery** | `components/image-gallery.tsx` | Lightbox + zoom |
+| **Database Backup** | `scripts/backup-firestore.ts` | Script สำรองข้อมูล |
+| **Migrations** | `scripts/migrate.ts` | Database schema migrations |
 
 ---
 

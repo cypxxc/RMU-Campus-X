@@ -95,7 +95,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Contributors
 
 - RMU-Campus X Team
+- Chayaphon (653120100120)
 
-## License
-
-This project is licensed under the MIT License.
