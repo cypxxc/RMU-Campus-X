@@ -209,7 +209,7 @@ export function HelpBotWidget() {
           </CardContent>
 
           {/* Input Area */}
-          <CardFooter className="p-3 bg-background border-t">
+          <CardFooter className="p-3 bg-background border-t flex flex-col gap-2">
             <form onSubmit={handleSubmit} className="flex w-full gap-2">
               <Input
                 value={input}
@@ -227,6 +227,63 @@ export function HelpBotWidget() {
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </form>
+            
+            {/* Quick Suggestions */}
+            {messages.length <= 1 && !isLoading && (
+              <div className="flex flex-wrap gap-1.5 w-full">
+                {[
+                  "ระบบนี้ใช้งานยังไง?",
+                  "วิธีโพสต์สิ่งของ",
+                  "วิธีขอแลกเปลี่ยน",
+                  "วิธีแชทกับคนอื่น",
+                  "ติดต่อแอดมิน",
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => {
+                      setInput(suggestion)
+                      // Auto submit after setting input
+                      setTimeout(() => {
+                        const userMessage = { 
+                          id: Date.now().toString(), 
+                          role: "user", 
+                          content: suggestion 
+                        }
+                        setMessages(prev => [...prev, userMessage])
+                        setIsLoading(true)
+                        setInput("")
+                        
+                        fetch("/api/chat/help", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ messages: [...messages, userMessage] }),
+                        })
+                          .then(res => res.json())
+                          .then(data => {
+                            setMessages(prev => [...prev, { 
+                              id: Date.now().toString() + "-ai", 
+                              role: "assistant", 
+                              content: data.text 
+                            }])
+                          })
+                          .catch(() => {
+                            setMessages(prev => [...prev, { 
+                              id: "error-" + Date.now(), 
+                              role: "assistant", 
+                              content: "ขออภัยครับ เกิดข้อผิดพลาด" 
+                            }])
+                          })
+                          .finally(() => setIsLoading(false))
+                      }, 50)
+                    }}
+                    className="text-xs px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors border border-blue-200 dark:border-blue-700"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
           </CardFooter>
         </Card>
       )}
