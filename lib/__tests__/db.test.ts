@@ -62,7 +62,8 @@ describe('Database Functions', () => {
     it('should calculate hasMore correctly when items less than pageSize', () => {
       const itemsCount = 15
       const pageSize = 20
-      const hasMore = itemsCount === pageSize
+      // When items < pageSize, there are no more items
+      const hasMore = itemsCount >= pageSize
       expect(hasMore).toBe(false)
     })
   })
