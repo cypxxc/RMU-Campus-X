@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "lint": "eslint .",
     "start": "next start",
     "test": "vitest run",
@@ -13,7 +13,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "type-check": "tsc --noEmit",
-    "check-all": "npm run type-check && npm run test && npm run build"
+    "check-all": "bun run type-check && bun run test && bun run build"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.6",

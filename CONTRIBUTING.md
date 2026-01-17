@@ -10,8 +10,7 @@
 
 ### Prerequisites
 
-- Node.js >= 18.0.0
-- npm >= 9.0.0
+- Bun >= 1.0.0 ([ติดตั้ง Bun](https://bun.sh/docs/installation))
 - Git
 
 ### Setup
@@ -22,13 +21,13 @@ git clone https://github.com/cypxxc/RMU-Campus-X.git
 cd RMU-Campus-X
 
 # Install dependencies
-npm install
+bun install
 
 # Copy environment variables
 cp .env.example .env.local
 
 # Run development server
-npm run dev
+bun dev
 ```
 
 ## 🛠️ Development Workflow
@@ -59,19 +58,19 @@ refactor: simplify item card component
 
 ```bash
 # Run unit tests
-npm run test
+bun run test
 
 # Run tests with watch mode
-npm run test:watch
+bun run test:watch
 
 # Run tests with coverage
-npm run test:coverage
+bun run test:coverage
 
 # Run E2E tests
-npm run test:e2e
+bun run test:e2e
 
 # Run all checks
-npm run check-all
+bun run check-all
 ```
 
 ## 📝 Code Style
@@ -79,23 +78,23 @@ npm run check-all
 - Use TypeScript for type safety
 - Follow existing code patterns
 - Add JSDoc comments for public functions
-- Run `npm run type-check` before committing
+- Run `bun run type-check` before committing
 
 ## 🔀 Pull Request Process
 
 1. Fork the repository
 2. Create a feature branch from `main`
 3. Make your changes
-4. Run `npm run check-all` to verify
+4. Run `bun run check-all` to verify
 5. Push to your fork
 6. Open a Pull Request
 
 ### PR Checklist
 
-- [ ] Tests pass (`npm run test`)
-- [ ] TypeScript compiles (`npm run type-check`)
-- [ ] Build succeeds (`npm run build`)
-- [ ] E2E tests pass (`npm run test:e2e`)
+- [ ] Tests pass (`bun run test`)
+- [ ] TypeScript compiles (`bun run type-check`)
+- [ ] Build succeeds (`bun run build`)
+- [ ] E2E tests pass (`bun run test:e2e`)
 - [ ] Code follows project style
 - [ ] Documentation updated if needed
 

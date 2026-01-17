@@ -3,10 +3,11 @@
 **ระบบแพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม**
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.1.1-black?logo=next.js)](https://nextjs.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.3.6-f9f1e1?logo=bun)](https://bun.sh/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Firebase](https://img.shields.io/badge/Firebase-12.5-orange?logo=firebase)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/Tests-133%20passed-success)]()
+[![Tests](https://img.shields.io/badge/Tests-69%20passed-success)]()
 
 ---
 
@@ -18,7 +19,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                         CLIENT LAYER                            │
 ├─────────────────────────────────────────────────────────────────┤
-│  Next.js 16 (App Router)  │  React 18  │  TailwindCSS 4         │
+│  Next.js 16 (App Router)  │  React 19  │  TailwindCSS 4         │
 │  ────────────────────────────────────────────────────────────── │
 │  • Server Components (RSC)                                      │
 │  • Client Components for Interactivity                          │
@@ -70,8 +71,9 @@ User Action → React Component → API Route → Firebase/Service → Response
 
 | เทคโนโลยี | เวอร์ชัน | การใช้งาน |
 |-----------|----------|-----------|
-| **Next.js** | 16.1.1 | Framework หลัก (App Router, RSC) |
-| **React** | 18.3.1 | UI Library |
+| **Next.js** | 16.1.1 | Framework หลัก (App Router, RSC, Turbopack) |
+| **React** | 19.2.3 | UI Library |
+| **Bun** | 1.3.6 | JavaScript Runtime & Package Manager |
 | **TypeScript** | 5.x | Type Safety |
 | **TailwindCSS** | 4.1.9 | Styling Framework |
 | **Radix UI** | Latest | Accessible Components |
@@ -93,7 +95,7 @@ User Action → React Component → API Route → Firebase/Service → Response
 
 | เทคโนโลยี | เวอร์ชัน | การใช้งาน |
 |-----------|----------|-----------|
-| **Vitest** | 4.0.17 | Unit Testing (69 tests) |
+| **Vitest** | 4.0.17 | Unit Testing (69 tests, via Bun) |
 | **Playwright** | 1.57.0 | E2E Testing (64 tests, 4 browsers) |
 | **ESLint** | 8.57.1 | Code Linting |
 | **Zod** | 3.25.76 | Schema Validation |
@@ -260,17 +262,17 @@ rmu-campus-x/
 
 ### 10. Testing & Quality Assurance
 
-- **Unit Tests** - Jest สำหรับทดสอบ functions หลัก
+- **Unit Tests** - Vitest สำหรับทดสอบ functions หลัก
 - **Security Tests** - ทดสอบ input validation & sanitization
 - **Database Tests** - ทดสอบ Firestore operations
-- **Coverage Reports** - ดู code coverage ด้วย `npm run test:coverage`
+- **Coverage Reports** - ดู code coverage ด้วย `bun run test:coverage`
 
 ```bash
 # Run tests
-npm test
+bun run test
 
 # Run with coverage
-npm run test:coverage
+bun run test:coverage
 ```
 
 ### 11. Monitoring & Error Tracking (`lib/monitoring.ts`)
@@ -317,8 +319,7 @@ endTimer() // logs duration
 
 ### ความต้องการระบบ (Prerequisites)
 
-- **Node.js** >= 18.0.0
-- **npm** >= 9.0.0
+- **Bun** >= 1.0.0 ([ติดตั้ง Bun](https://bun.sh/docs/installation))
 - **Git**
 
 ### ขั้นตอนการติดตั้ง
@@ -329,13 +330,13 @@ git clone https://github.com/cypxxc/5-1-2569.git
 cd rmu-campus-x
 
 # 2. ติดตั้ง dependencies
-npm install
+bun install
 
 # 3. ตั้งค่า environment variables (ดูหัวข้อถัดไป)
 cp .env.example .env
 
-# 4. รันโหมด Development
-npm run dev
+# 4. รันโหมด Development (พร้อม Turbopack)
+bun dev
 
 # 5. เปิด browser ไปที่ http://localhost:3000
 ```
@@ -344,13 +345,14 @@ npm run dev
 
 | Script | คำอธิบาย |
 |--------|----------|
-| `npm run dev` | รันโหมด Development |
-| `npm run build` | Build สำหรับ Production |
-| `npm run start` | รัน Production Server |
-| `npm run lint` | ตรวจสอบ Code Quality |
-| `npm run test` | รัน Unit Tests (Jest) |
-| `npm run test:e2e` | รัน E2E Tests (Playwright) |
-| `npm run test:e2e:ui` | รัน E2E Tests พร้อม UI |
+| `bun dev` | รันโหมด Development (Turbopack) |
+| `bun run build` | Build สำหรับ Production |
+| `bun start` | รัน Production Server |
+| `bun run lint` | ตรวจสอบ Code Quality |
+| `bun run test` | รัน Unit Tests (Vitest) |
+| `bun run test:e2e` | รัน E2E Tests (Playwright) |
+| `bun run test:e2e:ui` | รัน E2E Tests พร้อม UI |
+| `bun run check-all` | รัน Type-check, Tests และ Build ทั้งหมด |
 
 ---
 
@@ -387,33 +389,33 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.com
 
 ## 🧪 การทดสอบ (Testing)
 
-### Unit Tests (Jest)
+### Unit Tests (Vitest)
 
 ```bash
 # รันทุก test
-npm run test
+bun run test
 
 # รันพร้อม watch mode
-npm run test:watch
+bun run test:watch
 
 # รันพร้อม coverage report
-npm run test:coverage
+bun run test:coverage
 ```
 
 ### E2E Tests (Playwright)
 
 ```bash
 # ติดตั้ง browsers (ครั้งแรก)
-npx playwright install
+bunx playwright install
 
 # รันทุก test
-npm run test:e2e
+bun run test:e2e
 
 # รันพร้อม UI
-npm run test:e2e:ui
+bun run test:e2e:ui
 
 # ดู test report
-npx playwright show-report
+bunx playwright show-report
 ```
 
 ### Test Coverage
@@ -437,10 +439,10 @@ npx playwright show-report
 
 ```bash
 # Build production
-npm run build
+bun run build
 
 # Start production server
-npm run start
+bun start
 ```
 
 ---
