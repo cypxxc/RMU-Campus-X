@@ -8,6 +8,7 @@ on:
 
 env:
   NODE_VERSION: "20"
+  BUN_VERSION: "1.3.6"
 
 jobs:
   # ================================================
@@ -24,13 +25,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Run TypeScript check
-        run: npm run type-check
+        run: bun run type-check
 
   # ================================================
   # Unit Tests
@@ -46,16 +51,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Run tests
-        run: npm run test
+        run: bun run test
 
       - name: Run tests with coverage
-        run: npm run test:coverage
+        run: bun run test:coverage
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -77,16 +86,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: npx playwright test --project=chromium
+        run: bunx playwright test --project=chromium
         env:
           CI: true
 
@@ -113,13 +126,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Build application
-        run: npm run build
+        run: bun run build
         env:
           # Add dummy env vars for build
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'dummy' }}
@@ -140,13 +157,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
-      - name: Run npm audit
-        run: npm audit --audit-level=high
+      - name: Run bun audit
+        run: bun audit --audit-level=high
         continue-on-error: true
 
   # ================================================
