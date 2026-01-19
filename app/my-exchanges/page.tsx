@@ -128,17 +128,22 @@ export default function MyExchangesPage() {
 
       // Send LINE notification to the other party (async, don't block)
       try {
-        fetch('/api/line/notify-chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'status_change',
-            recipientUserId: recipientId,
-            itemTitle: exchangeToCancel.itemTitle,
-            status: 'cancelled',
-            exchangeId: exchangeToCancel.id
-          })
-        }).catch(err => console.log('[LINE] Notify cancel error:', err))
+        user.getIdToken().then((token) => {
+          fetch("/api/line/notify-chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              type: "status_change",
+              recipientUserId: recipientId,
+              itemTitle: exchangeToCancel.itemTitle,
+              status: "cancelled",
+              exchangeId: exchangeToCancel.id,
+            }),
+          }).catch((err) => console.log("[LINE] Notify cancel error:", err))
+        })
       } catch (lineError) {
         console.log('[LINE] Notify cancel error:', lineError)
       }

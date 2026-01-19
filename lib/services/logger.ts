@@ -91,15 +91,23 @@ export class SystemLogger {
    */
   private static async notifyAdmin(category: string, eventName: string, data: any) {
     try {
-      // Don't block execution
-      fetch('/api/line/notify-admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      // Best-effort: only if we can get an auth token (custom broadcasts require admin)
+      const { getAuth } = await import("firebase/auth")
+      const auth = getAuth()
+      const token = await auth.currentUser?.getIdToken()
+      if (!token) return
+
+      fetch("/api/line/notify-admin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
-          message: `🚨 CRITICAL ERROR 🚨\nCategory: ${category}\nEvent: ${eventName}\nMessage: ${data.message || 'No details'}`,
-          type: 'custom'
-        })
-      }).catch(err => console.error('Failed to send admin notification:', err))
+          message: `🚨 CRITICAL ERROR 🚨\nCategory: ${category}\nEvent: ${eventName}\nMessage: ${data.message || "No details"}`,
+          type: "custom",
+        }),
+      }).catch((err) => console.error("Failed to send admin notification:", err))
     } catch (e) {
       // Ignore notification errors
     }

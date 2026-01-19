@@ -6,9 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { sendPushMessage } from "@/lib/line"
-
-const FIREBASE_PROJECT = "resource-4e4fc"
-const FIREBASE_API_KEY = "AIzaSyAhtR1jX2lycnS2xYLhiAtMAjn5dLOYAZM"
+import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
 interface NotifyExchangeBody {
@@ -18,40 +16,56 @@ interface NotifyExchangeBody {
   exchangeId: string
 }
 
-async function firestoreGet(documentPath: string) {
-  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/${documentPath}?key=${FIREBASE_API_KEY}`
-  
-  const response = await fetch(url)
-  if (!response.ok) {
-    return null
-  }
-  
-  return response.json()
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const body: NotifyExchangeBody = await request.json()
-    console.log("[LINE Notify Exchange] Body:", body)
+    // Require authentication (prevents anonymous spam)
+    const token = extractBearerToken(request.headers.get("Authorization"))
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    const { ownerId, itemTitle, requesterName, exchangeId } = body
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
 
-    if (!ownerId || !exchangeId) {
+    const body = (await request.json()) as Partial<NotifyExchangeBody>
+    const exchangeId = body.exchangeId
+
+    if (!exchangeId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Check if owner has LINE notifications enabled
-    const ownerDoc = await firestoreGet(`users/${ownerId}`)
-    
-    if (!ownerDoc?.fields) {
+    const db = getAdminDb()
+    const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
+    if (!exchangeSnap.exists) {
+      return NextResponse.json({ sent: false, reason: "exchange not found" })
+    }
+
+    const exchange = exchangeSnap.data() as any
+    const ownerId = exchange?.ownerId as string | undefined
+    const requesterId = exchange?.requesterId as string | undefined
+
+    // Only requester can trigger the "request created" notification
+    if (!requesterId || decoded.uid !== requesterId) {
+      return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
+    }
+
+    if (!ownerId) {
+      return NextResponse.json({ sent: false, reason: "owner missing" })
+    }
+
+    const ownerSnap = await db.collection("users").doc(ownerId).get()
+    if (!ownerSnap.exists) {
       console.log("[LINE Notify Exchange] Owner not found")
       return NextResponse.json({ sent: false, reason: "owner not found" })
     }
 
-    const lineUserId = ownerDoc.fields.lineUserId?.stringValue
+    const owner = ownerSnap.data() as any
+    const lineUserId = owner?.lineUserId as string | undefined
     // Default to true if not explicitly set
-    const notificationsEnabled = ownerDoc.fields.lineNotifications?.mapValue?.fields?.enabled?.booleanValue ?? true
-    const exchangeRequestEnabled = ownerDoc.fields.lineNotifications?.mapValue?.fields?.exchangeRequest?.booleanValue ?? true
+    const notificationsEnabled = owner?.lineNotifications?.enabled !== false
+    const exchangeRequestEnabled = owner?.lineNotifications?.exchangeRequest !== false
 
     console.log("[LINE Notify Exchange] Owner LINE status:", { 
       hasLineId: !!lineUserId, 
@@ -67,6 +81,12 @@ export async function POST(request: NextRequest) {
     if (!notificationsEnabled || !exchangeRequestEnabled) {
       return NextResponse.json({ sent: false, reason: "notifications disabled" })
     }
+
+    const itemTitle = (exchange?.itemTitle as string | undefined) || body.itemTitle || "สิ่งของ"
+    const requesterName =
+      body.requesterName ||
+      (exchange?.requesterName as string | undefined) ||
+      (decoded.email ? decoded.email.split("@")[0] : "ผู้ใช้")
 
     // Send LINE notification
     await sendPushMessage(lineUserId, [

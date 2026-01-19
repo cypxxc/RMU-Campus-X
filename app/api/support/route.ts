@@ -4,10 +4,10 @@
  */
 
 import { NextRequest } from "next/server"
-import { getAdminDb } from "@/lib/firebase-admin"
+import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { notifyAdminsNewSupportTicket } from "@/lib/line"
-import { successResponse, ApiErrors, validateRequiredFields, parseRequestBody } from "@/lib/api-response"
+import { successResponse, ApiErrors, validateRequiredFields, parseRequestBody, getAuthToken } from "@/lib/api-response"
 import type { SupportTicket, User } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
@@ -22,15 +22,28 @@ interface CreateTicketBody {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication and prevent spoofed userId/userEmail
+    const token = getAuthToken(request)
+    if (!token) {
+      return ApiErrors.unauthorized("Missing authentication token")
+    }
+
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) {
+      return ApiErrors.unauthorized("Invalid or expired session")
+    }
+
     const body = await parseRequestBody<CreateTicketBody>(request)
     if (!body) {
       return ApiErrors.badRequest("Invalid request body")
     }
 
-    const { subject, category, description, userId, userEmail } = body
+    const { subject, category, description } = body
+    const userId = decoded.uid
+    const userEmail = decoded.email || body.userEmail || ""
 
     // Validate required fields
-    const validation = validateRequiredFields(body, ["subject", "category", "userId"])
+    const validation = validateRequiredFields(body, ["subject", "category"])
     if (!validation.valid) {
       return ApiErrors.missingFields(validation.missing)
     }

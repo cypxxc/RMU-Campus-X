@@ -109,14 +109,18 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
 
       // ส่ง LINE notification แยกทาง API (ไม่ต้อง auth)
       try {
+        const token = await user.getIdToken()
         await fetch("/api/line/notify-exchange", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({
-            ownerId: item.postedBy,
+            exchangeId,
             itemTitle: item.title,
             requesterName: user.displayName || user.email?.split("@")[0] || "ผู้ใช้",
-            exchangeId,
+            ownerId: item.postedBy, // kept for backward compatibility
           }),
         })
       } catch (lineError) {

@@ -35,9 +35,8 @@ export const createSupportTicket = async (
     updatedAt: serverTimestamp(),
   })
 
-  // Note: Admin notifications are handled separately via /api/line/notify-admin
-  // called from the UI component. This avoids direct admins collection access
-  // which requires admin privileges.
+  // Note: New flows should create tickets via `/api/support` (Admin SDK),
+  // so admin notifications and LINE alerts happen server-side.
   
   return docRef.id
 }

@@ -10,9 +10,7 @@ import {
   notifyAccountStatusChange 
 } from "@/lib/line"
 import { verifyAdminAccess } from "@/lib/admin-api"
-
-const FIREBASE_PROJECT = "resource-4e4fc"
-const FIREBASE_API_KEY = "AIzaSyAhtR1jX2lycnS2xYLhiAtMAjn5dLOYAZM"
+import { getAdminDb } from "@/lib/firebase-admin"
 
 interface NotifyUserActionBody {
   userId: string
@@ -26,17 +24,6 @@ interface NotifyUserActionBody {
   // For status change
   status?: "ACTIVE" | "SUSPENDED" | "BANNED"
   suspendedUntil?: string // ISO date string
-}
-
-async function firestoreGet(documentPath: string) {
-  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/${documentPath}?key=${FIREBASE_API_KEY}`
-  
-  const response = await fetch(url)
-  if (!response.ok) {
-    return null
-  }
-  
-  return response.json()
 }
 
 export async function POST(request: NextRequest) {
@@ -55,17 +42,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has LINE notifications enabled
-    const userDoc = await firestoreGet(`users/${userId}`)
-    
-    if (!userDoc?.fields) {
+    const db = getAdminDb()
+    const userSnap = await db.collection("users").doc(userId).get()
+
+    if (!userSnap.exists) {
       console.log("[LINE Notify User Action] User not found")
       return NextResponse.json({ sent: false, reason: "user not found" })
     }
 
-    const lineUserId = userDoc.fields.lineUserId?.stringValue
+    const userData = userSnap.data() as any
+    const lineUserId = userData?.lineUserId as string | undefined
     // Default to true if not explicitly set
-    const notificationsEnabled = userDoc.fields.lineNotifications?.mapValue?.fields?.enabled?.booleanValue ?? true
-    const accountStatusEnabled = userDoc.fields.lineNotifications?.mapValue?.fields?.accountStatus?.booleanValue ?? true
+    const notificationsEnabled = userData?.lineNotifications?.enabled ?? true
+    const accountStatusEnabled = userData?.lineNotifications?.accountStatus ?? true
 
     console.log("[LINE Notify User Action] User LINE status:", { 
       hasLineId: !!lineUserId, 

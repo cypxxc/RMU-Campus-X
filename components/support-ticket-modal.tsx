@@ -2,7 +2,6 @@
 
 import { useState, useRef } from "react"
 import { useAuth } from "@/components/auth-provider"
-import { createSupportTicket } from "@/lib/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 import { Input } from "@/components/ui/input"
@@ -71,31 +70,23 @@ export function SupportTicketModal({ open, onOpenChange }: SupportTicketModalPro
     setSubmitting(true)
     
     try {
-      await createSupportTicket({
-        userId: user.uid,
-        userEmail: user.email || "",
-        subject: subject.trim(),
-        category,
-        description: description.trim(),
+      const token = await user.getIdToken()
+      const res = await fetch("/api/support", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          subject: subject.trim(),
+          category,
+          description: description.trim(),
+        }),
       })
 
-      // Send LINE notification to all admins (async, don't block)
-      console.log('[LINE] Sending admin notification for new support ticket...')
-      try {
-        const notifyResponse = await fetch('/api/line/notify-admin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'new_support_ticket',
-            subject: subject.trim(),
-            category,
-            userEmail: user.email || 'ไม่ระบุ'
-          })
-        })
-        const notifyResult = await notifyResponse.json()
-        console.log('[LINE] Admin notification result:', notifyResult)
-      } catch (lineError) {
-        console.log('[LINE] Notify admin error:', lineError)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.error || "ไม่สามารถส่งคำร้องได้")
       }
 
       toast({

@@ -6,10 +6,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { notifyNewChatMessage, notifyExchangeStatusChange } from "@/lib/line"
 import type { ExchangeStatus } from "@/types"
-import { verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
+import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 
-const FIREBASE_PROJECT = "resource-4e4fc"
-const FIREBASE_API_KEY = "AIzaSyAhtR1jX2lycnS2xYLhiAtMAjn5dLOYAZM"
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
 interface NotifyChatBody {
@@ -21,17 +19,6 @@ interface NotifyChatBody {
   messagePreview?: string
   exchangeId?: string
   status?: ExchangeStatus
-}
-
-async function firestoreGet(documentPath: string) {
-  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/${documentPath}?key=${FIREBASE_API_KEY}`
-  
-  const response = await fetch(url)
-  if (!response.ok) {
-    return null
-  }
-  
-  return response.json()
 }
 
 export async function POST(request: NextRequest) {
@@ -56,17 +43,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing recipientId" }, { status: 400 })
     }
 
+    if (!body.exchangeId) {
+      return NextResponse.json({ error: "Missing exchangeId" }, { status: 400 })
+    }
+
+    const db = getAdminDb()
+    const exchangeSnap = await db.collection("exchanges").doc(body.exchangeId).get()
+    if (!exchangeSnap.exists) {
+      return NextResponse.json({ sent: false, reason: "exchange not found" })
+    }
+
+    const exchange = exchangeSnap.data() as any
+    const ownerId = exchange?.ownerId as string | undefined
+    const requesterId = exchange?.requesterId as string | undefined
+
+    if (!ownerId || !requesterId) {
+      return NextResponse.json({ sent: false, reason: "invalid exchange" }, { status: 400 })
+    }
+
+    // Caller must be a participant
+    if (decoded.uid !== ownerId && decoded.uid !== requesterId) {
+      return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
+    }
+
+    // Recipient must be the other party
+    const allowedRecipient = decoded.uid === ownerId ? requesterId : ownerId
+    if (recipientId !== allowedRecipient) {
+      return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
+    }
+
     // Check if recipient has LINE notifications enabled
-    const userDoc = await firestoreGet(`users/${recipientId}`)
-    
-    if (!userDoc?.fields) {
+    const userSnap = await db.collection("users").doc(recipientId).get()
+
+    if (!userSnap.exists) {
       console.log("[LINE Notify Chat] User not found")
       return NextResponse.json({ sent: false, reason: "user not found" })
     }
 
-    const lineUserId = userDoc.fields.lineUserId?.stringValue
+    const userData = userSnap.data() as any
+    const lineUserId = userData?.lineUserId as string | undefined
     // Default to true if not explicitly set
-    const notificationsEnabled = userDoc.fields.lineNotifications?.mapValue?.fields?.enabled?.booleanValue ?? true
+    const notificationsEnabled = userData?.lineNotifications?.enabled !== false
 
     console.log("[LINE Notify Chat] User LINE status:", { 
       hasLineId: !!lineUserId, 
@@ -86,7 +103,10 @@ export async function POST(request: NextRequest) {
     // Handle different notification types
     if (notificationType === 'status_change') {
       // Check statusChange notification setting
-      const statusChangeEnabled = userDoc.fields.lineNotifications?.mapValue?.fields?.statusChange?.booleanValue ?? true
+      const statusChangeEnabled =
+        userData?.lineNotifications?.statusChange ??
+        userData?.lineNotifications?.exchangeStatus ??
+        true
       
       if (!statusChangeEnabled) {
         return NextResponse.json({ sent: false, reason: "status change notifications disabled" })
@@ -105,14 +125,10 @@ export async function POST(request: NextRequest) {
       )
     } else {
       // Default: chat message notification
-      const chatNotificationsEnabled = userDoc.fields.lineNotifications?.mapValue?.fields?.chatMessage?.booleanValue ?? true
+      const chatNotificationsEnabled = userData?.lineNotifications?.chatMessage ?? true
       
       if (!chatNotificationsEnabled) {
         return NextResponse.json({ sent: false, reason: "chat notifications disabled" })
-      }
-
-      if (!body.exchangeId) {
-        return NextResponse.json({ error: "Missing exchangeId" }, { status: 400 })
       }
 
       await notifyNewChatMessage(

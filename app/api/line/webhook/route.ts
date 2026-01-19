@@ -5,9 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { verifySignature, sendReplyMessage } from "@/lib/line"
-
-const FIREBASE_PROJECT = "resource-4e4fc"
-const FIREBASE_API_KEY = "AIzaSyAhtR1jX2lycnS2xYLhiAtMAjn5dLOYAZM"
+import { getAdminDb } from "@/lib/firebase-admin"
 
 interface LineEvent {
   type: string
@@ -26,82 +24,35 @@ interface LineWebhookBody {
   events: LineEvent[]
 }
 
-// Firebase REST API helper
-async function firestoreQuery(collectionPath: string, field: string, value: string) {
-  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents:runQuery?key=${FIREBASE_API_KEY}`
-  
-  const body = {
-    structuredQuery: {
-      from: [{ collectionId: collectionPath }],
-      where: {
-        fieldFilter: {
-          field: { fieldPath: field },
-          op: "EQUAL",
-          value: { stringValue: value }
-        }
-      },
-      limit: 1
-    }
-  }
+type FirestoreQueryResult = {
+  id: string
+  path: string
+  data: FirebaseFirestore.DocumentData
+}
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  })
+async function firestoreQueryOne(
+  collectionPath: string,
+  field: string,
+  value: string
+): Promise<FirestoreQueryResult | null> {
+  const db = getAdminDb()
+  const snapshot = await db
+    .collection(collectionPath)
+    .where(field, "==", value)
+    .limit(1)
+    .get()
 
-  const data = await response.json()
-  
-  if (!response.ok) {
-    throw new Error(`Firestore query failed: ${response.status} - ${JSON.stringify(data)}`)
-  }
+  if (snapshot.empty) return null
 
-  return data
+  const doc = snapshot.docs[0]!
+  return { id: doc.id, path: `${collectionPath}/${doc.id}`, data: doc.data() }
 }
 
 async function firestoreUpdate(documentPath: string, fields: Record<string, unknown>) {
-  // Build updateMask with separate parameter for each field
-  const fieldMask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&')
-  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/${documentPath}?key=${FIREBASE_API_KEY}&${fieldMask}`
-  
-  // Convert fields to Firestore format
-  const firestoreFields: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(fields)) {
-    if (typeof value === "string") {
-      firestoreFields[key] = { stringValue: value }
-    } else if (typeof value === "boolean") {
-      firestoreFields[key] = { booleanValue: value }
-    } else if (value === null) {
-      firestoreFields[key] = { nullValue: null }
-    } else if (typeof value === "object") {
-      // For nested objects like lineNotifications
-      const mapFields: Record<string, unknown> = {}
-      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (typeof v === "boolean") {
-          mapFields[k] = { booleanValue: v }
-        }
-      }
-      firestoreFields[key] = { mapValue: { fields: mapFields } }
-    }
-  }
-
+  const db = getAdminDb()
   console.log("[LINE Webhook] Updating:", documentPath, "with fields:", Object.keys(fields))
-
-  const response = await fetch(url, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fields: firestoreFields })
-  })
-
-  const data = await response.json()
-  
-  if (!response.ok) {
-    console.error("[LINE Webhook] Update failed:", data)
-    throw new Error(`Firestore update failed: ${response.status} - ${JSON.stringify(data)}`)
-  }
-
+  await db.doc(documentPath).set(fields, { merge: true })
   console.log("[LINE Webhook] Update success!")
-  return data
 }
 
 export async function POST(request: NextRequest) {
@@ -168,9 +119,9 @@ async function handleTextMessage(event: LineEvent) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (emailRegex.test(text)) {
       // Find user by email
-      let result
+      let result: FirestoreQueryResult | null
       try {
-        result = await firestoreQuery("users", "email", text)
+        result = await firestoreQueryOne("users", "email", text.trim().toLowerCase())
       } catch (queryError) {
         // Show the actual error to user for debugging
         await sendReplyMessage(event.replyToken, [
@@ -180,7 +131,7 @@ async function handleTextMessage(event: LineEvent) {
       }
       
       // Check if user found
-      if (!result || result.length === 0 || !result[0].document) {
+      if (!result) {
         await sendReplyMessage(event.replyToken, [
           {
             type: "text",
@@ -192,8 +143,7 @@ async function handleTextMessage(event: LineEvent) {
         return
       }
 
-      const doc = result[0].document
-      const docPath = doc.name.split("/documents/")[1] // Get path like "users/xxx"
+      const docPath = result.path
       
       // Link the account
       try {
@@ -229,15 +179,14 @@ async function handleTextMessage(event: LineEvent) {
     // Check status
     if (text === "สถานะ" || text === "status") {
       try {
-        const result = await firestoreQuery("users", "lineUserId", lineUserId)
+        const result = await firestoreQueryOne("users", "lineUserId", lineUserId)
         
-        if (!result || result.length === 0 || !result[0].document) {
+        if (!result) {
           await sendReplyMessage(event.replyToken, [
             { type: "text", text: "❌ ยังไม่ได้เชื่อมบัญชี\n\n📧 พิมพ์อีเมลเพื่อเชื่อมบัญชี" },
           ])
         } else {
-          const fields = result[0].document.fields
-          const email = fields?.email?.stringValue || "ไม่ระบุ"
+          const email = (result.data?.email as string | undefined) || "ไม่ระบุ"
           await sendReplyMessage(event.replyToken, [
             { type: "text", text: `✅ เชื่อมบัญชีแล้ว\n\n📧 ${email}` },
           ])
@@ -253,15 +202,14 @@ async function handleTextMessage(event: LineEvent) {
     // Unlink account
     if (text === "ยกเลิก" || text === "unlink" || text === "ยกเลิกการเชื่อมต่อ") {
       try {
-        const result = await firestoreQuery("users", "lineUserId", lineUserId)
+        const result = await firestoreQueryOne("users", "lineUserId", lineUserId)
         
-        if (!result || result.length === 0 || !result[0].document) {
+        if (!result) {
           await sendReplyMessage(event.replyToken, [
             { type: "text", text: "❌ ไม่พบบัญชีที่เชื่อมกับ LINE นี้" },
           ])
         } else {
-          const doc = result[0].document
-          const docPath = doc.name.split("/documents/")[1]
+          const docPath = result.path
           
           // Remove LINE connection
           await firestoreUpdate(docPath, {
@@ -274,7 +222,7 @@ async function handleTextMessage(event: LineEvent) {
             },
           })
           
-          const email = doc.fields?.email?.stringValue || "บัญชี"
+          const email = (result.data?.email as string | undefined) || "บัญชี"
           await sendReplyMessage(event.replyToken, [
             { 
               type: "text", 

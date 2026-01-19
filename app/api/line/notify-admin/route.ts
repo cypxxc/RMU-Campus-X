@@ -5,87 +5,104 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { notifyAdminsNewReport, notifyAdminsNewSupportTicket, sendPushMessage } from "@/lib/line"
+import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
+import { ApiErrors, getAuthToken, parseRequestBody, successResponse } from "@/lib/api-response"
+import { isAdmin } from "@/lib/admin-auth"
 
-const FIREBASE_PROJECT = "resource-4e4fc"
-const FIREBASE_API_KEY = "AIzaSyAhtR1jX2lycnS2xYLhiAtMAjn5dLOYAZM"
+type NotifyType = "new_report" | "new_support_ticket" | "custom"
 
-// Get all admin LINE user IDs from Firestore
-// ดึง Admin จาก admins collection แล้วไปหา lineUserId จาก users collection
-// Note: admin document ID = user ID
-async function getAdminLineUserIds(): Promise<string[]> {
-  try {
-    console.log("[Admin Notify] Starting admin lookup...")
-    
-    // Step 1: Get all admins from admins collection
-    const adminsUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/admins?key=${FIREBASE_API_KEY}`
-    
-    console.log("[Admin Notify] Fetching admins collection...")
-    const adminsResponse = await fetch(adminsUrl)
-    const adminsData = await adminsResponse.json()
-    
-    console.log("[Admin Notify] Admins response status:", adminsResponse.status)
-    
-    if (!adminsResponse.ok || !adminsData.documents) {
-      console.log("[Admin Notify] No admins found or error - response:", JSON.stringify(adminsData))
-      return []
+type NotifyBody =
+  | {
+      type: "new_report"
+      reportType: string
+      targetTitle: string
+      reporterEmail: string
+    }
+  | {
+      type: "new_support_ticket"
+      subject: string
+      category: string
+      userEmail: string
+    }
+  | {
+      type: "custom"
+      message: string
     }
 
-    console.log(`[Admin Notify] Found ${adminsData.documents.length} admin document(s)`)
-    
-    const lineUserIds: string[] = []
-    
-    // Step 2: For each admin doc, document ID = user ID
-    for (const doc of adminsData.documents) {
-      // Extract user ID from document path: projects/.../documents/admins/{userId}
-      const docPath = doc.name
-      const userId = docPath.split('/').pop()
-      const email = doc.fields?.email?.stringValue || 'unknown'
-      
-      console.log(`[Admin Notify] Processing admin: ${email} (userId: ${userId})`)
-      
-      if (!userId) {
-        console.log("[Admin Notify] Could not extract user ID from document path")
-        continue
-      }
-      
-      // Get user document directly by ID
-      const userUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/users/${userId}?key=${FIREBASE_API_KEY}`
-      
-      console.log(`[Admin Notify] Fetching user document: users/${userId}`)
-      const userResponse = await fetch(userUrl)
-      
-      if (!userResponse.ok) {
-        console.log(`[Admin Notify] User document not found for ${userId}`)
-        continue
-      }
-      
-      const userData = await userResponse.json()
-      const lineUserId = userData.fields?.lineUserId?.stringValue
-      
-      console.log(`[Admin Notify] Admin ${email} - lineUserId: ${lineUserId || 'NOT FOUND'}`)
-      
-      if (lineUserId) {
-        lineUserIds.push(lineUserId)
-        console.log(`[Admin Notify] ✅ Added LINE ID for admin ${email}`)
-      } else {
-        console.log(`[Admin Notify] ❌ Admin ${email} has no LINE linked`)
-      }
-    }
-
-    console.log(`[Admin Notify] Total ${lineUserIds.length} admin(s) with LINE linked`)
-    return lineUserIds
-  } catch (error) {
-    console.error("[Admin Notify] Error querying admins:", error)
-    return []
+type AdminUserDoc = {
+  lineUserId?: string
+  lineNotifications?: {
+    enabled?: boolean
   }
+  email?: string
+}
+
+/**
+ * Get all admin LINE User IDs using Admin SDK (no public REST API, no API keys).
+ *
+ * Strategy:
+ * - Read `admins` collection
+ * - Prefer mapping adminDoc.id -> users/{id}
+ * - Fallback to users lookup by email if needed
+ */
+async function getAdminLineUserIds(): Promise<string[]> {
+  const db = getAdminDb()
+
+  const adminsSnapshot = await db.collection("admins").get()
+  if (adminsSnapshot.empty) return []
+
+  const lineUserIds = new Set<string>()
+
+  for (const adminDoc of adminsSnapshot.docs) {
+    const adminData = adminDoc.data() as { email?: string }
+    const adminId = adminDoc.id
+
+    // 1) Prefer direct lookup by id
+    const userDocById = await db.collection("users").doc(adminId).get()
+    if (userDocById.exists) {
+      const user = userDocById.data() as AdminUserDoc
+      if (user.lineUserId && user.lineNotifications?.enabled) {
+        lineUserIds.add(user.lineUserId)
+        continue
+      }
+    }
+
+    // 2) Fallback by email
+    if (adminData.email) {
+      const userSnap = await db
+        .collection("users")
+        .where("email", "==", adminData.email)
+        .limit(1)
+        .get()
+
+      if (!userSnap.empty) {
+        const user = userSnap.docs[0]!.data() as AdminUserDoc
+        if (user.lineUserId && user.lineNotifications?.enabled) {
+          lineUserIds.add(user.lineUserId)
+        }
+      }
+    }
+  }
+
+  return Array.from(lineUserIds)
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { type, ...data } = body
+    // 1) Require authentication (prevents anonymous spam)
+    const token = getAuthToken(request)
+    if (!token) return ApiErrors.unauthorized("Missing authentication token")
 
-    console.log(`[Admin Notify] Received notification request - Type: ${type}`, data)
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+
+    // 2) Parse and validate body
+    const body = await parseRequestBody<NotifyBody>(request)
+    if (!body) return ApiErrors.badRequest("Invalid request body")
+
+    const type = body.type as NotifyType
+
+    console.log(`[Admin Notify] Received notification request - Type: ${type}`)
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569.vercel.app"
     
@@ -94,39 +111,52 @@ export async function POST(request: NextRequest) {
     
     if (adminLineIds.length === 0) {
       console.log("[Admin Notify] No admins with LINE linked, skipping notification")
-      return NextResponse.json({ success: true, message: "No admins to notify" })
+      return successResponse({ success: true, message: "No admins to notify" })
     }
 
     console.log(`[Admin Notify] Will notify ${adminLineIds.length} admin(s) for ${type}`)
 
     switch (type) {
       case "new_report":
+        if (!("reportType" in body) || !("targetTitle" in body) || !("reporterEmail" in body)) {
+          return ApiErrors.missingFields(["reportType", "targetTitle", "reporterEmail"])
+        }
         await notifyAdminsNewReport(
           adminLineIds,
-          data.reportType,
-          data.targetTitle,
-          data.reporterEmail,
+          body.reportType,
+          body.targetTitle,
+          body.reporterEmail,
           baseUrl
         )
         console.log("[Admin Notify] Report notification sent")
         break
 
       case "new_support_ticket":
+        if (!("subject" in body) || !("category" in body) || !("userEmail" in body)) {
+          return ApiErrors.missingFields(["subject", "category", "userEmail"])
+        }
         await notifyAdminsNewSupportTicket(
           adminLineIds,
-          data.subject,
-          data.category,
-          data.userEmail,
+          body.subject,
+          body.category,
+          body.userEmail,
           baseUrl
         )
         console.log("[Admin Notify] Support ticket notification sent")
         break
 
       case "custom":
+        // Custom broadcasts should be admin-only
+        if (!decoded.email) return ApiErrors.forbidden("Missing email in token")
+        const allowed = await isAdmin(decoded.email)
+        if (!allowed) return ApiErrors.forbidden("Admin permission required")
+        if (!("message" in body) || !body.message?.trim()) {
+          return ApiErrors.missingFields(["message"])
+        }
         // Send custom message to all admins
         const message = {
           type: "text" as const,
-          text: data.message
+          text: body.message
         }
         await Promise.allSettled(
           adminLineIds.map((adminId) => sendPushMessage(adminId, [message]))
@@ -136,10 +166,10 @@ export async function POST(request: NextRequest) {
 
       default:
         console.log(`[Admin Notify] Unknown notification type: ${type}`)
-        return NextResponse.json({ success: false, error: "Unknown notification type" }, { status: 400 })
+        return ApiErrors.badRequest("Unknown notification type")
     }
 
-    return NextResponse.json({ success: true, notifiedCount: adminLineIds.length })
+    return successResponse({ success: true, notifiedCount: adminLineIds.length })
   } catch (error) {
     console.error("[Admin Notify] Error:", error)
     return NextResponse.json({ success: false, error: String(error) }, { status: 500 })

@@ -5,7 +5,6 @@
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
-import { createReport } from "@/lib/firestore"
 import { getItemById } from "@/lib/firestore"
 import type { ReportType } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -168,8 +167,6 @@ function ReportContent() {
         reasonCode,
         reason: selectedReason?.label || "",
         description: description.trim() || "ไม่มีรายละเอียดเพิ่มเติม",
-        reporterId: user.uid,
-        reporterEmail: user.email || "",
         targetId: itemId || exchangeId || chatId || userId || "",
         targetTitle: item?.title || "",
       }
@@ -181,7 +178,20 @@ function ReportContent() {
         reportData.itemStatus = item.status
       }
 
-      await createReport(reportData)
+      const token = await user.getIdToken()
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(reportData),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err?.error || "ไม่สามารถส่งรายงานได้")
+      }
 
       toast({
         title: "รายงานสำเร็จ",

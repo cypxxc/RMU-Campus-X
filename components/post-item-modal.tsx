@@ -172,16 +172,21 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
 
       // Send LINE notification (async, don't wait)
       try {
-        fetch('/api/line/notify-item', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user.uid,
-            itemTitle: title,
-            itemId: result.data,
-            action: 'posted'
-          })
-        }).catch(err => console.log('[LINE] Notify item error:', err))
+        user.getIdToken().then(token => {
+          fetch("/api/line/notify-item", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              userId: user.uid,
+              itemTitle: title,
+              itemId: result.data,
+              action: "posted",
+            }),
+          }).catch((err) => console.log("[LINE] Notify item error:", err))
+        })
       } catch (lineError) {
         console.log('[LINE] Notify item error:', lineError)
       }

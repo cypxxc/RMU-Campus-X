@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/components/auth-provider"
-import { createSupportTicket } from "@/lib/db/support"
 import { useToast } from "@/hooks/use-toast"
 
 export default function ContactPage() {
@@ -50,13 +49,24 @@ export default function ContactPage() {
 
     setLoading(true)
     try {
-      await createSupportTicket({
-        subject: formData.subject,
-        description: formData.message,
-        category: 'general', // Default category for contact form
-        userId: user.uid,
-        userEmail: user.email || "",
+      const token = await user.getIdToken()
+      const res = await fetch("/api/support", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          subject: formData.subject.trim(),
+          category: "general", // Default category for contact form
+          description: formData.message.trim(),
+        }),
       })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.error || "ไม่สามารถส่งข้อความได้")
+      }
 
       toast({
         title: "ส่งข้อความเรียบร้อยแล้ว",
@@ -102,7 +112,7 @@ export default function ContactPage() {
                 <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center mb-6 text-primary">
                   <MessageSquare className="w-6 h-6" />
                 </div>
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent mb-2">
+                <h2 className="text-3xl font-bold bg-linear-to-r from-primary to-blue-600 bg-clip-text text-transparent mb-2">
                   ติดต่อเรา
                 </h2>
                 <p className="text-muted-foreground mb-8">
