@@ -30,6 +30,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/components/auth-provider"
 import type { User, Item } from "@/types"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
+import { ProfileBadges } from "@/components/profile/profile-badges"
 
 export default function PublicProfilePage() {
   const params = useParams()
@@ -242,6 +243,14 @@ export default function PublicProfilePage() {
                       </span>
                     )}
                   </div>
+                </div>
+
+                {/* Public badges (safe fields only) */}
+                <div className="pt-1">
+                  <ProfileBadges
+                    isActive={profile.status === "ACTIVE"}
+                    hasAvatar={!!profile.photoURL}
+                  />
                 </div>
                 
                 {/* Bio / Introduction Section */}

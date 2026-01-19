@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Loader2, Shield, Package, Trash2, Edit, Save, ArrowLeft, CheckCircle, History, Camera, AlertTriangle } from "lucide-react"
+import { Loader2, Shield, Package, Trash2, Edit, Save, ArrowLeft, History, Camera, AlertTriangle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 import Image from "next/image"
@@ -33,6 +33,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Settings } from "lucide-react"
 import { LineNotificationSettings } from "@/components/line-notification-settings"
 import { UnifiedModal } from "@/components/ui/unified-modal"
+import { ProfileBadges } from "@/components/profile/profile-badges"
 
 // Refactored Components
 import { MyItemsList } from "@/components/profile/my-items-list"
@@ -345,17 +346,14 @@ export default function ProfilePage() {
                   </Button>
                 </div>
 
-                <div className="mt-6 flex flex-wrap justify-center gap-2">
-                   {user.emailVerified ? (
-                    <Badge className="gap-1.5 py-1 px-3 bg-primary/10 text-primary border-primary/20 rounded-full" variant="outline">
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      ยืนยันตัวตนแล้ว
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="gap-1.5 py-1 px-3 bg-destructive/10 text-destructive border-destructive/20 rounded-full">
-                      ยังไม่ยืนยันอีเมล
-                    </Badge>
-                  )}
+                <div className="mt-6">
+                  <ProfileBadges
+                    emailVerified={user.emailVerified}
+                    isActive={userProfile?.status === "ACTIVE"}
+                    hasAvatar={!!profileImage}
+                    lineLinked={!!userProfile?.lineUserId}
+                    lineNotificationsEnabled={!!userProfile?.lineNotifications?.enabled}
+                  />
                 </div>
 
                 <div className="mt-8 pt-8 border-t grid grid-cols-2 gap-4">

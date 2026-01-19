@@ -18,6 +18,7 @@ import { ItemDetailView } from "@/components/item-detail-view"
 import { AccountStatusBanner } from "@/components/account-status-banner"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import debounce from 'lodash/debounce'
 import { toast } from 'sonner'
 import { memo } from "react"
@@ -219,30 +220,40 @@ export default function DashboardPage() {
               <ItemCardSkeletonGrid count={6} />
             ) : items.length === 0 ? (
               /* Empty State */
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                  {debouncedSearchQuery ? <Search className="h-8 w-8 text-muted-foreground" /> : <Package className="h-8 w-8 text-muted-foreground" />}
-                </div>
-                <h3 className="text-lg font-semibold mb-2">
-                  {debouncedSearchQuery ? "ไม่พบสิ่งของที่ค้นหา" : "ไม่พบสิ่งของ"}
-                </h3>
-                <p className="text-muted-foreground text-sm max-w-sm">
-                  {debouncedSearchQuery ? "ลองค้นหาด้วยคำสำคัญอื่นๆ หรือตรวจสอบคำผิด" : "ลองเปลี่ยนตัวกรองหรือกลับมาดูใหม่ภายหลัง"}
-                </p>
-                {(categories.length > 0 || status !== "all" || debouncedSearchQuery) && (
-                  <Button 
-                    variant="outline" 
-                    className="mt-4"
-                    onClick={() => {
-                      setCategories([])
-                      setStatus("all")
-                      setSearchQuery("")
-                    }}
-                  >
-                    ล้างการค้นหาและตัวกรอง
-                  </Button>
-                )}
-              </div>
+              <Empty className="py-16 bg-muted/10 border border-dashed">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon" className="rounded-2xl size-14 [&_svg:not([class*='size-'])]:size-7">
+                    {debouncedSearchQuery ? (
+                      <Search className="h-7 w-7 text-muted-foreground" />
+                    ) : (
+                      <Package className="h-7 w-7 text-muted-foreground" />
+                    )}
+                  </EmptyMedia>
+                  <EmptyTitle>
+                    {debouncedSearchQuery ? "ไม่พบสิ่งของที่ค้นหา" : "ไม่พบสิ่งของ"}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {debouncedSearchQuery
+                      ? "ลองค้นหาด้วยคำสำคัญอื่นๆ หรือตรวจสอบคำผิด"
+                      : "ลองเปลี่ยนตัวกรองหรือกลับมาดูใหม่ภายหลัง"}
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  {(categories.length > 0 || status !== "all" || debouncedSearchQuery) && (
+                    <Button
+                      variant="outline"
+                      className="mt-1"
+                      onClick={() => {
+                        setCategories([])
+                        setStatus("all")
+                        setSearchQuery("")
+                      }}
+                    >
+                      ล้างการค้นหาและตัวกรอง
+                    </Button>
+                  )}
+                </EmptyContent>
+              </Empty>
             ) : (
               /* Items Grid */
               <>
