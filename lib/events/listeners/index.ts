@@ -73,7 +73,7 @@ export function registerLineNotificationListeners(): void {
   })
 
   eventBus.on<UserSuspendedEvent>(EVENT_TYPES.USER_SUSPENDED, async (event) => {
-    const { userId, reason, suspendedUntil } = event.payload
+    const { userId, reason: _reason, suspendedUntil: _suspendedUntil } = event.payload
     console.log(`[LINE] Would notify ${userId} about suspension`)
     
     // TODO: Integrate with LINE service
