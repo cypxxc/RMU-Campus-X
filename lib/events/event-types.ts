@@ -2,7 +2,7 @@
 // Event Types
 // ============================================================
 
-import type { Exchange, Item, User, Report } from "@/types"
+import type { Exchange, Item, Report } from "@/types"
 
 // ============ Event Names ============
 

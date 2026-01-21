@@ -2,7 +2,7 @@
 // Event Listeners - Notification Handlers
 // ============================================================
 
-import { onEvent, getEventBus } from "../event-bus"
+import { getEventBus } from "../event-bus"
 import { EVENT_TYPES } from "../event-types"
 import type {
   ExchangeCreatedEvent,
