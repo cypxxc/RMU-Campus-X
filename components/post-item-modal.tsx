@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/components/auth-provider"
 import { createItem } from "@/lib/firestore"
 import { Button } from "@/components/ui/button"
@@ -35,6 +35,10 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
   const { user } = useAuth()
   const { toast } = useToast()
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
+  
+  // Refs for form fields - used for auto-focus on validation errors
+  const titleRef = useRef<HTMLInputElement>(null)
+  const descriptionRef = useRef<HTMLTextAreaElement>(null)
 
   // Use the shared image upload hook
   const { 
@@ -123,6 +127,14 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
         if (issue.path[0]) fieldErrors[issue.path[0].toString()] = issue.message
       })
       setErrors(fieldErrors)
+      
+      // Auto-focus on first field with error for better UX
+      if (fieldErrors.title) {
+        titleRef.current?.focus()
+      } else if (fieldErrors.description) {
+        descriptionRef.current?.focus()
+      }
+      
       // Force loading false just in case
       setLoading(false)
       return
@@ -258,15 +270,17 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               ชื่อสิ่งของ <span className="text-destructive">*</span>
             </Label>
             <Input
+              ref={titleRef}
               id="modal-title"
               placeholder="เช่น เสื้อโปโล RMU ไซส์ M"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
               disabled={loading}
+              aria-describedby={errors.title ? "title-error" : undefined}
               className={errors.title ? "border-destructive focus-visible:ring-destructive" : ""}
             />
-            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+            {errors.title && <p id="title-error" role="alert" className="text-xs text-destructive">{errors.title}</p>}
           </div>
 
           {/* Description */}
@@ -275,6 +289,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               รายละเอียด <span className="text-destructive">*</span>
             </Label>
             <Textarea
+              ref={descriptionRef}
               id="modal-description"
               placeholder="อธิบายสภาพ ประโยชน์ หรือเหตุผลที่ต้องการแบ่งปัน"
               value={description}
@@ -282,9 +297,10 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               rows={3}
               required
               disabled={loading}
+              aria-describedby={errors.description ? "description-error" : undefined}
               className={`resize-none ${errors.description ? "border-destructive focus-visible:ring-destructive" : ""}`}
             />
-            {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
+            {errors.description && <p id="description-error" role="alert" className="text-xs text-destructive">{errors.description}</p>}
           </div>
 
           {/* Category and Location */}

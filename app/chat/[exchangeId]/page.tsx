@@ -419,7 +419,11 @@ export default function ChatPage({
 
                 {exchange.status === "completed" ? (
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-500/10 text-green-600 border border-green-500/20 text-sm font-bold h-9">
+                    <div 
+                      role="status" 
+                      aria-live="polite"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-500/10 text-green-600 border border-green-500/20 text-sm font-bold h-9"
+                    >
                       <CheckCheck className="h-4 w-4" />
                       <span className="hidden sm:inline">แลกเปลี่ยนสำเร็จ</span>
                       <span className="sm:hidden">สำเร็จ</span>
