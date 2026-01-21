@@ -1,5 +1,4 @@
 import { z } from "zod"
-import { ValidationError } from "@/lib/errors/app-error"
 
 // ============ User Schemas ============
 
@@ -161,7 +160,9 @@ export function validate<T>(schema: z.ZodSchema<T>, data: unknown): T {
       field: e.path.join("."),
       message: e.message,
     }))
-    throw new ValidationError("ข้อมูลไม่ถูกต้อง", errors)
+    const error = new Error("ข้อมูลไม่ถูกต้อง") as Error & { errors: typeof errors }
+    error.errors = errors
+    throw error
   }
   return result.data
 }
