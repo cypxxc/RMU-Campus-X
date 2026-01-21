@@ -60,6 +60,7 @@ import {
   serverTimestamp,
   getCountFromServer,
   DocumentSnapshot,
+  QueryConstraint,
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import { generateKeywords, buildSearchConstraints, refineItemsBySearchTerms } from "@/lib/db/items-helpers"
@@ -99,7 +100,7 @@ export class FirestoreItemRepository implements IItemRepository {
     pageSize = 20,
     lastDoc?: unknown
   ): Promise<PaginatedResult<Item>> {
-    const constraints: any[] = []
+    const constraints: QueryConstraint[] = []
 
     if (filters?.categories && filters.categories.length > 0) {
       constraints.push(where("category", "in", filters.categories))
@@ -173,7 +174,7 @@ export class FirestoreItemRepository implements IItemRepository {
       throw new Error(`Item ${id} not found`)
     }
 
-    const updates: any = { ...data, updatedAt: serverTimestamp() }
+    const updates: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() }
 
     // Regenerate keywords if title or description changed
     if (data.title || data.description) {

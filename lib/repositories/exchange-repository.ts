@@ -158,7 +158,7 @@ export class FirestoreExchangeRepository implements IExchangeRepository {
     await this.update(id, { status })
   }
 
-  async confirmByUser(id: string, userId: string, role: 'owner' | 'requester'): Promise<void> {
+  async confirmByUser(id: string, _userId: string, role: 'owner' | 'requester'): Promise<void> {
     const field = role === 'owner' ? 'ownerConfirmed' : 'requesterConfirmed'
     await this.update(id, { [field]: true } as ExchangeUpdateInput)
   }
