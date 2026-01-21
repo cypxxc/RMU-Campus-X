@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Loader2, CheckCheck, AlertTriangle, ChevronDown, Package } from "lucide-react"
+import { Send, Loader2, CheckCheck, AlertTriangle, ChevronDown, Package, MessageCircle } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -498,7 +498,18 @@ export default function ChatPage({
 
           <CardContent className="flex flex-col h-full p-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-background/20" ref={scrollAreaRef}>
-              {messages.map((msg) => {
+              {messages.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-6 min-h-[200px]">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <MessageCircle className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="font-semibold mb-1">เริ่มการสนทนา</h3>
+                  <p className="text-sm text-muted-foreground max-w-xs">
+                    ส่งข้อความถึง{isOwner ? 'ผู้ขอรับ' : 'เจ้าของสิ่งของ'}เพื่อนัดหมายการรับของ
+                  </p>
+                </div>
+              ) : (
+                messages.map((msg) => {
                 const isOwnMessage = msg.senderId === user?.uid
                 const msgDate = msg.createdAt?.toDate?.() || new Date()
 
@@ -551,7 +562,8 @@ export default function ChatPage({
                     </div>
                   </div>
                 )
-              })}
+              })
+              )}
               <div ref={messagesEndRef} />
             </div>
 

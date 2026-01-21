@@ -317,6 +317,22 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
             </div>
           )}
 
+          {/* Unavailable Item Message */}
+          {user && !isOwner && item.status !== "available" && (
+            <div className="p-4 rounded-xl bg-muted/50 border text-center" role="status">
+              <p className="text-sm text-muted-foreground mb-3">
+                {item.status === "pending" && "สิ่งของนี้กำลังอยู่ระหว่างการแลกเปลี่ยน"}
+                {item.status === "completed" && "สิ่งของนี้ถูกแลกเปลี่ยนแล้ว"}
+              </p>
+              <Button variant="outline" className="gap-2" asChild>
+                <Link href="/dashboard">
+                  <Package className="h-4 w-4" />
+                  ดูสิ่งของอื่น
+                </Link>
+              </Button>
+            </div>
+          )}
+
           {isOwner && (
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-center gap-2">
               <Package className="h-4 w-4 text-primary" />
