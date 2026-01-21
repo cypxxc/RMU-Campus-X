@@ -70,19 +70,20 @@ export class FirestoreUserRepository implements IUserRepository {
     const q = query(this.getCollection(), where("email", "==", email))
     const snapshot = await getDocs(q)
     if (snapshot.empty) return null
-    const doc = snapshot.docs[0]
-    return { uid: doc.id, ...doc.data() } as User
+    const userDoc = snapshot.docs[0]
+    if (!userDoc) return null
+    return { uid: userDoc.id, ...userDoc.data() } as User
   }
 
   async findAll(): Promise<User[]> {
     const snapshot = await getDocs(this.getCollection())
-    return snapshot.docs.map((doc) => ({ uid: doc.id, ...doc.data() }) as User)
+    return snapshot.docs.map((d) => ({ uid: d.id, ...d.data() }) as User)
   }
 
   async findAdmins(): Promise<User[]> {
     const q = query(this.getCollection(), where("isAdmin", "==", true))
     const snapshot = await getDocs(q)
-    return snapshot.docs.map((doc) => ({ uid: doc.id, ...doc.data() }) as User)
+    return snapshot.docs.map((d) => ({ uid: d.id, ...d.data() }) as User)
   }
 
   async create(data: Partial<User>): Promise<User> {

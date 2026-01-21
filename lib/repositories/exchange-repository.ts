@@ -3,7 +3,7 @@
 // ============================================================
 
 import type { Exchange, ExchangeStatus } from "@/types"
-import type { IRepository, PaginatedResult } from "./types"
+import type { IRepository } from "./types"
 
 // ============ Types ============
 
@@ -73,7 +73,7 @@ export class FirestoreExchangeRepository implements IExchangeRepository {
   async findAll(): Promise<Exchange[]> {
     const q = query(this.getCollection(), orderBy("createdAt", "desc"))
     const snapshot = await getDocs(q)
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Exchange)
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Exchange)
   }
 
   async findByItem(itemId: string): Promise<Exchange[]> {
@@ -83,7 +83,7 @@ export class FirestoreExchangeRepository implements IExchangeRepository {
       orderBy("createdAt", "desc")
     )
     const snapshot = await getDocs(q)
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Exchange)
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Exchange)
   }
 
   async findActiveByItem(itemId: string): Promise<Exchange | null> {
@@ -94,8 +94,9 @@ export class FirestoreExchangeRepository implements IExchangeRepository {
     )
     const snapshot = await getDocs(q)
     if (snapshot.empty) return null
-    const doc = snapshot.docs[0]
-    return { id: doc.id, ...doc.data() } as Exchange
+    const exchangeDoc = snapshot.docs[0]
+    if (!exchangeDoc) return null
+    return { id: exchangeDoc.id, ...exchangeDoc.data() } as Exchange
   }
 
   async findByUser(userId: string): Promise<Exchange[]> {
@@ -118,8 +119,8 @@ export class FirestoreExchangeRepository implements IExchangeRepository {
     ])
 
     const allExchanges = [
-      ...ownerExchanges.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Exchange),
-      ...requesterExchanges.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Exchange),
+      ...ownerExchanges.docs.map((d) => ({ id: d.id, ...d.data() }) as Exchange),
+      ...requesterExchanges.docs.map((d) => ({ id: d.id, ...d.data() }) as Exchange),
     ]
 
     // Remove duplicates and sort
