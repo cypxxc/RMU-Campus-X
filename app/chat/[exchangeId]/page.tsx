@@ -116,10 +116,10 @@ export default function ChatPage({
         })
         router.push("/dashboard")
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "เกิดข้อผิดพลาด",
-        description: error?.message || "ไม่สามารถโหลดการแลกเปลี่ยนได้",
+        description: error instanceof Error ? error.message : "ไม่สามารถโหลดการแลกเปลี่ยนได้",
         variant: "destructive",
       })
     } finally {
@@ -145,10 +145,10 @@ export default function ChatPage({
     return onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as ChatMessage)
       setMessages(msgs)
-    }, (error: any) => {
+    }, (error: unknown) => {
       toast({
         title: "เกิดข้อผิดพลาด",
-        description: error?.message || "ไม่สามารถโหลดข้อความได้",
+        description: error instanceof Error ? error.message : "ไม่สามารถโหลดข้อความได้",
         variant: "destructive",
       })
     })
@@ -188,13 +188,13 @@ export default function ChatPage({
            try {
              const errData = await uploadRes.json()
              errorMsg = errData.error || errorMsg
-           } catch (e) {}
+           } catch {}
            throw new Error(errorMsg)
         }
 
         const data = await uploadRes.json()
         imageUrl = data.url
-        imageType = selectedImageFile.type as any
+        imageType = selectedImageFile.type
       }
 
       const messageText = newMessage.trim() || (imageUrl ? "ส่งรูปภาพ" : "")
@@ -250,11 +250,11 @@ export default function ChatPage({
       } catch (lineError) {
         console.log('[LINE] Notify chat error:', lineError)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Send message error:', error)
       toast({
         title: "ส่งข้อความไม่สำเร็จ",
-        description: error?.message || "โปรดลองใหม่อีกครั้ง",
+        description: error instanceof Error ? error.message : "โปรดลองใหม่อีกครั้ง",
         variant: "destructive",
       })
     } finally {
@@ -327,10 +327,10 @@ export default function ChatPage({
       }
 
       loadExchange()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "เกิดข้อผิดพลาด",
-        description: error?.message || "ไม่สามารถยืนยันได้",
+        description: error instanceof Error ? error.message : "ไม่สามารถยืนยันได้",
         variant: "destructive",
       })
     }
