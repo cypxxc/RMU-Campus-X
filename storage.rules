@@ -1,0 +1,79 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ============================================================================
+    // 🛡️ SECURITY UTILITIES
+    // ============================================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    function isUnderSizeLimit(maxSizeMB) {
+      return request.resource.size < maxSizeMB * 1024 * 1024;
+    }
+    
+    // ============================================================================
+    // 📂 USER AVATARS
+    // Only the user can upload/update their own avatar
+    // ============================================================================
+    match /avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId)
+                   && isValidImage()
+                   && isUnderSizeLimit(5);
+      allow delete: if isOwner(userId);
+    }
+    
+    // ============================================================================
+    // 📦 ITEM IMAGES
+    // Any authenticated user can upload item images
+    // ============================================================================
+    match /items/{itemId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuthenticated()
+                   && isValidImage()
+                   && isUnderSizeLimit(10);
+      allow delete: if isAuthenticated();
+    }
+    
+    // ============================================================================
+    // 💬 CHAT IMAGES
+    // Authenticated users can upload chat images
+    // ============================================================================
+    match /chat/{exchangeId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+                   && isValidImage()
+                   && isUnderSizeLimit(5);
+    }
+    
+    // ============================================================================
+    // 📝 REPORT EVIDENCE
+    // Users can upload evidence for reports
+    // ============================================================================
+    match /reports/{reportId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+                   && isValidImage()
+                   && isUnderSizeLimit(10);
+    }
+    
+    // ============================================================================
+    // 🚫 CATCH-ALL: Block everything else
+    // ============================================================================
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
