@@ -12,7 +12,7 @@ import { NotificationBell } from "./notification-bell"
 import { AccountStatusBanner } from "./account-status-banner"
 import { ModeToggle } from "./mode-toggle"
 import { Logo } from "./logo"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import dynamic from "next/dynamic"
 
 // Lazy load heavy modals - only loaded when opened
@@ -34,11 +34,6 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [postModalOpen, setPostModalOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const handleSignOut = async () => {
     try {
@@ -159,8 +154,7 @@ export function Navbar() {
                 </Button>
 
                 {/* Mobile Menu */}
-                {mounted && (
-                  <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                     <SheetTrigger asChild>
                       <Button variant="ghost" size="icon" className="md:hidden">
                         <Menu className="h-5 w-5" />
@@ -244,7 +238,6 @@ export function Navbar() {
                       </div>
                     </SheetContent>
                   </Sheet>
-                )}
               </>
             ) : (
               <>

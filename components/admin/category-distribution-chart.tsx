@@ -28,10 +28,32 @@ const categoryLabels: Record<string, string> = {
   other: "อื่นๆ",
 }
 
+function CategoryTooltip({
+  active,
+  payload,
+  total,
+}: {
+  active?: boolean
+  payload?: any[]
+  total: number
+}) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card border rounded-lg p-3 shadow-lg">
+        <p className="font-medium">{payload[0].name}</p>
+        <p className="text-sm text-muted-foreground">
+          {payload[0].value} รายการ ({((payload[0].value / total) * 100).toFixed(1)}%)
+        </p>
+      </div>
+    )
+  }
+  return null
+}
+
 export const CategoryDistributionChart = memo(function CategoryDistributionChart({ 
   items 
 }: CategoryDistributionChartProps) {
-  // ✅ Memoized chart data - only recomputes when items change
+  // Memoized chart data - only recomputes when items change
   const chartData = useMemo(() => {
     const categoryCounts: Record<string, number> = {}
     
@@ -47,19 +69,6 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
     }))
   }, [items]) // Only recompute when items array changes
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-card border rounded-lg p-3 shadow-lg">
-          <p className="font-medium">{payload[0].name}</p>
-          <p className="text-sm text-muted-foreground">
-            {payload[0].value} รายการ ({((payload[0].value / items.length) * 100).toFixed(1)}%)
-          </p>
-        </div>
-      )
-    }
-    return null
-  }
 
   // Handle empty state
   if (items.length === 0) {
@@ -111,7 +120,7 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
                 />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CategoryTooltip total={items.length} />} />
             <Legend />
           </PieChart>
         </ResponsiveContainer>

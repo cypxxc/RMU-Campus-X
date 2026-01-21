@@ -4,7 +4,7 @@ import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTriangle, History } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 
 import { AuthGuard } from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
@@ -16,11 +16,6 @@ import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
  
   const navItems = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -94,7 +89,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </span>
              </div>
              
-             {mounted && <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                 <SheetTrigger asChild>
                    <Button variant="ghost" size="icon" className="h-9 w-9 hover:scale-110 transition-transform duration-200">
                       <Menu className="h-5 w-5" />
@@ -124,7 +119,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       ))}
                    </nav>
                 </SheetContent>
-             </Sheet>}
+             </Sheet>
           </div>
  
           {/* Main Content (Right) - Animated */}

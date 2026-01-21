@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, getDocs, query, where } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
@@ -21,16 +21,7 @@ export default function AdminDashboardPage() {
   // ✅ NEW: React Query replaces real-time listeners
   const { items, users, tickets, isLoading } = useAdminDashboardData()
 
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [user, authLoading])
-
-  const checkAdmin = async () => {
+  const checkAdmin = useCallback(async () => {
     if (!user) return
 
     try {
@@ -56,7 +47,16 @@ export default function AdminDashboardPage() {
     } finally {
       setCheckingAdmin(false)
     }
-  }
+  }, [router, toast, user])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    checkAdmin()
+  }, [authLoading, checkAdmin, router, user])
 
   // ✅ Real-time listeners removed - now using React Query with polling
   // See hooks/use-admin-dashboard.ts for optimized implementation

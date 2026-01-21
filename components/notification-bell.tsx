@@ -25,7 +25,6 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const [mounted, setMounted] = useState(false)
   // Track shown toast IDs AND timestamps to prevent duplicates more reliably
   const shownToasts = useRef<Map<string, number>>(new Map())
   const lastProcessedTime = useRef<number>(0)
@@ -34,7 +33,6 @@ export function NotificationBell() {
   const { toast } = useToast()
 
   useEffect(() => {
-    setMounted(true)
     // Clean up old shown toasts (older than 5 minutes) periodically
     const cleanup = setInterval(() => {
       const now = Date.now()
@@ -46,6 +44,19 @@ export function NotificationBell() {
     }, 60000)
     return () => clearInterval(cleanup)
   }, [])
+
+  const handleMarkAsRead = useCallback(async (id: string, relatedId?: string, type?: string) => {
+    await markNotificationAsRead(id)
+    if (relatedId) {
+      if (type === "chat") {
+        router.push(`/chat/${relatedId}`)
+      } else if (type === "exchange") {
+        router.push("/my-exchanges")
+      } else if (type === "report") {
+        router.push("/profile")
+      }
+    }
+  }, [router])
 
   useEffect(() => {
     if (!user) return
@@ -117,20 +128,7 @@ export function NotificationBell() {
     })
 
     return () => unsubscribe()
-  }, [user, isInitialLoad, toast])
-
-  const handleMarkAsRead = useCallback(async (id: string, relatedId?: string, type?: string) => {
-    await markNotificationAsRead(id)
-    if (relatedId) {
-      if (type === "chat") {
-        router.push(`/chat/${relatedId}`)
-      } else if (type === "exchange") {
-        router.push("/my-exchanges")
-      } else if (type === "report") {
-        router.push("/profile")
-      }
-    }
-  }, [router])
+  }, [user, isInitialLoad, toast, handleMarkAsRead])
 
   const handleMarkAllRead = async () => {
     if (!user) return
@@ -182,7 +180,7 @@ export function NotificationBell() {
     }
   }
 
-  if (!mounted || !user) return null
+  if (!user) return null
 
   return (
     <DropdownMenu>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs, DocumentSnapshot } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
@@ -67,16 +67,7 @@ export default function AdminItemsPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [user, authLoading])
-
-  const checkAdmin = async () => {
+  const checkAdmin = useCallback(async () => {
     if (!user) return
 
     try {
@@ -96,14 +87,22 @@ export default function AdminItemsPage() {
       }
 
       setIsAdmin(true)
-      loadItems(true)
     } catch (error) {
       console.error("[AdminItems] Error checking admin:", error)
       router.push("/dashboard")
     }
-  }
+  }, [router, toast, user])
 
-  const loadItems = async (reset = false) => {
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    checkAdmin()
+  }, [authLoading, checkAdmin, router, user])
+
+  const loadItems = useCallback(async ({ reset = false, lastDoc: lastDocOverride, searchQuery: searchQueryOverride }: { reset?: boolean; lastDoc?: DocumentSnapshot | null; searchQuery?: string } = {}) => {
     try {
       if (reset) {
         setLoading(true)
@@ -114,8 +113,8 @@ export default function AdminItemsPage() {
 
       const { data, error } = await getItems({
         pageSize,
-        lastDoc: reset ? undefined : (lastDoc || undefined),
-        searchQuery: searchQuery || undefined
+        lastDoc: reset ? undefined : (lastDocOverride || undefined),
+        searchQuery: searchQueryOverride || undefined
       })
 
       if (error) {
@@ -140,16 +139,17 @@ export default function AdminItemsPage() {
       setLoading(false)
       setIsLoadMore(false)
     }
-  }
+  }, [pageSize, toast])
 
   // Reload when search changes (with debounce)
   useEffect(() => {
     if (!isAdmin) return
+    const delay = searchQuery ? 500 : 0
     const timer = setTimeout(() => {
-      loadItems(true)
-    }, 500)
+      loadItems({ reset: true, searchQuery })
+    }, delay)
     return () => clearTimeout(timer)
-  }, [searchQuery])
+  }, [isAdmin, loadItems, searchQuery])
 
   const handleDeleteItem = async () => {
     if (!deleteDialog.itemId || !user) return
@@ -257,7 +257,7 @@ export default function AdminItemsPage() {
             <p className="text-muted-foreground">ดูแลและจัดการสิ่งของทั้งหมดในระบบ</p>
           </div>
         </div>
-        <Button onClick={() => loadItems(true)} variant="outline" className="gap-2">
+        <Button onClick={() => loadItems({ reset: true, searchQuery })} variant="outline" className="gap-2">
           <RefreshCw className="h-4 w-4" />
           รีเฟรช
         </Button>
@@ -414,7 +414,7 @@ export default function AdminItemsPage() {
         <div className="flex justify-center mt-8">
             <Button 
                 variant="outline" 
-                onClick={() => loadItems(false)} 
+                onClick={() => loadItems({ reset: false, lastDoc, searchQuery })} 
                 disabled={isLoadMore}
                 className="w-full max-w-[200px]"
             >

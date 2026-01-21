@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs, DocumentSnapshot } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
@@ -93,21 +93,22 @@ export default function AdminSupportPage() {
   // Separate state for each tab to preserve data when switching
   const [pendingState, setPendingState] = useState<PaginationState>({ data: [], lastDoc: null, hasMore: true, totalCount: 0, loading: false })
   const [historyState, setHistoryState] = useState<PaginationState>({ data: [], lastDoc: null, hasMore: true, totalCount: 0, loading: false })
+  const pendingStateRef = useRef(pendingState)
+  const historyStateRef = useRef(historyState)
+
+  useEffect(() => {
+    pendingStateRef.current = pendingState
+  }, [pendingState])
+
+  useEffect(() => {
+    historyStateRef.current = historyState
+  }, [historyState])
 
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
 
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [user, authLoading])
-
-  const checkAdmin = async () => {
+  const checkAdmin = useCallback(async () => {
     if (!user) return
 
     try {
@@ -127,17 +128,23 @@ export default function AdminSupportPage() {
       }
 
       setIsAdmin(true)
-      loadTickets('pending', true) // Initial load
-      loadTickets('history', true)
-      setIsDataLoaded(true)
     } catch (error) {
       console.error("[AdminSupport] Error checking admin:", error)
       router.push("/dashboard")
     }
-  }
+  }, [router, toast, user])
 
-  const loadTickets = async (tab: 'pending' | 'history', reset = false) => {
-    const currentState = tab === 'pending' ? pendingState : historyState
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    checkAdmin()
+  }, [authLoading, checkAdmin, router, user])
+
+  const loadTickets = useCallback(async (tab: 'pending' | 'history', reset = false) => {
+    const currentState = tab === 'pending' ? pendingStateRef.current : historyStateRef.current
     const setState = tab === 'pending' ? setPendingState : setHistoryState
     
     if (currentState.loading) return
@@ -168,7 +175,14 @@ export default function AdminSupportPage() {
       setState(prev => ({ ...prev, loading: false }))
       toast({ title: "โหลดข้อมูลล้มเหลว", variant: "destructive" })
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    if (!isAdmin || isDataLoaded) return
+    loadTickets('pending', true)
+    loadTickets('history', true)
+    setIsDataLoaded(true)
+  }, [isAdmin, isDataLoaded, loadTickets])
 
   const handleSendReply = async () => {
     if (!selectedTicket || !user || !ticketReply.trim()) return

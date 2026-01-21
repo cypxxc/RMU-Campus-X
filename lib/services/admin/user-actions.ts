@@ -1,225 +1,282 @@
-import { getAdminDb } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
+// ============================================================
+// Admin User Actions (SOLID: Dependency Inversion Principle)
+// Business logic with injectable dependencies
+// ============================================================
 
-export interface AdminActionParams {
-  adminId: string
-  adminEmail: string
-  userId: string
-  reason?: string
-}
+import type {
+  AdminActionParams,
+  UpdateStatusParams,
+  UpdateStatusResult,
+  IssueWarningResult,
+  UserStatusUpdateDeps,
+  WarningIssueDeps,
+  UserData,
+} from "@/lib/services/admin/types"
+import {
+  createUserStatusDeps,
+  createWarningIssueDeps,
+} from "@/lib/services/admin/firebase-admin-deps"
 
-export interface UpdateStatusParams extends AdminActionParams {
-  status: 'ACTIVE' | 'SUSPENDED' | 'BANNED'
-  suspendDays?: number
+// Re-export types for backward compatibility
+export type { AdminActionParams, UpdateStatusParams }
+
+// ============ Helper Functions ============
+
+function buildStatusUpdates(
+  status: 'ACTIVE' | 'SUSPENDED' | 'BANNED',
+  reason?: string,
+  suspendDays?: number,
   suspendMinutes?: number
+): Partial<UserData> {
+  const updates: Partial<UserData> = { status }
+
+  if (status === 'SUSPENDED') {
+    const suspendUntil = new Date()
+    if (suspendDays && suspendDays > 0) {
+      suspendUntil.setDate(suspendUntil.getDate() + suspendDays)
+    }
+    if (suspendMinutes && suspendMinutes > 0) {
+      suspendUntil.setMinutes(suspendUntil.getMinutes() + suspendMinutes)
+    }
+    updates.suspendedUntil = suspendUntil
+    updates.restrictions = { canPost: false, canExchange: false, canChat: false }
+  }
+
+  if (status === 'BANNED') {
+    updates.bannedReason = reason
+    updates.restrictions = { canPost: false, canExchange: false, canChat: false }
+  }
+
+  if (status === 'ACTIVE') {
+    updates.warningCount = 0
+    updates.restrictions = { canPost: true, canExchange: true, canChat: true }
+    updates.suspendedUntil = null
+    updates.bannedReason = null
+  }
+
+  return updates
 }
+
+function getStatusText(status: 'ACTIVE' | 'SUSPENDED' | 'BANNED'): string {
+  switch (status) {
+    case 'ACTIVE':
+      return 'ได้รับสิทธิ์ใช้งานปกติ'
+    case 'SUSPENDED':
+      return 'ถูกระงับการใช้งานชั่วคราว'
+    case 'BANNED':
+      return 'ถูกระงับการใช้งานถาวร'
+  }
+}
+
+function getActionType(status: 'ACTIVE' | 'SUSPENDED' | 'BANNED') {
+  switch (status) {
+    case 'ACTIVE':
+      return 'user_activate' as const
+    case 'SUSPENDED':
+      return 'user_suspend' as const
+    case 'BANNED':
+      return 'user_ban' as const
+  }
+}
+
+// ============ Core Business Logic (DIP) ============
 
 /**
- * Server-Side: Update User Status (Suspend/Ban/Activate)
- * Bypasses Firestore Rules using Admin SDK
+ * Update User Status - Core business logic with injectable dependencies
+ * @param params - Update parameters
+ * @param deps - Injectable dependencies (for testing or different implementations)
  */
-export async function updateUserStatus(params: UpdateStatusParams) {
-  const db = getAdminDb()
+export async function updateUserStatusWithDeps(
+  params: UpdateStatusParams,
+  deps: UserStatusUpdateDeps
+): Promise<UpdateStatusResult> {
   const { adminId, adminEmail, userId, status, reason, suspendDays, suspendMinutes } = params
-  
-  const userRef = db.collection('users').doc(userId)
-  const userDoc = await userRef.get()
-  
-  // 1. Capture exact state before change
-  const beforeState = userDoc.exists ? userDoc.data() : { status: 'NEW (Auto-created)' }
-  
+
+  const existingUser = await deps.getUserById(userId)
+  const beforeState = existingUser ?? { status: 'NEW (Auto-created)' }
+
   try {
-    const updates: any = {
-      status,
-      updatedAt: FieldValue.serverTimestamp(),
-    }
+    const updates = buildStatusUpdates(status, reason, suspendDays, suspendMinutes)
 
-    // Handle Suspension
-    if (status === 'SUSPENDED') {
-      const suspendUntil = new Date()
-      if (suspendDays && suspendDays > 0) suspendUntil.setDate(suspendUntil.getDate() + suspendDays)
-      if (suspendMinutes && suspendMinutes > 0) suspendUntil.setMinutes(suspendUntil.getMinutes() + suspendMinutes)
-      
-      updates.suspendedUntil = suspendUntil
-      updates.restrictions = { canPost: false, canExchange: false, canChat: false }
-    }
-
-    // Handle Ban
-    if (status === 'BANNED') {
-      updates.bannedReason = reason
-      updates.restrictions = { canPost: false, canExchange: false, canChat: false }
-    }
-
-    // Handle Activation
-    if (status === 'ACTIVE') {
-      updates.warningCount = 0
-      updates.restrictions = { canPost: true, canExchange: true, canChat: true }
-      updates.suspendedUntil = null
-      updates.bannedReason = null
-    }
-
-    // 2. Perform Update
-    if (!userDoc.exists) {
-        // Edge case: Create if missing (rare but possible)
-        await userRef.set({
-            uid: userId,
-            createdAt: FieldValue.serverTimestamp(),
-            ...updates
-        })
+    // 1. Update or create user
+    if (!existingUser) {
+      await deps.createUser(userId, updates)
     } else {
-        await userRef.update(updates)
+      await deps.updateUser(userId, updates)
     }
 
-    // 3. Create Audit Log (Server Side)
+    // 2. Create Audit Log
     const afterState = { ...beforeState, ...updates }
-    
-    await db.collection('adminLogs').add({
-      actionType: status === 'ACTIVE' ? 'user_activate' : status === 'SUSPENDED' ? 'user_suspend' : 'user_ban',
+    await deps.createAuditLog({
+      actionType: getActionType(status),
       adminId,
       adminEmail,
       targetType: 'user',
       targetId: userId,
-      targetInfo: (beforeState as any)?.email || userId,
+      targetInfo: (existingUser as UserData | null)?.email || userId,
       description: `เปลี่ยนสถานะเป็น ${status}${reason ? `: ${reason}` : ''}`,
       status: 'success',
-      reason: reason,
-      beforeState: beforeState || {},
-      afterState: afterState,
+      reason,
+      beforeState: beforeState as Record<string, unknown>,
+      afterState: afterState as Record<string, unknown>,
       metadata: { status, reason, suspendDays },
-      createdAt: FieldValue.serverTimestamp()
     })
 
-    // 4. Create Notification (System Notification)
-    let statusText = status === 'ACTIVE' ? 'ได้รับสิทธิ์ใช้งานปกติ' : status === 'SUSPENDED' ? 'ถูกระงับการใช้งานชั่วคราว' : 'ถูกระงับการใช้งานถาวร'
-    let msg = `บัญชีของคุณได้ถูกเปลี่ยนสถานะเป็น: ${statusText}`
+    // 3. Create Notification
+    let msg = `บัญชีของคุณได้ถูกเปลี่ยนสถานะเป็น: ${getStatusText(status)}`
     if (reason) msg += ` เนื่องด้วยเหตุผล: ${reason}`
 
-    await db.collection('notifications').add({
-      userId: userId,
+    await deps.createNotification({
+      userId,
       title: "อัปเดตสถานะบัญชี",
       message: msg,
       type: status === 'ACTIVE' ? 'system' : 'warning',
       relatedId: userId,
-      createdAt: FieldValue.serverTimestamp(),
-      isRead: false
+      isRead: false,
     })
 
-    // 5. Create Warning Record if negative action
+    // 4. Create Warning Record if negative action
     if (status !== 'ACTIVE') {
-        const warningAction = status === 'SUSPENDED' ? 'SUSPEND' : 'BAN'
-        await db.collection('userWarnings').add({
-            userId,
-            reason: reason || 'Status updated by admin',
-            issuedBy: adminId,
-            issuedByEmail: adminEmail,
-            issuedAt: FieldValue.serverTimestamp(),
-            action: warningAction,
-            resolved: false,
-        })
+      const warningAction = status === 'SUSPENDED' ? 'SUSPEND' : 'BAN'
+      await deps.createWarningRecord({
+        userId,
+        reason: reason || 'Status updated by admin',
+        issuedBy: adminId,
+        issuedByEmail: adminEmail,
+        action: warningAction,
+        resolved: false,
+      })
     }
 
-    return { success: true, status, userId, suspendedUntil: updates.suspendedUntil }
-
-  } catch (error: any) {
+    return {
+      success: true,
+      status,
+      userId,
+      suspendedUntil: updates.suspendedUntil,
+    }
+  } catch (error: unknown) {
     console.error("[AdminService] Update Status Failed:", error)
-    
+
     // Log Failure
-    await db.collection('adminLogs').add({
-      actionType: status === 'ACTIVE' ? 'user_activate' : status === 'SUSPENDED' ? 'user_suspend' : 'user_ban',
+    await deps.createAuditLog({
+      actionType: getActionType(status),
       adminId,
       adminEmail,
       targetType: 'user',
       targetId: userId,
       status: 'failed',
-      reason: error.message,
-      metadata: { error: error.toString() },
-      createdAt: FieldValue.serverTimestamp()
+      reason: error instanceof Error ? error.message : String(error),
+      metadata: { error: String(error) },
     })
-    
+
     throw error
   }
 }
 
 /**
- * Server-Side: Issue Warning
+ * Issue Warning - Core business logic with injectable dependencies
+ * @param params - Warning parameters
+ * @param deps - Injectable dependencies
  */
-export async function issueWarning(params: AdminActionParams) {
-  const db = getAdminDb()
+export async function issueWarningWithDeps(
+  params: AdminActionParams,
+  deps: WarningIssueDeps
+): Promise<IssueWarningResult> {
   const { adminId, adminEmail, userId, reason } = params
-  
-  const userRef = db.collection('users').doc(userId)
-  const userDoc = await userRef.get()
-  
-  if (!userDoc.exists) throw new Error('User not found')
-  
-  const beforeState = userDoc.data()
-  
+
+  const existingUser = await deps.getUserById(userId)
+  if (!existingUser) {
+    throw new Error('User not found')
+  }
+
+  const beforeState = existingUser
+
   try {
-    const currentWarnings = beforeState?.warningCount || 0
+    const currentWarnings = beforeState.warningCount || 0
     const newWarningCount = currentWarnings + 1
 
-    const updates = {
+    const updates: Partial<UserData> = {
       warningCount: newWarningCount,
-      lastWarningDate: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+      lastWarningDate: new Date(),
     }
 
     // 1. Update User
-    await userRef.update(updates)
+    await deps.updateUser(userId, updates)
 
     // 2. Create Warning Record
-    await db.collection('userWarnings').add({
+    await deps.createWarningRecord({
       userId,
-      userEmail: beforeState?.email,
-      reason,
+      userEmail: beforeState.email,
+      reason: reason || '',
       issuedBy: adminId,
       issuedByEmail: adminEmail,
-      issuedAt: FieldValue.serverTimestamp(),
       action: 'WARNING',
       resolved: false,
     })
 
     // 3. Notify User
-    await db.collection('notifications').add({
+    await deps.createNotification({
       userId,
       title: 'ได้รับคำเตือน',
       message: `${reason} (คำเตือนครั้งที่ ${newWarningCount})`,
       type: 'warning',
-      createdAt: FieldValue.serverTimestamp(),
-      isRead: false
+      isRead: false,
     })
 
     // 4. Audit Log
-    await db.collection('adminLogs').add({
+    await deps.createAuditLog({
       actionType: 'user_warning',
       adminId,
       adminEmail,
       targetType: 'user',
       targetId: userId,
-      targetInfo: beforeState?.email,
+      targetInfo: beforeState.email,
       description: `ออกคำเตือนครั้งที่ ${newWarningCount}: ${reason}`,
       status: 'success',
-      reason: reason,
-      beforeState: beforeState || {},
-      afterState: { ...beforeState, ...updates },
+      reason,
+      beforeState: beforeState as unknown as Record<string, unknown>,
+      afterState: { ...beforeState, ...updates } as unknown as Record<string, unknown>,
       metadata: { warningCount: newWarningCount },
-      createdAt: FieldValue.serverTimestamp()
     })
 
     return { success: true, warningCount: newWarningCount }
-
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[AdminService] Issue Warning Failed:", error)
-    await db.collection('adminLogs').add({
+
+    await deps.createAuditLog({
       actionType: 'user_warning',
       adminId,
       adminEmail,
       targetType: 'user',
       targetId: userId,
       status: 'failed',
-      reason: error.message,
-      createdAt: FieldValue.serverTimestamp()
+      reason: error instanceof Error ? error.message : String(error),
     })
+
     throw error
   }
+}
+
+// ============ Convenience Functions (Backward Compatible) ============
+
+/**
+ * Update User Status - Uses Firebase Admin SDK by default
+ * This is the original API for backward compatibility
+ */
+export async function updateUserStatus(
+  params: UpdateStatusParams
+): Promise<UpdateStatusResult> {
+  const deps = createUserStatusDeps()
+  return updateUserStatusWithDeps(params, deps)
+}
+
+/**
+ * Issue Warning - Uses Firebase Admin SDK by default
+ * This is the original API for backward compatibility
+ */
+export async function issueWarning(
+  params: AdminActionParams
+): Promise<IssueWarningResult> {
+  const deps = createWarningIssueDeps()
+  return issueWarningWithDeps(params, deps)
 }

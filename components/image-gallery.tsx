@@ -28,17 +28,24 @@ export function ImageGallery({
   const [isOpen, setIsOpen] = useState(false)
   const [zoom, setZoom] = useState(1)
 
-  // Reset zoom when changing images or closing
-  useEffect(() => {
+  const handleOpen = useCallback(() => {
     setZoom(1)
-  }, [currentIndex, isOpen])
+    setIsOpen(true)
+  }, [])
+
+  const handleOpenChange = useCallback((open: boolean) => {
+    setIsOpen(open)
+    setZoom(1)
+  }, [])
 
   const handlePrevious = useCallback(() => {
     setCurrentIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))
+    setZoom(1)
   }, [images.length])
 
   const handleNext = useCallback(() => {
     setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))
+    setZoom(1)
   }, [images.length])
 
   const handleKeyDown = useCallback(
@@ -93,7 +100,7 @@ export function ImageGallery({
       <div className={cn('relative group', className)}>
         <div 
           className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-zoom-in"
-          onClick={() => setIsOpen(true)}
+          onClick={handleOpen}
         >
           <Image
             src={images[currentIndex] || ''}
@@ -151,7 +158,10 @@ export function ImageGallery({
           {images.map((image, index) => (
             <button
               key={index}
-              onClick={() => setCurrentIndex(index)}
+              onClick={() => {
+                setCurrentIndex(index)
+                setZoom(1)
+              }}
               className={cn(
                 'relative w-16 h-16 rounded-md overflow-hidden flex-shrink-0 border-2 transition-all',
                 thumbnailClassName,
@@ -173,7 +183,7 @@ export function ImageGallery({
       )}
 
       {/* Lightbox Dialog */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none">
           <div className="relative w-full h-[90vh] flex items-center justify-center">
             {/* Close button */}

@@ -321,6 +321,7 @@ endTimer() // logs duration
 
 - **Bun** >= 1.0.0 ([ติดตั้ง Bun](https://bun.sh/docs/installation))
 - **Git**
+- **npm/pnpm/yarn** (optional alternative to Bun)
 
 ### ขั้นตอนการติดตั้ง
 
@@ -331,6 +332,9 @@ cd rmu-campus-x
 
 # 2. ติดตั้ง dependencies
 bun install
+
+# 2b. npm/pnpm/yarn alternative
+npm install
 
 # 3. ตั้งค่า environment variables (ดูหัวข้อถัดไป)
 cp .env.example .env

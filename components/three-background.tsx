@@ -18,6 +18,7 @@ interface ShapeConfig {
 const PRIMARY_COLOR = "#22c55e"
 const SECONDARY_COLOR = "#16a34a"
 const ACCENT_COLOR = "#ef4444"
+const PARTICLE_SEED = 1337
 
 const SHAPES: ShapeConfig[] = [
   { position: [-3, 2, -5], color: PRIMARY_COLOR, speed: 1.2, size: 1.5, shape: "sphere", distort: 0.3 },
@@ -32,6 +33,17 @@ const LITE_SHAPES: ShapeConfig[] = [
   { position: [-2, 1, -4], color: PRIMARY_COLOR, speed: 0.8, size: 1.2, shape: "sphere", distort: 0.2 },
   { position: [2, -1, -5], color: SECONDARY_COLOR, speed: 0.6, size: 1, shape: "box", distort: 0.15 },
 ]
+
+const createSeededRandom = (seed: number) => {
+  let value = seed
+  return () => {
+    value += 0x6d2b79f5
+    let t = value
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 
 function FloatingShape({ 
   position, 
@@ -92,11 +104,12 @@ function FloatingShape({
 
 function Particles({ count = 100 }: { count?: number }) {
   const points = useMemo(() => {
+    const random = createSeededRandom(PARTICLE_SEED + count)
     const positions = new Float32Array(count * 3)
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 20
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 20
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 20
+      positions[i * 3] = (random() - 0.5) * 20
+      positions[i * 3 + 1] = (random() - 0.5) * 20
+      positions[i * 3 + 2] = (random() - 0.5) * 20
     }
     return positions
   }, [count])

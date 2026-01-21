@@ -2,7 +2,7 @@
 
 
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
@@ -109,43 +109,7 @@ export default function AdminReportsPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [user, authLoading])
-
-  const checkAdmin = async () => {
-    if (!user) return
-
-    try {
-      const db = getFirebaseDb()
-      const adminsRef = collection(db, "admins")
-      const q = query(adminsRef, where("email", "==", user.email))
-      const snapshot = await getDocs(q)
-
-      if (snapshot.empty) {
-        toast({
-          title: "ไม่มีสิทธิ์เข้าถึง",
-          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
-          variant: "destructive",
-        })
-        router.push("/dashboard")
-        return
-      }
-
-      setIsAdmin(true)
-      loadData()
-    } catch (error) {
-      console.error("[AdminReports] Error checking admin:", error)
-      router.push("/dashboard")
-    }
-  }
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true)
       const reportsData = await getReports()
@@ -207,7 +171,44 @@ export default function AdminReportsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    const run = async () => {
+      if (!user) return
+
+      try {
+        const db = getFirebaseDb()
+        const adminsRef = collection(db, "admins")
+        const q = query(adminsRef, where("email", "==", user.email))
+        const snapshot = await getDocs(q)
+
+        if (snapshot.empty) {
+          toast({
+            title: "ไม่มีสิทธิ์เข้าถึง",
+            description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+            variant: "destructive",
+          })
+          router.push("/dashboard")
+          return
+        }
+
+        setIsAdmin(true)
+        loadData()
+      } catch (error) {
+        console.error("[AdminReports] Error checking admin:", error)
+        router.push("/dashboard")
+      }
+    }
+
+    run()
+  }, [authLoading, loadData, router, toast, user])
 
   const handleUpdateStatus = async (status: ReportStatus) => {
     if (!selectedReport || !user) return
@@ -381,6 +382,7 @@ export default function AdminReportsPage() {
 
             <TabsContent value="pending" className="m-0">
                <ReportsTable 
+                 key={`pending-${pendingReports.length}`}
                  data={pendingReports} 
                  onView={(r) => setSelectedReport(r)} 
                  emptyMessage="ไม่มีรายการที่รอดำเนินการ"
@@ -389,6 +391,7 @@ export default function AdminReportsPage() {
             
             <TabsContent value="history" className="m-0">
                <ReportsTable 
+                 key={`history-${historyReports.length}`}
                  data={historyReports} 
                  onView={(r) => setSelectedReport(r)} 
                  emptyMessage="ไม่มีประวัติการรายงาน"
@@ -565,11 +568,6 @@ function ReportsTable({
   const itemsPerPage = 10
   const totalPages = Math.ceil(data.length / itemsPerPage)
   const paginatedData = data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-
-  // Reset page when data changes
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [data.length])
 
   return (
     <div>

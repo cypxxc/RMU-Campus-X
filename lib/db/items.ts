@@ -18,26 +18,7 @@ import {
 import { getFirebaseDb } from "@/lib/firebase"
 import type { Item, ItemCategory, ItemStatus } from "@/types"
 import { apiCall, TIMEOUT_CONFIG, type ApiResponse } from "@/lib/api-wrapper"
-
-// Helper to generate keywords with prefixes
-const generateKeywords = (title: string, description: string): string[] => {
-  const text = `${title} ${description}`.toLowerCase()
-  // Split by whitespace and remove empty strings
-  const words = text.split(/[\s,]+/).filter(w => w.length > 0)
-  
-  const keywords = new Set<string>()
-  words.forEach(word => {
-    // Add full word
-    keywords.add(word)
-    // Add prefixes (e.g. "notebook" -> "not", "note", "noteb"...)
-    // Min length 3 to avoid noise
-    for (let i = 3; i < word.length; i++) {
-      keywords.add(word.substring(0, i))
-    }
-  })
-  
-  return Array.from(keywords)
-}
+import { buildSearchConstraints, generateKeywords, refineItemsBySearchTerms } from "./items-helpers"
 
 // Items
 export const createItem = async (itemData: Omit<Item, "id" | "postedAt" | "updatedAt">) => {
@@ -84,15 +65,8 @@ export const getItems = async (filters?: {
       }
       
       // Search logic for base filtering
-      let searchTerms: string[] = []
-      if (filters?.searchQuery) {
-        searchTerms = filters.searchQuery.toLowerCase().split(/\s+/).filter(t => t.length > 0)
-        if (searchTerms.length > 0) {
-           // Improved: Use array-contains-any to find ANY matching term, then filter strict matches in-memory
-           // Limit to 10 terms due to Firestore constraint
-           baseConstraints.push(where("searchKeywords", "array-contains-any", searchTerms.slice(0, 10)))
-        }
-      }
+      const { searchTerms, constraints: searchConstraints } = buildSearchConstraints(filters?.searchQuery)
+      baseConstraints.push(...searchConstraints)
 
       // 1. Get total count
       let totalCount = 0
@@ -114,10 +88,7 @@ export const getItems = async (filters?: {
       
       // In-memory refinement for ALL terms (Intersection)
       if (searchTerms.length > 0) {
-          items = items.filter(item => {
-              const combined = `${item.title} ${item.description}`.toLowerCase()
-              return searchTerms.every(term => combined.includes(term))
-          })
+          items = refineItemsBySearchTerms(items, searchTerms)
       }
       
       const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null
@@ -178,10 +149,9 @@ export const updateItem = async (id: string, data: Partial<Item>): Promise<ApiRe
       if (data.title || data.description) {
           const currentData = docSnap.data() as Item
           
-          // Guard: Prevent editing if item is pending
-          if (currentData.status === 'pending') {
-              throw new Error("Cannot edit item details while an exchange is pending")
-          }
+          // NOTE: Business rule validation (e.g., pending status check)
+          // is now handled in lib/services/items/item-update.ts
+          // This layer only handles data persistence
 
           const newTitle = data.title || currentData.title
           const newDesc = data.description || currentData.description

@@ -4,8 +4,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
-import { cloudinary } from "@/lib/cloudinary"
+import { verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
+import { deleteItemAsOwner } from "@/lib/services/items/item-deletion"
+import { createFirebaseAdminItemDeps } from "@/lib/services/items/firebase-admin-deps"
+import { isItemDeletionError } from "@/lib/services/items/errors"
 
 export const runtime = 'nodejs'
 
@@ -23,62 +25,17 @@ export async function DELETE(
     const decodedToken = await verifyIdToken(token) 
     if (!decodedToken) return NextResponse.json({ error: "Invalid token" }, { status: 401 })
 
-    const db = getAdminDb()
-    const itemRef = db.collection("items").doc(itemId)
-    const itemDoc = await itemRef.get()
-    
-    if (!itemDoc.exists) {
-        return NextResponse.json({ error: "Item not found" }, { status: 404 })
-    }
-    
-    const itemData = itemDoc.data()
     const userId = decodedToken.uid
+    const deps = createFirebaseAdminItemDeps()
 
-    // 2. Verify Ownership
-    if (itemData?.postedBy !== userId) {
-        // Admin override could be added here if we merge logic, but this is user-facing.
-        return NextResponse.json({ error: "Forbidden: You do not own this item" }, { status: 403 })
+    try {
+      await deleteItemAsOwner({ itemId, requesterId: userId }, deps)
+    } catch (error) {
+      if (isItemDeletionError(error)) {
+        return NextResponse.json({ error: error.message }, { status: error.status })
+      }
+      throw error
     }
-
-    // 3. Status Guard (Double Check)
-    if (['pending'].includes(itemData?.status)) {
-        return NextResponse.json({ error: "Cannot delete item with active exchange" }, { status: 409 })
-    }
-    
-    // Also check for active exchanges in 'exchanges' collection just in case item status is desynced
-    const exchangesQuery = db.collection('exchanges')
-        .where('itemId', '==', itemId)
-        .where('status', 'in', ['pending', 'accepted', 'in_progress'])
-        .limit(1)
-    
-    const activeExchanges = await exchangesQuery.get()
-    if (!activeExchanges.empty) {
-        return NextResponse.json({ error: "Cannot delete item with active exchange" }, { status: 409 })
-    }
-
-    // 4. Cloudinary Cleanup
-    const imageUrls = itemData?.imageUrls || []
-    if (itemData?.imageUrl) imageUrls.push(itemData.imageUrl) // Legacy support
-    
-    const publicIds: string[] = []
-    
-    imageUrls.forEach((url: string) => {
-        if (url.includes("cloudinary")) {
-            const matches = url.match(/\/rmu-exchange\/items\/([^/.]+)/)
-            if (matches?.[1]) publicIds.push(`rmu-exchange/items/${matches[1]}`)
-        }
-    })
-    
-    if (publicIds.length > 0) {
-        try {
-            await cloudinary.api.delete_resources(publicIds, { type: 'upload', resource_type: 'image' })
-        } catch (e) {
-            console.error("[ItemDelete] Cloudinary cleanup failed:", e)
-        }
-    }
-
-    // 5. Delete Firestore Doc
-    await itemRef.delete()
 
     return NextResponse.json({ success: true, message: "Item deleted successfully" })
 

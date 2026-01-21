@@ -2,7 +2,7 @@
 
 
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
@@ -75,43 +75,7 @@ export default function AdminLogsPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [user, authLoading])
-
-  const checkAdmin = async () => {
-    if (!user) return
-
-    try {
-      const db = getFirebaseDb()
-      const adminsRef = collection(db, "admins")
-      const q = query(adminsRef, where("email", "==", user.email))
-      const snapshot = await getDocs(q)
-
-      if (snapshot.empty) {
-        toast({
-          title: "ไม่มีสิทธิ์เข้าถึง",
-          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
-          variant: "destructive",
-        })
-        router.push("/dashboard")
-        return
-      }
-
-      setIsAdmin(true)
-      loadLogs()
-    } catch (error) {
-      console.error("[AdminLogs] Error checking admin:", error)
-      router.push("/dashboard")
-    }
-  }
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true)
     try {
       const options: any = { limitCount: 100 }
@@ -136,13 +100,50 @@ export default function AdminLogsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filterAction, filterTarget, toast])
+
+  const checkAdmin = useCallback(async () => {
+    if (!user) return
+
+    try {
+      const db = getFirebaseDb()
+      const adminsRef = collection(db, "admins")
+      const q = query(adminsRef, where("email", "==", user.email))
+      const snapshot = await getDocs(q)
+
+      if (snapshot.empty) {
+        toast({
+          title: "ไม่มีสิทธิ์เข้าถึง",
+          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+          variant: "destructive",
+        })
+        router.push("/dashboard")
+        return
+      }
+
+      setIsAdmin(true)
+      loadLogs()
+    } catch (error) {
+      console.error("[AdminLogs] Error checking admin:", error)
+      router.push("/dashboard")
+    }
+  }, [loadLogs, router, toast, user])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    checkAdmin()
+  }, [authLoading, checkAdmin, router, user])
+
 
   useEffect(() => {
     if (isAdmin) {
       loadLogs()
     }
-  }, [filterAction, filterTarget, isAdmin])
+  }, [isAdmin, loadLogs])
 
   if (loading || !isAdmin) {
     return (

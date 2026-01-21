@@ -34,8 +34,7 @@ export function Logo({ size = "md", showIcon = true, href = "/dashboard", classN
   }
 
   const sizeConfig = sizes[size]
-
-  const LogoContent = () => (
+  const content = (
     <div className={`flex items-center ${sizeConfig.container} ${className}`}>
       {showIcon && (
         <div className={`${sizeConfig.icon} relative shrink-0`}>
@@ -65,11 +64,10 @@ export function Logo({ size = "md", showIcon = true, href = "/dashboard", classN
         href={href}
         className="hover:opacity-80 transition-opacity"
       >
-        <LogoContent />
+        {content}
       </Link>
     )
   }
 
-  return <LogoContent />
+  return content
 }
-

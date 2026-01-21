@@ -4,6 +4,7 @@
  */
 
 import type { ExchangeStatus } from "@/types"
+import { getReportTypeLabel } from "@/lib/reports/report-types"
 import type { LinePushResponse, LineTextMessage } from "./types"
 import { sendPushMessage, sendReplyMessage } from "./core"
 import { 
@@ -102,19 +103,13 @@ export async function notifyAdminsNewReport(
   baseUrl: string
 ): Promise<void> {
   console.log(`[LINE Admin] Sending report notification to ${adminLineUserIds.length} admin(s)`)
-  
-  const reportTypeLabels: Record<string, string> = {
-    item_report: "รายงานสิ่งของ",
-    exchange_report: "รายงานการแลกเปลี่ยน",
-    chat_report: "รายงานแชท",
-    user_report: "รายงานผู้ใช้",
-  }
+  const reportTypeLabel = getReportTypeLabel(reportType) || reportType
 
   const message: LineTextMessage = {
     type: "text",
     text: `🚨 [Admin] มีรายงานใหม่
 
-📋 ประเภท: ${reportTypeLabels[reportType] || reportType}
+📋 ประเภท: ${reportTypeLabel}
 🎯 เป้าหมาย: ${targetTitle}
 👤 ผู้รายงาน: ${reporterEmail}
 
@@ -274,18 +269,13 @@ export async function notifyUserReported(
   reportType: string,
   targetTitle: string
 ): Promise<LinePushResponse> {
-  const reportTypeLabels: Record<string, string> = {
-    item_report: "สิ่งของ",
-    exchange_report: "การแลกเปลี่ยน",
-    chat_report: "ข้อความแชท",
-    user_report: "บัญชีผู้ใช้",
-  }
+  const reportTypeLabel = getReportTypeLabel(reportType) || reportType
 
   const message: LineTextMessage = {
     type: "text",
     text: `⚠️ แจ้งเตือน
 
-มีผู้รายงาน${reportTypeLabels[reportType] || reportType}ของคุณ
+มีผู้รายงาน${reportTypeLabel}ของคุณ
 🎯 ${targetTitle}
 
 กรุณาตรวจสอบและปฏิบัติตามกฎของชุมชน`,

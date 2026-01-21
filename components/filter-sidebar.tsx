@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader } from "@/components/ui/sheet"
 import type { ItemCategory, ItemStatus } from "@/types"
 import { Filter, Package, Check } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { CATEGORY_OPTIONS, STATUS_OPTIONS } from "@/lib/constants"
 
 interface FilterSidebarProps {
@@ -135,11 +135,6 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
 
 export function FilterSidebar({ categories, status, onCategoriesChange, onStatusChange }: FilterSidebarProps) {
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const activeFilters = (categories.length > 0 ? 1 : 0) + (status !== "all" ? 1 : 0)
 
@@ -164,8 +159,7 @@ export function FilterSidebar({ categories, status, onCategoriesChange, onStatus
       </Card>
 
       {/* Mobile Filter Button */}
-      {mounted && (
-        <div className="lg:hidden">
+      <div className="lg:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" className="w-full gap-2">
@@ -205,8 +199,7 @@ export function FilterSidebar({ categories, status, onCategoriesChange, onStatus
               </div>
             </SheetContent>
           </Sheet>
-        </div>
-      )}
+      </div>
     </>
   )
 }
