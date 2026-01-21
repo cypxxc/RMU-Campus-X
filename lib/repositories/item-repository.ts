@@ -3,7 +3,7 @@
 // ============================================================
 
 import type { Item, ItemCategory, ItemStatus } from "@/types"
-import type { IRepository, PaginatedResult, RepositoryError } from "./types"
+import type { IRepository, PaginatedResult } from "./types"
 
 // ============ Types ============
 
@@ -81,7 +81,7 @@ export class FirestoreItemRepository implements IItemRepository {
   async findAll(): Promise<Item[]> {
     const q = query(this.getCollection(), orderBy("postedAt", "desc"))
     const snapshot = await getDocs(q)
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Item)
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Item)
   }
 
   async findByOwner(ownerId: string): Promise<Item[]> {
@@ -91,7 +91,7 @@ export class FirestoreItemRepository implements IItemRepository {
       orderBy("postedAt", "desc")
     )
     const snapshot = await getDocs(q)
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Item)
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Item)
   }
 
   async findPaginated(
@@ -135,7 +135,7 @@ export class FirestoreItemRepository implements IItemRepository {
 
     const q = query(this.getCollection(), ...dataConstraints)
     const snapshot = await getDocs(q)
-    let items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Item)
+    let items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Item)
 
     // In-memory refinement for search
     if (searchTerms.length > 0) {

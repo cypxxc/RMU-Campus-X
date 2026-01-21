@@ -1,0 +1,350 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "RMU-Campus X API",
+    "description": "API สำหรับระบบแลกเปลี่ยนสิ่งของของนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม",
+    "version": "1.0.0",
+    "contact": {
+      "name": "RMU-Campus X Support",
+      "email": "support@rmu.ac.th"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://rmu-campus-x.vercel.app",
+      "description": "Production Server"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Development Server"
+    }
+  ],
+  "tags": [
+    { "name": "Items", "description": "สิ่งของ" },
+    { "name": "Exchanges", "description": "การแลกเปลี่ยน" },
+    { "name": "Admin", "description": "Administration" },
+    { "name": "Upload", "description": "อัปโหลดไฟล์" },
+    { "name": "LINE", "description": "LINE Integration" },
+    { "name": "Support", "description": "ระบบ Support" }
+  ],
+  "paths": {
+    "/api/items": {
+      "get": {
+        "tags": ["Items"],
+        "summary": "ดึงรายการสิ่งของ",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "กรองตามหมวดหมู่"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["available", "pending", "completed"] }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "รายการสิ่งของ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/items/{id}": {
+      "get": {
+        "tags": ["Items"],
+        "summary": "ดึงข้อมูลสิ่งของตาม ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ข้อมูลสิ่งของ",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Item" }
+              }
+            }
+          },
+          "404": { "description": "ไม่พบสิ่งของ" }
+        }
+      },
+      "delete": {
+        "tags": ["Items"],
+        "summary": "ลบสิ่งของ",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "ลบสำเร็จ" },
+          "403": { "description": "ไม่มีสิทธิ์" },
+          "404": { "description": "ไม่พบสิ่งของ" }
+        }
+      }
+    },
+    "/api/exchanges": {
+      "get": {
+        "tags": ["Exchanges"],
+        "summary": "ดึงรายการแลกเปลี่ยนของผู้ใช้",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "รายการแลกเปลี่ยน",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExchangeListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Exchanges"],
+        "summary": "สร้างคำขอแลกเปลี่ยน",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["itemId"],
+                "properties": {
+                  "itemId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "สร้างสำเร็จ" },
+          "400": { "description": "ข้อมูลไม่ถูกต้อง" },
+          "409": { "description": "มีการแลกเปลี่ยนอยู่แล้ว" }
+        }
+      }
+    },
+    "/api/exchanges/respond": {
+      "post": {
+        "tags": ["Exchanges"],
+        "summary": "ตอบรับ/ปฏิเสธการแลกเปลี่ยน",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["exchangeId", "action"],
+                "properties": {
+                  "exchangeId": { "type": "string" },
+                  "action": { "type": "string", "enum": ["accept", "reject"] },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "ดำเนินการสำเร็จ" }
+        }
+      }
+    },
+    "/api/upload": {
+      "post": {
+        "tags": ["Upload"],
+        "summary": "อัปโหลดรูปภาพ",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "อัปโหลดสำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "ไฟล์ไม่ถูกต้อง" },
+          "413": { "description": "ไฟล์ใหญ่เกินไป (max 10MB)" }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "ดึงรายการผู้ใช้ทั้งหมด",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "รายการผู้ใช้" },
+          "403": { "description": "ต้องเป็น Admin" }
+        }
+      }
+    },
+    "/api/admin/users/{id}/status": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "อัปเดตสถานะผู้ใช้",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": { "type": "string", "enum": ["ACTIVE", "SUSPENDED", "BANNED"] },
+                  "reason": { "type": "string" },
+                  "suspendDays": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "อัปเดตสำเร็จ" }
+        }
+      }
+    },
+    "/api/line/link": {
+      "post": {
+        "tags": ["LINE"],
+        "summary": "เชื่อมต่อบัญชี LINE",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "รหัสเชื่อมต่อ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "linkCode": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Firebase ID Token"
+      }
+    },
+    "schemas": {
+      "Item": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "category": { "type": "string", "enum": ["electronics", "books", "furniture", "clothing", "sports", "other"] },
+          "status": { "type": "string", "enum": ["available", "pending", "completed"] },
+          "imageUrls": { "type": "array", "items": { "type": "string" } },
+          "location": { "type": "string" },
+          "postedBy": { "type": "string" },
+          "postedByEmail": { "type": "string" },
+          "postedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Exchange": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "itemId": { "type": "string" },
+          "itemTitle": { "type": "string" },
+          "ownerId": { "type": "string" },
+          "requesterId": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "accepted", "in_progress", "completed", "cancelled", "rejected"] },
+          "ownerConfirmed": { "type": "boolean" },
+          "requesterConfirmed": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ItemListResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Item" }
+          }
+        }
+      },
+      "ExchangeListResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Exchange" }
+          }
+        }
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error": { "type": "string" }
+        }
+      }
+    }
+  }
+}

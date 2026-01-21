@@ -45,3 +45,6 @@ public/worker-*.js.map
 # Backups
 backups/
 
+
+# Sentry Config File
+.env.sentry-build-plugin

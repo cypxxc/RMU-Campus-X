@@ -7,7 +7,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Firebase](https://img.shields.io/badge/Firebase-12.5-orange?logo=firebase)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/Tests-69%20passed-success)]()
+[![Tests](https://img.shields.io/badge/Tests-84%20passed-success)]()
+[![Sentry](https://img.shields.io/badge/Sentry-Enabled-362D59?logo=sentry)](https://sentry.io)
 
 ---
 
@@ -62,6 +63,24 @@ User Action → React Component → API Route → Firebase/Service → Response
      └──────────► Toast ◄──────────┴──────────────┴──────────────┘
                 Notification
 ```
+
+### Clean Architecture Patterns
+
+ระบบใช้หลัก **SOLID** และ **Clean Architecture**:
+
+| Pattern | ตำแหน่ง | รายละเอียด |
+|---------|---------|-------------|
+| **Repository** | `lib/repositories/` | Data access abstraction |
+| **Use Cases** | `lib/use-cases/` | Business logic encapsulation |
+| **Events** | `lib/events/` | Event-driven side effects |
+| **Errors** | `lib/errors/` | Centralized error handling |
+
+### Observability
+
+| Tool | การใช้งาน |
+|------|-----------|
+| **Sentry** | Error tracking & Performance monitoring |
+| **Vercel Analytics** | Web analytics |
 
 ---
 
@@ -452,6 +471,8 @@ bun start
 ---
 
 ## 📖 API Documentation
+
+> 🔗 **Interactive API Docs:** [/api-docs](/api-docs) (Swagger UI)
 
 ### API Endpoints
 
