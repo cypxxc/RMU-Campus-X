@@ -48,3 +48,14 @@ backups/
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Cursor AI Editor
+.cursor/
+
+# Firebase DataConnect Generated (regenerated on build)
+src/dataconnect-generated/
+dataconnect-generated/
+
+# Bun Cache
+*.db
+bun.lockb.bak
