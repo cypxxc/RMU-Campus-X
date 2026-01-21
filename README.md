@@ -34,7 +34,7 @@
 │  /api/admin/*     │  /api/exchanges/*   │  /api/line/*          │
 │  /api/reports/*   │  /api/support/*     │  /api/upload/*        │
 │  ────────────────────────────────────────────────────────────── │
-│  • Rate Limiting Middleware (100 req/min)                       │
+│  • Rate Limiting Middleware (Upstash Redis / In-Memory)          │
 │  • Firebase Admin SDK Authentication                            │
 │  • API Response Wrapper with Timeout                            │
 └───────────────────────────┬─────────────────────────────────────┘
@@ -70,16 +70,16 @@ User Action → React Component → API Route → Firebase/Service → Response
 
 | Pattern | ตำแหน่ง | รายละเอียด |
 |---------|---------|-------------|
-| **Repository** | `lib/repositories/` | Data access abstraction |
-| **Use Cases** | `lib/use-cases/` | Business logic encapsulation |
-| **Events** | `lib/events/` | Event-driven side effects |
-| **Errors** | `lib/errors/` | Centralized error handling |
+| **Services** | `lib/services/` | Business logic with DIP |
+| **Rate Limiting** | `lib/upstash-rate-limiter.ts` | Scalable Redis rate limiting |
+| **Schemas** | `lib/schemas.ts` | Zod validation with Thai messages |
 
 ### Observability
 
 | Tool | การใช้งาน |
 |------|-----------|
 | **Sentry** | Error tracking & Performance monitoring |
+| **Upstash Redis** | Scalable rate limiting (optional) |
 | **Vercel Analytics** | Web analytics |
 
 ---
