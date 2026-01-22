@@ -34,9 +34,10 @@
 │  /api/admin/*     │  /api/exchanges/*   │  /api/line/*          │
 │  /api/reports/*   │  /api/support/*     │  /api/upload/*        │
 │  ────────────────────────────────────────────────────────────── │
-│  • Rate Limiting Middleware (Upstash Redis / In-Memory)          │
+│  • Distributed Rate Limiting (Upstash Redis)                    │
 │  • Firebase Admin SDK Authentication                            │
 │  • API Response Wrapper with Timeout                            │
+│  • Server-Side Validation & Type Safety                         │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
                             ▼
@@ -256,10 +257,12 @@ rmu-campus-x/
 
 ### 7. ความปลอดภัย (Security)
 
-- **Rate Limiting** - 100 req/min สำหรับ API ทั่วไป
-- **Image Validation** - ตรวจสอบประเภทไฟล์
-- **Firebase Security Rules** - ป้องกันการเข้าถึงโดยไม่ได้รับอนุญาต
-- **Input Validation** - Zod Schema Validation
+- **Distributed Rate Limiting** - Upstash Redis backing (100 req/min)
+- **Image Magic Byte Validation** - ตรวจสอบไฟล์จริง (JPEG, PNG, GIF, WebP)
+- **API Validation Wrapper** - Server-side Zod validation ทุก request
+- **Exchange State Machine** - ป้องกันสถานะเปลี่ยนผิดปกติ
+- **Request ID Tracking** - Traceable requests for debugging
+- **Firebase Security Rules** - Defenses in depth for DB & Storage
 
 ### 8. Progressive Web App (PWA)
 
@@ -406,6 +409,11 @@ LINE_CHANNEL_SECRET=your_channel_secret
 
 # Application
 NEXT_PUBLIC_BASE_URL=https://your-domain.com
+
+# System Hardening (Production)
+UPSTASH_REDIS_REST_URL=https://your-redis.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_token
+
 ```
 
 ---
@@ -568,10 +576,10 @@ interface ApiResponse<T> {
 | **Session Management** | `lib/session-manager.ts` | จัดการ sessions หลายอุปกรณ์ |
 | **Caching** | `lib/cache.ts` | In-memory cache with TTL |
 | **Feature Flags** | `lib/feature-flags.ts` | เปิด/ปิด features ได้ |
-| **Search Engine** | `lib/search.ts` | Fuzzy search + relevance scoring |
-| **Image Gallery** | `components/image-gallery.tsx` | Lightbox + zoom |
-| **Database Backup** | `scripts/backup-firestore.ts` | Script สำรองข้อมูล |
-| **Migrations** | `scripts/migrate.ts` | Database schema migrations |
+| **Searching** | `lib/search.ts` | Fuzzy search + scoring |
+| **Backups** | `.github/workflows/backup.yml` | Automated daily Firestore backups |
+| **Validation** | `lib/api-validation.ts` | Centralized API validation wrapper |
+| **State Machine** | `lib/exchange-state-machine.ts` | Exchange status transitions |
 
 ---
 
