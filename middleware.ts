@@ -1,16 +1,33 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { checkRateLimit, getClientIP, RATE_LIMITS } from './lib/rate-limiter'
+import { checkRateLimitScalable, getClientIP, RATE_LIMITS } from './lib/upstash-rate-limiter'
+
+/**
+ * Generate a unique request ID for tracing
+ * Format: timestamp-random (e.g., "1705912345678-a1b2c3d4")
+ */
+function generateRequestId(): string {
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).substring(2, 10)
+  return `${timestamp}-${random}`
+}
 
 /**
  * Next.js Middleware for rate limiting API requests
+ * Uses Upstash Redis for distributed rate limiting (persists across deploys)
+ * Falls back to in-memory if Upstash env vars are not configured
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  
+  // Generate unique request ID for tracing
+  const requestId = request.headers.get('X-Request-Id') || generateRequestId()
   
   // Only apply rate limiting to API routes
   if (!pathname.startsWith('/api')) {
-    return NextResponse.next()
+    const response = NextResponse.next()
+    response.headers.set('X-Request-Id', requestId)
+    return response
   }
   
   const clientIP = getClientIP(request)
@@ -27,7 +44,7 @@ export function middleware(request: NextRequest) {
   // Create unique key for this client + endpoint type
   const key = `${clientIP}:${pathname.split('/')[2] || 'api'}`
   
-  const { allowed, remaining, resetTime } = checkRateLimit(
+  const { allowed, remaining, resetTime } = await checkRateLimitScalable(
     key,
     rateLimitConfig.limit,
     rateLimitConfig.windowMs
@@ -38,12 +55,14 @@ export function middleware(request: NextRequest) {
     return new NextResponse(
       JSON.stringify({
         error: 'Too many requests. Please try again later.',
-        retryAfter: Math.ceil((resetTime - Date.now()) / 1000)
+        retryAfter: Math.ceil((resetTime - Date.now()) / 1000),
+        requestId, // Include for debugging
       }),
       {
         status: 429,
         headers: {
           'Content-Type': 'application/json',
+          'X-Request-Id': requestId,
           'X-RateLimit-Limit': String(rateLimitConfig.limit),
           'X-RateLimit-Remaining': '0',
           'X-RateLimit-Reset': String(Math.ceil(resetTime / 1000)),
@@ -53,8 +72,9 @@ export function middleware(request: NextRequest) {
     )
   }
   
-  // Add rate limit headers to response
+  // Add rate limit and request ID headers to response
   const response = NextResponse.next()
+  response.headers.set('X-Request-Id', requestId)
   response.headers.set('X-RateLimit-Limit', String(rateLimitConfig.limit))
   response.headers.set('X-RateLimit-Remaining', String(remaining))
   response.headers.set('X-RateLimit-Reset', String(Math.ceil(resetTime / 1000)))
@@ -64,5 +84,6 @@ export function middleware(request: NextRequest) {
 
 // Configure which routes to apply middleware to
 export const config = {
-  matcher: '/api/:path*'
+  matcher: ['/api/:path*', '/((?!_next/static|_next/image|favicon.ico).*)']
 }
+

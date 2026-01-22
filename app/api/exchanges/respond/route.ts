@@ -5,15 +5,12 @@
  */
 
 import { NextRequest } from "next/server"
-import { successResponse, ApiErrors, validateRequiredFields, parseRequestBody, getAuthToken } from "@/lib/api-response"
+import { successResponse, ApiErrors, getAuthToken } from "@/lib/api-response"
 import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
-
-interface RespondBody {
-  exchangeId: string
-  action: 'accept' | 'reject'
-  userId: string // Owner ID
-}
+import { respondExchangeSchema } from "@/lib/schemas"
+import { validateTransition } from "@/lib/exchange-state-machine"
+import type { ExchangeStatus } from "@/types"
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,22 +26,22 @@ export async function POST(request: NextRequest) {
       return ApiErrors.unauthorized("Invalid or expired session")
     }
 
-    const body = await parseRequestBody<RespondBody>(request)
-    if (!body) {
-      return ApiErrors.badRequest("Invalid request body")
+    // Parse and validate body with Zod
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return ApiErrors.badRequest("Invalid JSON body")
     }
 
-    const validation = validateRequiredFields(body, ["exchangeId", "action", "userId"])
-    if (!validation.valid) {
-        return ApiErrors.missingFields(validation.missing)
+    const validation = respondExchangeSchema.safeParse(body)
+    if (!validation.success) {
+      const errors = validation.error.errors.map(e => e.message).join(", ")
+      return ApiErrors.badRequest(`Validation failed: ${errors}`)
     }
 
-    const { exchangeId, action, userId } = body
-    
-    // Check ownership (Auth Token vs Body)
-    if (decodedToken.uid !== userId) {
-        return ApiErrors.forbidden("User ID mismatch")
-    }
+    const { exchangeId, action } = validation.data
+    const userId = decodedToken.uid // Use token's uid for security
 
     const db = getAdminDb()
 
@@ -58,15 +55,18 @@ export async function POST(request: NextRequest) {
       }
 
       const exchangeData = exchangeDoc.data()
+      const currentStatus = exchangeData?.status as ExchangeStatus
       
       // Ownership Check
       if (exchangeData?.ownerId !== userId) {
           throw new Error("Only the item owner can respond to this exchange")
       }
 
-      // State Check
-      if (exchangeData?.status !== 'pending') {
-          throw new Error(`Cannot respond to exchange in status: ${exchangeData?.status}`)
+      // State machine validation
+      const newStatus: ExchangeStatus = action === 'accept' ? 'accepted' : 'rejected'
+      const transitionError = validateTransition(currentStatus, newStatus)
+      if (transitionError) {
+        throw new Error(transitionError)
       }
 
       const itemId = exchangeData?.itemId
@@ -123,8 +123,9 @@ export async function POST(request: NextRequest) {
 
     return successResponse({ success: true, action })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[RespondExchange] Error:", error)
-    return ApiErrors.internalError(error.message)
+    const message = error instanceof Error ? error.message : "Unknown error"
+    return ApiErrors.internalError(message)
   }
 }
