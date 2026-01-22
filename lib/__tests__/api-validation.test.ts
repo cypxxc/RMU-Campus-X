@@ -44,7 +44,7 @@ describe('API Validation Types', () => {
       
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0].message).toBe('Invalid email')
+        expect(result.error.errors[0]?.message).toBe('Invalid email')
       }
     })
 
@@ -55,7 +55,7 @@ describe('API Validation Types', () => {
       
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0].path).toContain('name')
+        expect(result.error.errors[0]?.path).toContain('name')
       }
     })
 
@@ -127,7 +127,7 @@ describe('API Validation Types', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         const formatted = formatZodErrors(result.error)
-        expect(formatted[0].field).toBe('user.profile.name')
+        expect(formatted[0]?.field).toBe('user.profile.name')
       }
     })
   })
