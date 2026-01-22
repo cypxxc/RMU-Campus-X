@@ -26,6 +26,14 @@ function initApp(): FirebaseApp {
   return firebaseApp
 }
 
+/**
+ * Get or initialize the Firebase app instance
+ * Exported for use by App Check and other modules
+ */
+export function getFirebaseApp(): FirebaseApp {
+  return initApp()
+}
+
 export function getFirebaseAuth(): Auth {
   if (typeof window === "undefined") {
     throw new Error("Firebase Auth should only be used on the client side")

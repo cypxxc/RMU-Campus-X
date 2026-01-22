@@ -578,8 +578,11 @@ interface ApiResponse<T> {
 | **Feature Flags** | `lib/feature-flags.ts` | เปิด/ปิด features ได้ |
 | **Searching** | `lib/search.ts` | Fuzzy search + scoring |
 | **Backups** | `.github/workflows/backup.yml` | Automated daily Firestore backups |
+| **Restore** | `scripts/restore-firestore.ts` | Restore data from backup |
 | **Validation** | `lib/api-validation.ts` | Centralized API validation wrapper |
 | **State Machine** | `lib/exchange-state-machine.ts` | Exchange status transitions |
+| **Health Check** | `/api/health` | System status monitoring |
+| **App Check** | `lib/app-check.ts` | Firebase App Check (bot protection) |
 
 ---
 
