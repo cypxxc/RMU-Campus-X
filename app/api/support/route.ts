@@ -1,124 +1,132 @@
 /**
  * Support Tickets API Route
  * สร้าง Support Ticket พร้อมส่ง LINE Notification ไปยัง Admin
+ * 
+ * ✅ Uses withValidation wrapper for consistent validation and auth
  */
 
-import { NextRequest } from "next/server"
-import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
+import { NextResponse } from "next/server"
+import { z } from "zod"
+import { withValidation, type ValidationContext } from "@/lib/api-validation"
+import { getAdminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { notifyAdminsNewSupportTicket } from "@/lib/line"
-import { successResponse, ApiErrors, validateRequiredFields, parseRequestBody, getAuthToken } from "@/lib/api-response"
-import type { SupportTicket, User } from "@/types"
+import type { User } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
-interface CreateTicketBody {
-  subject: string
-  category: SupportTicket["category"]
-  description: string
-  userId: string
-  userEmail: string
-}
+/**
+ * Zod schema for support ticket creation
+ */
+const createTicketSchema = z.object({
+  subject: z.string().min(1, "กรุณาระบุหัวข้อ").max(200, "หัวข้อยาวเกินไป"),
+  category: z.enum(["general", "technical", "account", "exchange", "report", "other"], {
+    errorMap: () => ({ message: "กรุณาเลือกหมวดหมู่" })
+  }),
+  description: z.string().min(10, "คำอธิบายต้องมีอย่างน้อย 10 ตัวอักษร").max(2000, "คำอธิบายยาวเกินไป"),
+})
 
-export async function POST(request: NextRequest) {
-  try {
-    // Verify authentication and prevent spoofed userId/userEmail
-    const token = getAuthToken(request)
-    if (!token) {
-      return ApiErrors.unauthorized("Missing authentication token")
-    }
+type CreateTicketInput = z.infer<typeof createTicketSchema>
 
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) {
-      return ApiErrors.unauthorized("Invalid or expired session")
-    }
-
-    const body = await parseRequestBody<CreateTicketBody>(request)
-    if (!body) {
-      return ApiErrors.badRequest("Invalid request body")
-    }
-
-    const { subject, category, description } = body
-    const userId = decoded.uid
-    const userEmail = decoded.email || body.userEmail || ""
-
-    // Validate required fields
-    const validation = validateRequiredFields(body, ["subject", "category"])
-    if (!validation.valid) {
-      return ApiErrors.missingFields(validation.missing)
-    }
-
-    const db = getAdminDb()
-
-    // Create ticket document
-    const ticketData = {
-      subject,
-      category,
-      description: description || "",
-      userId,
-      userEmail: userEmail || "",
-      status: "new" as const,
-      priority: 2, // Default medium priority
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }
-
-    const docRef = await db.collection("support_tickets").add(ticketData)
-    console.log("[Support API] Created ticket:", docRef.id)
-
-    // Create in-app notifications for admins
-    const adminsSnapshot = await db.collection("admins").get()
-    
-    for (const adminDoc of adminsSnapshot.docs) {
-      const adminData = adminDoc.data()
-      const usersSnapshot = await db.collection("users")
-        .where("email", "==", adminData.email)
-        .get()
-
-      if (!usersSnapshot.empty && usersSnapshot.docs[0]) {
-        const adminUserId = usersSnapshot.docs[0].data().uid
-        await db.collection("notifications").add({
-          userId: adminUserId,
-          title: "📩 Support Ticket ใหม่",
-          message: `"${subject}" จาก ${userEmail}`,
-          type: "support",
-          relatedId: docRef.id,
-          isRead: false,
-          createdAt: FieldValue.serverTimestamp(),
-        })
-      }
-    }
-
-    // ============ LINE Notification to Admins ============
-    const adminLineUserIds = await getAdminLineUserIds(db)
-    
-    if (adminLineUserIds.length > 0) {
-      console.log("[Support API] Sending LINE notification to", adminLineUserIds.length, "admins")
-      
-      await notifyAdminsNewSupportTicket(
-        adminLineUserIds,
-        subject,
-        category,
-        userEmail,
-        BASE_URL
+/**
+ * POST /api/support
+ * Create a new support ticket
+ */
+export const POST = withValidation(
+  createTicketSchema,
+  async (_request, data: CreateTicketInput, ctx: ValidationContext | null) => {
+    if (!ctx) {
+      return NextResponse.json(
+        { error: "Authentication context missing", code: "AUTH_ERROR" },
+        { status: 401 }
       )
     }
 
-    return successResponse({ ticketId: docRef.id })
-  } catch (error) {
-    console.error("[Support API] Error:", error)
-    return ApiErrors.internalError()
+    try {
+      const db = getAdminDb()
+      const { subject, category, description } = data
+
+      // Create ticket document
+      const ticketData = {
+        subject,
+        category,
+        description,
+        userId: ctx.userId,
+        userEmail: ctx.email || "",
+        status: "new" as const,
+        priority: 2,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }
+
+      const docRef = await db.collection("support_tickets").add(ticketData)
+
+      // Create in-app notifications for admins (fire and forget)
+      notifyAdminsInApp(db, subject, ctx.email || "", docRef.id).catch(err => {
+        console.error("[Support API] Admin notification error:", err)
+      })
+
+      // LINE Notification to Admins (fire and forget)
+      sendAdminLineNotifications(db, subject, category, ctx.email || "").catch(err => {
+        console.error("[Support API] LINE notification error:", err)
+      })
+
+      return NextResponse.json({
+        success: true,
+        data: { ticketId: docRef.id }
+      })
+    } catch (error) {
+      console.error("[Support API] Error:", error)
+      return NextResponse.json(
+        { error: "Internal server error", code: "INTERNAL_ERROR" },
+        { status: 500 }
+      )
+    }
+  },
+  { requireAuth: true }
+)
+
+// Helper: Notify admins in-app
+async function notifyAdminsInApp(
+  db: FirebaseFirestore.Firestore, 
+  subject: string, 
+  userEmail: string,
+  ticketId: string
+): Promise<void> {
+  const adminsSnapshot = await db.collection("admins").get()
+  
+  for (const adminDoc of adminsSnapshot.docs) {
+    const adminData = adminDoc.data()
+    const usersSnapshot = await db.collection("users")
+      .where("email", "==", adminData.email)
+      .get()
+
+    if (!usersSnapshot.empty && usersSnapshot.docs[0]) {
+      const adminUserId = usersSnapshot.docs[0].data().uid
+      await db.collection("notifications").add({
+        userId: adminUserId,
+        title: "📩 Support Ticket ใหม่",
+        message: `"${subject}" จาก ${userEmail}`,
+        type: "support",
+        relatedId: ticketId,
+        isRead: false,
+        createdAt: FieldValue.serverTimestamp(),
+      })
+    }
   }
 }
 
-// Helper function to get admin LINE User IDs
-async function getAdminLineUserIds(db: FirebaseFirestore.Firestore): Promise<string[]> {
+// Helper: Send LINE notifications to admins
+async function sendAdminLineNotifications(
+  db: FirebaseFirestore.Firestore,
+  subject: string,
+  category: string,
+  userEmail: string
+): Promise<void> {
   const adminsSnapshot = await db.collection("admins").get()
   const adminEmails = adminsSnapshot.docs.map(doc => doc.data().email)
 
-  if (adminEmails.length === 0) {
-    return []
-  }
+  if (adminEmails.length === 0) return
 
   const lineUserIds: string[] = []
 
@@ -135,6 +143,7 @@ async function getAdminLineUserIds(db: FirebaseFirestore.Firestore): Promise<str
     }
   }
 
-  return lineUserIds
+  if (lineUserIds.length > 0) {
+    await notifyAdminsNewSupportTicket(lineUserIds, subject, category, userEmail, BASE_URL)
+  }
 }
-

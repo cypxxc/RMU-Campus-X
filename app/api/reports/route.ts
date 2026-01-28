@@ -1,95 +1,95 @@
 /**
  * Reports API Route
  * สร้าง Report พร้อมส่ง LINE Notification ไปยัง Admin
+ * 
+ * ✅ Uses withValidation wrapper for consistent validation and auth
  */
 
-import { NextRequest } from "next/server"
-import { verifyIdToken } from "@/lib/firebase-admin"
-import { successResponse, ApiErrors, validateRequiredFields, parseRequestBody, getAuthToken } from "@/lib/api-response"
+import { NextResponse } from "next/server"
+import { z } from "zod"
+import { withValidation, type ValidationContext } from "@/lib/api-validation"
 import { createReport } from "@/lib/services/reports/create-report"
 import { createFirebaseAdminReportDeps } from "@/lib/services/reports/firebase-admin-deps"
 import { isReportServiceError } from "@/lib/services/reports/errors"
-import type { Report } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-const ADMIN_REPORT_NOTIFICATION_TITLE = "dYs\" …,­…,ć…,ś…,ý…,›…,Ř…,ý…,T…1ź…,®…,­…1^"
 
-interface CreateReportBody {
-  reportType: Report["reportType"]
-  reasonCode: string
-  reason: string
-  description: string
-  targetId: string
-  targetType?: string
-  targetTitle?: string
-  itemId?: string
-  itemTitle?: string
-  exchangeId?: string
-  evidenceUrls?: string[]
-}
+/**
+ * Zod schema for report creation
+ */
+const createReportSchema = z.object({
+  reportType: z.enum(["item_report", "exchange_report", "chat_report", "user_report"], {
+    errorMap: () => ({ message: "กรุณาระบุประเภทการรายงานที่ถูกต้อง" })
+  }),
+  reasonCode: z.string().optional(),
+  reason: z.string().optional(),
+  description: z.string().min(1, "กรุณาระบุรายละเอียด"),
+  targetId: z.string().min(1, "กรุณาระบุเป้าหมายที่ต้องการรายงาน"),
+  targetType: z.string().optional(),
+  targetTitle: z.string().optional(),
+  itemId: z.string().optional(),
+  itemTitle: z.string().optional(),
+  exchangeId: z.string().optional(),
+  evidenceUrls: z.array(z.string().url()).optional(),
+})
 
-export async function POST(request: NextRequest) {
-  try {
-    // Verify authentication (prevents anonymous/spoofed reports)
-    const token = getAuthToken(request)
-    if (!token) {
-      return ApiErrors.unauthorized("Missing authentication token")
+type CreateReportInput = z.infer<typeof createReportSchema>
+
+/**
+ * POST /api/reports
+ * Create a new report
+ */
+export const POST = withValidation(
+  createReportSchema,
+  async (_request, data: CreateReportInput, ctx: ValidationContext | null) => {
+    if (!ctx) {
+      return NextResponse.json(
+        { error: "Authentication context missing", code: "AUTH_ERROR" },
+        { status: 401 }
+      )
     }
 
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) {
-      return ApiErrors.unauthorized("Invalid or expired session")
+    try {
+      const deps = createFirebaseAdminReportDeps()
+      const result = await createReport({
+        input: {
+          reportType: data.reportType,
+          reasonCode: data.reasonCode || "",
+          reason: data.reason || "",
+          description: data.description,
+          targetId: data.targetId,
+          targetTitle: data.targetTitle,
+          itemId: data.itemId,
+          itemTitle: data.itemTitle,
+          exchangeId: data.exchangeId,
+          evidenceUrls: data.evidenceUrls,
+        },
+        context: { 
+          reporterId: ctx.userId, 
+          reporterEmail: ctx.email || "" 
+        },
+        deps,
+        baseUrl: BASE_URL,
+        adminNotificationTitle: "📢 มีรายงานใหม่",
+      })
+
+      return NextResponse.json({
+        success: true,
+        data: { reportId: result.reportId }
+      })
+    } catch (error) {
+      if (isReportServiceError(error)) {
+        return NextResponse.json(
+          { error: error.message, code: "REPORT_ERROR" },
+          { status: 400 }
+        )
+      }
+      console.error("[Report API] Error:", error)
+      return NextResponse.json(
+        { error: "Internal server error", code: "INTERNAL_ERROR" },
+        { status: 500 }
+      )
     }
-
-    const body = await parseRequestBody<CreateReportBody>(request)
-    if (!body) {
-      return ApiErrors.badRequest("Invalid request body")
-    }
-
-    const {
-      reportType,
-      reasonCode,
-      reason,
-      description,
-      targetId,
-      targetType: _targetType,
-      targetTitle,
-      ...optionalFields
-    } = body
-
-    // Validate required fields
-    const validation = validateRequiredFields(body, ["reportType", "targetId"])
-    if (!validation.valid) {
-      return ApiErrors.missingFields(validation.missing)
-    }
-
-    // Resolve reporter from token (prevents spoofing)
-    const reporterId = decoded.uid
-    const reporterEmail = decoded.email || ""
-
-    const deps = createFirebaseAdminReportDeps()
-    const result = await createReport({
-      input: {
-        reportType,
-        reasonCode,
-        reason,
-        description,
-        targetId,
-        targetTitle,
-        ...optionalFields,
-      },
-      context: { reporterId, reporterEmail },
-      deps,
-      baseUrl: BASE_URL,
-      adminNotificationTitle: ADMIN_REPORT_NOTIFICATION_TITLE,
-    })
-
-    return successResponse({ reportId: result.reportId })
-  } catch (error) {
-    if (isReportServiceError(error)) {
-      return ApiErrors.badRequest(error.message)
-    }
-    console.error("[Report API] Error:", error)
-    return ApiErrors.internalError()
-  }
-}
+  },
+  { requireAuth: true }
+)
