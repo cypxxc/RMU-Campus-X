@@ -12,6 +12,7 @@ import { withValidation, type ValidationContext } from "@/lib/api-validation"
 import { sendPushMessage } from "@/lib/line"
 import { getAdminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
+import { sanitizeText } from "@/lib/security"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
@@ -22,12 +23,12 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-w
  */
 const createExchangeSchema = z.object({
   itemId: z.string().min(1, "กรุณาระบุ Item ID"),
-  itemTitle: z.string().optional(),
+  itemTitle: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   ownerId: z.string().min(1, "กรุณาระบุเจ้าของ"),
   ownerEmail: z.string().optional(),
   requesterId: z.string().min(1, "กรุณาระบุผู้ขอ"),
   requesterEmail: z.string().optional(),
-  requesterName: z.string().optional(),
+  requesterName: z.string().optional().transform(val => val ? sanitizeText(val) : val),
 }).refine(data => data.ownerId !== data.requesterId, {
   message: "ไม่สามารถขอสิ่งของของตัวเองได้",
   path: ["requesterId"],

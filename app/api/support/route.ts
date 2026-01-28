@@ -12,6 +12,7 @@ import { getAdminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { notifyAdminsNewSupportTicket } from "@/lib/line"
 import type { User } from "@/types"
+import { sanitizeText } from "@/lib/security"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
@@ -19,11 +20,11 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
  * Zod schema for support ticket creation
  */
 const createTicketSchema = z.object({
-  subject: z.string().min(1, "กรุณาระบุหัวข้อ").max(200, "หัวข้อยาวเกินไป"),
+  subject: z.string().min(1, "กรุณาระบุหัวข้อ").max(200, "หัวข้อยาวเกินไป").transform(sanitizeText),
   category: z.enum(["general", "technical", "account", "exchange", "report", "other"], {
     errorMap: () => ({ message: "กรุณาเลือกหมวดหมู่" })
   }),
-  description: z.string().min(10, "คำอธิบายต้องมีอย่างน้อย 10 ตัวอักษร").max(2000, "คำอธิบายยาวเกินไป"),
+  description: z.string().min(10, "คำอธิบายต้องมีอย่างน้อย 10 ตัวอักษร").max(2000, "คำอธิบายยาวเกินไป").transform(sanitizeText),
 })
 
 type CreateTicketInput = z.infer<typeof createTicketSchema>

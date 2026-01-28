@@ -11,6 +11,7 @@ import { withValidation, type ValidationContext } from "@/lib/api-validation"
 import { createReport } from "@/lib/services/reports/create-report"
 import { createFirebaseAdminReportDeps } from "@/lib/services/reports/firebase-admin-deps"
 import { isReportServiceError } from "@/lib/services/reports/errors"
+import { sanitizeText } from "@/lib/security"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
@@ -21,14 +22,14 @@ const createReportSchema = z.object({
   reportType: z.enum(["item_report", "exchange_report", "chat_report", "user_report"], {
     errorMap: () => ({ message: "กรุณาระบุประเภทการรายงานที่ถูกต้อง" })
   }),
-  reasonCode: z.string().optional(),
-  reason: z.string().optional(),
-  description: z.string().min(1, "กรุณาระบุรายละเอียด"),
+  reasonCode: z.string().optional().transform(val => val ? sanitizeText(val) : val),
+  reason: z.string().optional().transform(val => val ? sanitizeText(val) : val),
+  description: z.string().min(1, "กรุณาระบุรายละเอียด").transform(sanitizeText),
   targetId: z.string().min(1, "กรุณาระบุเป้าหมายที่ต้องการรายงาน"),
-  targetType: z.string().optional(),
-  targetTitle: z.string().optional(),
+  targetType: z.string().optional().transform(val => val ? sanitizeText(val) : val),
+  targetTitle: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   itemId: z.string().optional(),
-  itemTitle: z.string().optional(),
+  itemTitle: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   exchangeId: z.string().optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
 })

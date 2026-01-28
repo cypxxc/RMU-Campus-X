@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { sanitizeText } from "./security"
 
 // ============ User Schemas ============
 
@@ -7,11 +8,13 @@ export const userProfileSchema = z.object({
   displayName: z
     .string()
     .min(2, "ชื่อต้องมีความยาวอย่างน้อย 2 ตัวอักษร")
-    .max(50, "ชื่อต้องมีความยาวไม่เกิน 50 ตัวอักษร"),
+    .max(50, "ชื่อต้องมีความยาวไม่เกิน 50 ตัวอักษร")
+    .transform(sanitizeText),
   bio: z
     .string()
     .max(300, "คำแนะนำตัวต้องมีความยาวไม่เกิน 300 ตัวอักษร")
-    .optional(),
+    .optional()
+    .transform(val => val ? sanitizeText(val) : val),
   phoneNumber: z
     .string()
     .regex(/^0[0-9]{9}$/, "เบอร์โทรศัพท์ไม่ถูกต้อง (ต้องเป็นตัวเลข 10 หลัก เริ่มต้นด้วย 0)")
@@ -52,14 +55,16 @@ export const itemSchema = z.object({
   title: z
     .string()
     .min(3, "ชื่อสิ่งของต้องมีความยาวอย่างน้อย 3 ตัวอักษร")
-    .max(100, "ชื่อสิ่งของต้องมีความยาวไม่เกิน 100 ตัวอักษร"),
+    .max(100, "ชื่อสิ่งของต้องมีความยาวไม่เกิน 100 ตัวอักษร")
+    .transform(sanitizeText),
   description: z
     .string()
     .min(10, "คำอธิบายต้องมีความยาวอย่างน้อย 10 ตัวอักษร")
-    .max(1000, "คำอธิบายต้องมีความยาวไม่เกิน 1000 ตัวอักษร"),
+    .max(1000, "คำอธิบายต้องมีความยาวไม่เกิน 1000 ตัวอักษร")
+    .transform(sanitizeText),
   category: itemCategorySchema,
-  location: z.string().min(1, "กรุณาระบุสถานที่นัดรับ (เช่น ตึกคณะ, โรงอาหาร)"),
-  locationDetail: z.string().max(200, "รายละเอียดสถานที่ต้องไม่เกิน 200 ตัวอักษร").optional(),
+  location: z.string().min(1, "กรุณาระบุสถานที่นัดรับ (เช่น ตึกคณะ, โรงอาหาร)").transform(sanitizeText),
+  locationDetail: z.string().max(200, "รายละเอียดสถานที่ต้องไม่เกิน 200 ตัวอักษร").optional().transform(val => val ? sanitizeText(val) : val),
 })
 
 export const itemUpdateSchema = itemSchema.partial()
@@ -82,12 +87,12 @@ export const createExchangeSchema = z.object({
 export const respondExchangeSchema = z.object({
   exchangeId: z.string().min(1, "กรุณาระบุรหัสการแลกเปลี่ยน"),
   action: z.enum(["accept", "reject"]),
-  reason: z.string().max(500).optional(),
+  reason: z.string().max(500).optional().transform(val => val ? sanitizeText(val) : val),
 })
 
 export const cancelExchangeSchema = z.object({
   exchangeId: z.string().min(1, "กรุณาระบุรหัสการแลกเปลี่ยน"),
-  reason: z.string().max(500, "เหตุผลต้องไม่เกิน 500 ตัวอักษร").optional(),
+  reason: z.string().max(500, "เหตุผลต้องไม่เกิน 500 ตัวอักษร").optional().transform(val => val ? sanitizeText(val) : val),
 })
 
 // ============ Report Schemas ============
@@ -103,8 +108,8 @@ export const createReportSchema = z.object({
   reportType: reportTypeSchema,
   targetId: z.string().min(1, "กรุณาระบุเป้าหมายที่ต้องการรายงาน"),
   reasonCode: z.string().min(1, "กรุณาเลือกเหตุผลในการรายงาน"),
-  reason: z.string().optional(),
-  description: z.string().max(1000, "คำอธิบายต้องไม่เกิน 1000 ตัวอักษร").optional(),
+  reason: z.string().optional().transform(val => val ? sanitizeText(val) : val),
+  description: z.string().max(1000, "คำอธิบายต้องไม่เกิน 1000 ตัวอักษร").optional().transform(val => val ? sanitizeText(val) : val),
   evidenceUrls: z.array(z.string().url()).max(5, "อัปโหลดหลักฐานได้สูงสุด 5 รูป").optional(),
 })
 
@@ -112,13 +117,13 @@ export const createReportSchema = z.object({
 
 export const updateUserStatusSchema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED", "BANNED"]),
-  reason: z.string().max(500).optional(),
+  reason: z.string().max(500).optional().transform(val => val ? sanitizeText(val) : val),
   suspendDays: z.number().int().min(1).max(365).optional(),
   suspendMinutes: z.number().int().min(1).max(1440).optional(),
 })
 
 export const issueWarningSchema = z.object({
-  reason: z.string().min(1, "กรุณาระบุเหตุผล").max(500, "เหตุผลต้องไม่เกิน 500 ตัวอักษร"),
+  reason: z.string().min(1, "กรุณาระบุเหตุผล").max(500, "เหตุผลต้องไม่เกิน 500 ตัวอักษร").transform(sanitizeText),
   relatedReportId: z.string().optional(),
   relatedItemId: z.string().optional(),
 })
@@ -127,7 +132,7 @@ export const issueWarningSchema = z.object({
 
 export const sendMessageSchema = z.object({
   exchangeId: z.string().min(1),
-  message: z.string().min(1, "กรุณาพิมพ์ข้อความ").max(1000, "ข้อความต้องไม่เกิน 1000 ตัวอักษร"),
+  message: z.string().min(1, "กรุณาพิมพ์ข้อความ").max(1000, "ข้อความต้องไม่เกิน 1000 ตัวอักษร").transform(sanitizeText),
   imageUrl: z.string().url().optional(),
 })
 
@@ -143,9 +148,9 @@ export const supportCategorySchema = z.enum([
 ])
 
 export const createSupportTicketSchema = z.object({
-  subject: z.string().min(5, "หัวข้อต้องมีความยาวอย่างน้อย 5 ตัวอักษร").max(100),
+  subject: z.string().min(5, "หัวข้อต้องมีความยาวอย่างน้อย 5 ตัวอักษร").max(100).transform(sanitizeText),
   category: supportCategorySchema,
-  description: z.string().min(10, "คำอธิบายต้องมีความยาวอย่างน้อย 10 ตัวอักษร").max(2000),
+  description: z.string().min(10, "คำอธิบายต้องมีความยาวอย่างน้อย 10 ตัวอักษร").max(2000).transform(sanitizeText),
 })
 
 // ============ Validation Helper ============
