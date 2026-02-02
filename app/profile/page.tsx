@@ -133,21 +133,15 @@ export default function ProfilePage() {
     if (!user) return
     setLoadingItems(true)
     try {
-      const result = await getItems()
+      const result = await getItems({ postedBy: user.uid, pageSize: 50 })
       if (result.success && result.data) {
-        const filtered = result.data.items
-          .filter((item: Item) => item.postedBy === user.uid)
-          .sort((a: Item, b: Item) => {
-            const dateA = (a.postedAt as any)?.toDate?.() || new Date()
-            const dateB = (b.postedAt as any)?.toDate?.() || new Date()
-            return dateB.getTime() - dateA.getTime()
-          })
-        setMyItems(filtered)
+        const list = result.data.items
+        setMyItems(list)
       } else {
         setMyItems([])
       }
-    } catch (error: any) {
-      console.error('[Profile] Error loading items:', error)
+    } catch (error: unknown) {
+      console.error("[Profile] Error loading items:", error)
       setMyItems([])
     } finally {
       setLoadingItems(false)
@@ -189,7 +183,6 @@ export default function ProfilePage() {
         displayName: data.displayName.trim(),
         bio: data.bio.trim(),
         photoURL: profileImage || "",
-        email: user.email || ""
       })
       toast({ title: "อัปเดตโปรไฟล์สำเร็จ" })
       loadProfile()
@@ -212,7 +205,6 @@ export default function ProfilePage() {
       setProfileImage(cloudinaryUrl)
       await updateUserProfile(user.uid, { 
         photoURL: cloudinaryUrl,
-        email: user.email || ""
       })
       toast({ title: "อัปโหลดรูปโปรไฟล์สำเร็จ" })
       loadProfile()

@@ -90,7 +90,11 @@ export function validateTransition(
 }
 
 /**
- * Get role-specific allowed actions based on current status
+ * Get role-specific allowed actions based on current status.
+ * - accept/reject: owner only, when pending.
+ * - cancel: requester when pending; both when accepted or in_progress.
+ * - confirm: both when accepted (เริ่มดำเนินการ → in_progress) or in_progress (ยืนยันเสร็จ → completed).
+ *   UI should interpret: in accepted → "เริ่มดำเนินการ", in in_progress → "ยืนยันเสร็จสิ้น".
  */
 export function getAllowedActions(
   status: ExchangeStatus,

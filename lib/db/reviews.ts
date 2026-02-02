@@ -103,8 +103,20 @@ const updateUserRating = async (userId: string) => {
   })
 }
 
-// Get reviews for a user
-export const getUserReviews = async (userId: string, limitCount = 10) => {
+// Get reviews for a user – ใช้ API เมื่อเรียกจาก client
+export const getUserReviews = async (userId: string, limitCount = 10): Promise<Review[]> => {
+  if (typeof window !== "undefined") {
+    try {
+      const { authFetchJson } = await import("@/lib/api-client")
+      const j = await authFetchJson<{ reviews?: Review[] }>(
+        `/api/reviews?targetUserId=${encodeURIComponent(userId)}&limit=${limitCount}`,
+        { method: "GET" }
+      )
+      return j.data?.reviews ?? []
+    } catch {
+      return []
+    }
+  }
   const db = getFirebaseDb()
   const q = query(
     collection(db, "reviews"),
@@ -112,9 +124,8 @@ export const getUserReviews = async (userId: string, limitCount = 10) => {
     orderBy("createdAt", "desc"),
     limit(limitCount)
   )
-  
   const snapshot = await getDocs(q)
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review))
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Review))
 }
 
 // Get pending reviews for a user (Exchanges completed but not reviewed)

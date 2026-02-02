@@ -1,20 +1,26 @@
 /**
  * Exchange Status API Route
  * อัปเดตสถานะ Exchange พร้อมส่ง LINE Notification
+ * ✅ Auth required, userId from token only, participant check, state machine
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getAdminDb } from "@/lib/firebase-admin"
+import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { notifyExchangeStatusChange, notifyExchangeCompleted } from "@/lib/line"
+import { ApiErrors, getAuthToken } from "@/lib/api-response"
+import { validateTransition } from "@/lib/exchange-state-machine"
 import type { Exchange, ExchangeStatus, User } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
 interface UpdateStatusBody {
   status: ExchangeStatus
-  userId: string  // User making the change
   reason?: string // For cancellation
+}
+
+function isParticipant(exchange: Exchange, userId: string): boolean {
+  return exchange.ownerId === userId || exchange.requesterId === userId
 }
 
 export async function PATCH(
@@ -22,13 +28,28 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: exchangeId } = await params
-    const body: UpdateStatusBody = await request.json()
-    const { status, userId, reason } = body
+    const token = getAuthToken(request) ?? extractBearerToken(request.headers.get("Authorization"))
+    if (!token) {
+      return ApiErrors.unauthorized("Authentication required")
+    }
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) {
+      return ApiErrors.invalidToken("Invalid or expired token")
+    }
+    const userId = decoded.uid
 
-    if (!exchangeId || !status || !userId) {
+    const { id: exchangeId } = await params
+    let body: UpdateStatusBody
+    try {
+      body = await request.json()
+    } catch {
+      return ApiErrors.badRequest("Invalid JSON body")
+    }
+    const { status, reason } = body
+
+    if (!exchangeId || !status) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { success: false, error: "Missing required fields", code: "MISSING_FIELDS" },
         { status: 400 }
       )
     }
@@ -38,40 +59,43 @@ export async function PATCH(
     const exchangeDoc = await exchangeRef.get()
 
     if (!exchangeDoc.exists) {
-      return NextResponse.json(
-        { error: "Exchange not found" },
-        { status: 404 }
-      )
+      return ApiErrors.notFound("Exchange not found")
     }
 
     const exchangeData = exchangeDoc.data() as Exchange
     const previousStatus = exchangeData.status
 
-    // Build update object
-    const updateData: Record<string, any> = {
+    if (!isParticipant(exchangeData, userId)) {
+      return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้นที่สามารถอัปเดตสถานะได้")
+    }
+
+    const transitionError = validateTransition(previousStatus, status)
+    if (transitionError) {
+      return NextResponse.json(
+        { success: false, error: transitionError, code: "INVALID_TRANSITION" },
+        { status: 400 }
+      )
+    }
+
+    const updateData: Record<string, unknown> = {
       status,
       updatedAt: FieldValue.serverTimestamp(),
     }
-
     if (status === "cancelled" && reason) {
       updateData.cancelReason = reason
       updateData.cancelledBy = userId
       updateData.cancelledAt = FieldValue.serverTimestamp()
     }
 
-    // Update exchange
     await exchangeRef.update(updateData)
 
     console.log(`[Exchange Status] ${exchangeId}: ${previousStatus} → ${status}`)
 
-    // Determine who to notify
     const isOwner = userId === exchangeData.ownerId
     const targetUserId = isOwner ? exchangeData.requesterId : exchangeData.ownerId
 
-    // Create in-app notification
     let notificationTitle = ""
     let notificationMessage = ""
-
     switch (status) {
       case "accepted":
         notificationTitle = "รับคำขอแล้ว"
@@ -105,8 +129,6 @@ export async function PATCH(
         isRead: false,
         createdAt: FieldValue.serverTimestamp(),
       })
-
-      // For completed status, notify both parties
       if (status === "completed") {
         await db.collection("notifications").add({
           userId: exchangeData.ownerId,
@@ -120,45 +142,27 @@ export async function PATCH(
       }
     }
 
-    // ============ LINE Notifications ============
-    // Get target user's LINE settings
     const targetUserDoc = await db.collection("users").doc(targetUserId).get()
-
     if (targetUserDoc.exists) {
       const targetUserData = targetUserDoc.data() as User
-
-      if (
-        targetUserData.lineUserId &&
-        targetUserData.lineNotifications?.enabled
-      ) {
-        // Check specific notification type
+      if (targetUserData.lineUserId && targetUserData.lineNotifications?.enabled) {
         if (status === "completed" && targetUserData.lineNotifications.exchangeComplete) {
-          // Notify target user
           await notifyExchangeCompleted(
             targetUserData.lineUserId,
             exchangeData.itemTitle
           )
-
-          // Also notify the other party (owner) if they have LINE enabled
-          if (status === "completed") {
-            const ownerDoc = await db.collection("users").doc(exchangeData.ownerId).get()
-            
-            if (ownerDoc.exists) {
-              const ownerData = ownerDoc.data() as User
-              if (
-                ownerData.lineUserId &&
-                ownerData.lineNotifications?.enabled &&
-                ownerData.lineNotifications.exchangeComplete
-              ) {
-                await notifyExchangeCompleted(
-                  ownerData.lineUserId,
-                  exchangeData.itemTitle
-                )
-              }
+          const ownerDoc = await db.collection("users").doc(exchangeData.ownerId).get()
+          if (ownerDoc.exists) {
+            const ownerData = ownerDoc.data() as User
+            if (
+              ownerData?.lineUserId &&
+              ownerData?.lineNotifications?.enabled &&
+              ownerData?.lineNotifications?.exchangeComplete
+            ) {
+              await notifyExchangeCompleted(ownerData.lineUserId, exchangeData.itemTitle)
             }
           }
-        } else if (targetUserData.lineNotifications.exchangeStatus) {
-          // Send status change notification
+        } else if (targetUserData.lineNotifications?.exchangeStatus) {
           await notifyExchangeStatusChange(
             targetUserData.lineUserId,
             exchangeData.itemTitle,
@@ -176,24 +180,30 @@ export async function PATCH(
     })
   } catch (error) {
     console.error("[Exchange Status] Error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return ApiErrors.internalError("Internal server error")
   }
 }
 
-// Get exchange details
+/** GET exchange details – ต้องล็อกอินและเป็น owner หรือ requester เท่านั้น */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: exchangeId } = await params
+    const token = getAuthToken(request) ?? extractBearerToken(request.headers.get("Authorization"))
+    if (!token) {
+      return ApiErrors.unauthorized("Authentication required")
+    }
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) {
+      return ApiErrors.invalidToken("Invalid or expired token")
+    }
+    const userId = decoded.uid
 
+    const { id: exchangeId } = await params
     if (!exchangeId) {
       return NextResponse.json(
-        { error: "Missing exchange ID" },
+        { success: false, error: "Missing exchange ID", code: "MISSING_FIELDS" },
         { status: 400 }
       )
     }
@@ -202,23 +212,23 @@ export async function GET(
     const exchangeDoc = await db.collection("exchanges").doc(exchangeId).get()
 
     if (!exchangeDoc.exists) {
-      return NextResponse.json(
-        { error: "Exchange not found" },
-        { status: 404 }
-      )
+      return ApiErrors.notFound("Exchange not found")
+    }
+
+    const exchangeData = exchangeDoc.data() as Exchange
+    if (!isParticipant(exchangeData, userId)) {
+      return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้นที่สามารถดูรายละเอียดได้")
     }
 
     return NextResponse.json({
+      success: true,
       exchange: {
+        ...exchangeData,
         id: exchangeDoc.id,
-        ...exchangeDoc.data(),
       },
     })
   } catch (error) {
     console.error("[Exchange Status] GET Error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return ApiErrors.internalError("Internal server error")
   }
 }

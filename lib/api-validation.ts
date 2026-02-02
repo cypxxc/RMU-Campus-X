@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ZodSchema, ZodError } from "zod";
-import { verifyIdToken, extractBearerToken } from "@/lib/firebase-admin";
+import { verifyIdToken, extractBearerToken, hasAcceptedTerms } from "@/lib/firebase-admin";
 import { isAdmin } from "@/lib/admin-auth";
 
 export interface ValidationContext {
@@ -19,6 +19,8 @@ export interface ApiHandlerOptions {
   requireAuth?: boolean;
   /** Optional: Check if user is admin */
   requireAdmin?: boolean;
+  /** Optional: Require user to have accepted terms & privacy (user doc termsAccepted === true) */
+  requireTermsAccepted?: boolean;
 }
 
 type ApiHandler<T> = (
@@ -87,6 +89,17 @@ export function withValidation<T>(
             );
           }
           context.isAdmin = true;
+        }
+
+        // Check if user has accepted terms when requireTermsAccepted is true
+        if (options.requireTermsAccepted) {
+          const accepted = await hasAcceptedTerms(decoded.uid);
+          if (!accepted) {
+            return NextResponse.json(
+              { error: "กรุณายอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวก่อนใช้งาน", code: "TERMS_REQUIRED" },
+              { status: 403 },
+            );
+          }
         }
       }
 

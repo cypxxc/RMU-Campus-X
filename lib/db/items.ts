@@ -1,112 +1,82 @@
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp,
-  QueryConstraint,
-  startAfter,
-  DocumentSnapshot,
-  getCountFromServer
-} from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+/**
+ * Items – ใช้ API เป็นหลัก (auth, terms, canPost ฝั่ง server)
+ */
+
 import type { Item, ItemCategory, ItemStatus } from "@/types"
 import { apiCall, TIMEOUT_CONFIG, type ApiResponse } from "@/lib/api-wrapper"
-import { buildSearchConstraints, generateKeywords, refineItemsBySearchTerms } from "./items-helpers"
+import { authFetchJson } from "@/lib/api-client"
 
-// Items
-export const createItem = async (itemData: Omit<Item, "id" | "postedAt" | "updatedAt">) => {
+export interface GetItemsFilters {
+  categories?: ItemCategory[]
+  status?: ItemStatus
+  pageSize?: number
+  lastId?: string | null
+  searchQuery?: string
+  postedBy?: string
+}
+
+export interface GetItemsResult {
+  items: Item[]
+  lastId: string | null
+  hasMore: boolean
+  totalCount: number
+}
+
+export const createItem = async (
+  itemData: Omit<Item, "id" | "postedAt" | "updatedAt">
+): Promise<ApiResponse<string>> => {
   return apiCall(
     async () => {
-      const db = getFirebaseDb()
-      const searchKeywords = generateKeywords(itemData.title, itemData.description)
-      
-      const docRef = await addDoc(collection(db, "items"), {
-        ...itemData,
-        searchKeywords,
-        postedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const json = await authFetchJson<{ id: string }>("/api/items", {
+        method: "POST",
+        body: {
+          title: itemData.title,
+          description: itemData.description,
+          category: itemData.category,
+          location: itemData.location ?? "",
+          locationDetail: itemData.locationDetail,
+          imageUrls: itemData.imageUrls,
+        },
       })
-      return docRef.id
+      if (!json.success || !json.data?.id) throw new Error(json.error || "Failed to create item")
+      return json.data.id
     },
-    'createItem',
+    "createItem",
     TIMEOUT_CONFIG.STANDARD
   )
 }
 
-export const getItems = async (filters?: { 
-  categories?: ItemCategory[]; 
-  status?: ItemStatus;
-  pageSize?: number;
-  lastDoc?: DocumentSnapshot;
-  searchQuery?: string;
-}): Promise<ApiResponse<{ items: Item[]; lastDoc: DocumentSnapshot | null; hasMore: boolean; totalCount: number }>> => {
+export const getItems = async (
+  filters?: GetItemsFilters
+): Promise<ApiResponse<GetItemsResult>> => {
   return apiCall(
     async () => {
-      const startTime = performance.now()
-      const db = getFirebaseDb()
-      const pageSize = filters?.pageSize || 20
-      
-      // Base constraints for both count and data queries
-      const baseConstraints: QueryConstraint[] = []
-      
-      // Multi-category filter using 'in' operator
-      if (filters?.categories && filters.categories.length > 0) {
-        baseConstraints.push(where("category", "in", filters.categories))
-      }
-      if (filters?.status) {
-        baseConstraints.push(where("status", "==", filters.status))
-      }
-      
-      // Search logic for base filtering
-      const { searchTerms, constraints: searchConstraints } = buildSearchConstraints(filters?.searchQuery)
-      baseConstraints.push(...searchConstraints)
+      const params = new URLSearchParams()
+      if (filters?.pageSize) params.set("pageSize", String(filters.pageSize))
+      if (filters?.lastId) params.set("lastId", filters.lastId)
+      if (filters?.categories?.length) params.set("categories", filters.categories.join(","))
+      if (filters?.status) params.set("status", filters.status)
+      if (filters?.searchQuery) params.set("search", filters.searchQuery)
+      if (filters?.postedBy) params.set("postedBy", filters.postedBy)
 
-      // 1. Get total count
-      let totalCount = 0
-      try {
-        const countQ = query(collection(db, "items"), ...baseConstraints)
-        const countSnapshot = await getCountFromServer(countQ)
-        totalCount = countSnapshot.data().count
-      } catch (error) {
-        console.warn("Count query failed", error)
+      const url = `/api/items?${params.toString()}`
+      const res = await authFetchJson(url, { method: "GET" }) as {
+        success?: boolean
+        items?: Item[]
+        lastId?: string | null
+        hasMore?: boolean
+        totalCount?: number
       }
+      if (!Array.isArray(res.items)) throw new Error("Failed to load items")
 
-      // 2. Get data
-      const dataConstraints = [...baseConstraints, orderBy("postedAt", "desc"), limit(pageSize)]
-      if (filters?.lastDoc) dataConstraints.push(startAfter(filters.lastDoc))
-
-      const q = query(collection(db, "items"), ...dataConstraints)
-      const snapshot = await getDocs(q)
-      let items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Item)
-      
-      // In-memory refinement for ALL terms (Intersection)
-      if (searchTerms.length > 0) {
-          items = refineItemsBySearchTerms(items, searchTerms)
-      }
-      
-      const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null
-      
-      // Log query performance
-      const duration = performance.now() - startTime
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[Query] getItems: ${duration.toFixed(2)}ms, ${items.length} items, total: ${totalCount}`)
-      }
-      
-      return { 
-        items, 
-        lastDoc: lastVisible, 
-        hasMore: snapshot.docs.length === pageSize,
-        totalCount
+      return {
+        items: res.items,
+        lastId: res.lastId ?? null,
+        hasMore: res.hasMore ?? false,
+        totalCount: res.totalCount ?? 0,
       }
     },
-    'getItems',
+    "getItems",
     TIMEOUT_CONFIG.STANDARD
   )
 }
@@ -114,53 +84,41 @@ export const getItems = async (filters?: {
 export const getItemById = async (id: string): Promise<ApiResponse<Item | null>> => {
   return apiCall(
     async () => {
-      const db = getFirebaseDb()
-      const docRef = doc(db, "items", id)
-      const docSnap = await getDoc(docRef)
-
-      if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as Item
+      try {
+        const res = await authFetchJson(`/api/items/${id}`, { method: "GET" }) as { success?: boolean; item?: Item }
+        return res.item ?? null
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (msg.includes("not found") || msg.includes("404")) return null
+        throw e
       }
-      return null
     },
-    'getItemById',
+    "getItemById",
     TIMEOUT_CONFIG.QUICK
   )
 }
 
-export const updateItem = async (id: string, data: Partial<Item>): Promise<ApiResponse<void>> => {
+export const updateItem = async (
+  id: string,
+  data: Partial<Pick<Item, "title" | "description" | "category" | "location" | "locationDetail" | "status">>
+): Promise<ApiResponse<void>> => {
   return apiCall(
     async () => {
-      const db = getFirebaseDb()
-      const docRef = doc(db, "items", id)
-      
-      // Check if document exists before updating
-      const docSnap = await getDoc(docRef)
-      if (!docSnap.exists()) {
-        throw new Error(`Item with ID ${id} does not exist`)
-      }
-      
-      const updates: any = {
-        ...data,
-        updatedAt: serverTimestamp(),
-      }
-      
-      // If title or description is updated, regenerate keywords
-      if (data.title || data.description) {
-          const currentData = docSnap.data() as Item
-          
-          // NOTE: Business rule validation (e.g., pending status check)
-          // is now handled in lib/services/items/item-update.ts
-          // This layer only handles data persistence
+      const body: Record<string, unknown> = {}
+      if (data.title !== undefined) body.title = data.title
+      if (data.description !== undefined) body.description = data.description
+      if (data.category !== undefined) body.category = data.category
+      if (data.location !== undefined) body.location = data.location
+      if (data.locationDetail !== undefined) body.locationDetail = data.locationDetail
+      if (data.status !== undefined) body.status = data.status
 
-          const newTitle = data.title || currentData.title
-          const newDesc = data.description || currentData.description
-          updates.searchKeywords = generateKeywords(newTitle, newDesc)
-      }
-      
-      await updateDoc(docRef, updates)
+      const json = await authFetchJson(`/api/items/${id}`, {
+        method: "PATCH",
+        body: Object.keys(body).length ? body : undefined,
+      })
+      if (!json.success) throw new Error(json.error || "Failed to update item")
     },
-    'updateItem',
+    "updateItem",
     TIMEOUT_CONFIG.STANDARD
   )
 }
@@ -168,33 +126,14 @@ export const updateItem = async (id: string, data: Partial<Item>): Promise<ApiRe
 export const deleteItem = async (id: string): Promise<ApiResponse<void>> => {
   return apiCall(
     async () => {
-      // db unused
-      // const db = getFirebaseDb()
-      
-      // We need to pass Auth Token to API
-      // Wait.. lib/db/items runs on client.
-      // fetch needs token.
-      
-      // Dynamic import to avoid circular dep issues if any, or just standard import
-      const { getAuth } = await import("firebase/auth")
-      const auth = getAuth()
-      const token = await auth.currentUser?.getIdToken()
-      
-      if (!token) throw new Error("Authentication required")
-
-      const response = await fetch(`/api/items/${id}`, {
-          method: 'DELETE',
-          headers: {
-              'Authorization': `Bearer ${token}`
-          }
-      })
-
-      if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || "Failed to delete item")
+      const { authFetch } = await import("@/lib/api-client")
+      const res = await authFetch(`/api/items/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Failed to delete item")
       }
     },
-    'deleteItem',
+    "deleteItem",
     TIMEOUT_CONFIG.STANDARD
   )
 }

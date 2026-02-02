@@ -23,7 +23,8 @@ export interface User {
   createdAt: Timestamp
   isAdmin?: boolean
   termsAccepted?: boolean
-  
+  termsAcceptedAt?: Timestamp
+
   // User Status & Restrictions
   status: UserStatus
   warningCount: number

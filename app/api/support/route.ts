@@ -84,7 +84,7 @@ export const POST = withValidation(
       )
     }
   },
-  { requireAuth: true }
+  { requireAuth: true, requireTermsAccepted: true }
 )
 
 // Helper: Notify admins in-app

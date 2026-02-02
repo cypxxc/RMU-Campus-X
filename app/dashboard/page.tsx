@@ -22,7 +22,6 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import debounce from 'lodash/debounce'
 import { toast } from 'sonner'
 import { memo } from "react"
-import { DocumentSnapshot } from "firebase/firestore"
 
 // Memoized Item Card เพื่อป้องกัน re-render
 const MemoizedItemCard = memo(ItemCard)
@@ -40,10 +39,10 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
 
-  // Pagination states
+  // Pagination states (lastId สำหรับ API)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
-  const paginationDocs = useRef<Map<number, DocumentSnapshot | null>>(new Map([[1, null]]))
+  const paginationLastIds = useRef<Map<number, string | null>>(new Map([[1, null]]))
   const [totalPages, setTotalPages] = useState(1)
 
   // Debounce search query
@@ -68,44 +67,35 @@ export default function DashboardPage() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-    paginationDocs.current = new Map([[1, null]])
+    paginationLastIds.current = new Map([[1, null]])
   }, [categories, status])
 
-  // Load items logic
+  // Load items logic (ใช้ API – lastId สำหรับ pagination)
   const loadItems = useCallback(async (page: number) => {
     try {
       setLoading(true)
       
-      const lastDoc = page === 1 ? null : paginationDocs.current.get(page) ?? null
+      const lastId = page === 1 ? null : paginationLastIds.current.get(page) ?? undefined
 
-      const filters: { 
-        categories?: ItemCategory[]; 
-        status?: ItemStatus; 
-        searchQuery?: string; 
-        lastDoc?: any; 
-        pageSize?: number 
-      } = {
+      const filters = {
         pageSize: PAGE_SIZE,
-        lastDoc
+        lastId: lastId ?? undefined,
+        categories: categories.length > 0 ? categories : undefined,
+        status: status !== "all" ? status : undefined,
+        searchQuery: debouncedSearchQuery.trim() || undefined,
       }
-      
-      if (categories.length > 0) filters.categories = categories
-      if (status !== "all") filters.status = status
-      if (debouncedSearchQuery.trim()) filters.searchQuery = debouncedSearchQuery.trim()
 
       const result = await getItems(filters)
       
       if (result.success && result.data) {
         setItems(result.data.items)
         
-        // Update total count and pages
         const count = result.data.totalCount || 0
         setTotalCount(count)
-        setTotalPages(Math.ceil(count / PAGE_SIZE) || 1)
+        setTotalPages(count > 0 ? Math.ceil(count / PAGE_SIZE) : (result.data.hasMore ? page + 1 : page))
 
-        // Store next page cursor
-        if (result.data.lastDoc && result.data.hasMore) {
-          paginationDocs.current.set(page + 1, result.data.lastDoc)
+        if (result.data.lastId != null && result.data.hasMore) {
+          paginationLastIds.current.set(page + 1, result.data.lastId)
         }
       } else {
         console.error('[Dashboard] Error:', result.error)
