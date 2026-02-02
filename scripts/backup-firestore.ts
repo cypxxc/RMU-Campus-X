@@ -1,24 +1,18 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Firestore Backup Script
  * 
  * Usage:
- *   npx ts-node scripts/backup-firestore.ts
+ *   bun run scripts/backup-firestore.ts
  * 
  * Prerequisites:
- *   - Firebase Admin SDK credentials
- *   - gcloud CLI installed (optional, for cloud backup)
- * 
- * Environment Variables:
- *   - FIREBASE_ADMIN_PROJECT_ID
- *   - FIREBASE_ADMIN_CLIENT_EMAIL
- *   - FIREBASE_ADMIN_PRIVATE_KEY
- *   - BACKUP_BUCKET (optional, GCS bucket for cloud backup)
+ *   - Firebase Admin SDK credentials in .env
  */
 
-import * as admin from 'firebase-admin'
 import * as fs from 'fs'
 import * as path from 'path'
+import { Timestamp } from 'firebase-admin/firestore'
+import { getAdminDb } from '../lib/firebase-admin'
 
 // Collections to backup
 const COLLECTIONS_TO_BACKUP = [
@@ -34,32 +28,9 @@ const COLLECTIONS_TO_BACKUP = [
   'adminLogs',
 ]
 
-// Initialize Firebase Admin
-function initializeFirebase() {
-  if (admin.apps.length > 0) {
-    return admin.app()
-  }
-
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
-  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n')
-
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error('Missing Firebase Admin credentials in environment variables')
-  }
-
-  return admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId,
-      clientEmail,
-      privateKey,
-    }),
-  })
-}
-
 // Backup a single collection
 async function backupCollection(
-  db: admin.firestore.Firestore,
+  db: FirebaseFirestore.Firestore,
   collectionName: string
 ): Promise<Record<string, unknown>[]> {
   console.log(`  Backing up ${collectionName}...`)
@@ -84,7 +55,7 @@ function convertTimestamps(obj: unknown): unknown {
     return obj
   }
 
-  if (obj instanceof admin.firestore.Timestamp) {
+  if (obj instanceof Timestamp) {
     return obj.toDate().toISOString()
   }
 
@@ -110,8 +81,8 @@ async function backup() {
   const startTime = Date.now()
   
   try {
-    initializeFirebase()
-    const db = admin.firestore()
+    // Initialize Firebase Admin using shared lib
+    const db = getAdminDb()
 
     const backup: Record<string, unknown[]> = {}
     let totalDocuments = 0
