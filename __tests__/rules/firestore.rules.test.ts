@@ -356,7 +356,7 @@ describe("Items Collection", () => {
           status: "available",
           postedBy: UNVERIFIED_STUDENT.uid,
           postedByEmail: UNVERIFIED_STUDENT.email,
-          postedAt: Timestamp.now(),
+          postedAt: serverTimestamp(),
         })
       );
     });
@@ -371,7 +371,7 @@ describe("Items Collection", () => {
           status: "available",
           postedBy: OTHER_STUDENT.uid, // Different from auth user
           postedByEmail: OTHER_STUDENT.email,
-          postedAt: Timestamp.now(),
+          postedAt: serverTimestamp(),
         })
       );
     });
@@ -386,7 +386,7 @@ describe("Items Collection", () => {
           status: "available",
           postedBy: ELIGIBLE_STUDENT.uid,
           postedByEmail: ELIGIBLE_STUDENT.email,
-          postedAt: Timestamp.now(),
+          postedAt: serverTimestamp(),
         })
       );
     });
@@ -403,8 +403,8 @@ describe("Items Collection", () => {
           status: "available",
           postedBy: ELIGIBLE_STUDENT.uid,
           postedByEmail: ELIGIBLE_STUDENT.email,
-          postedAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
+          postedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
       });
     });
@@ -415,7 +415,7 @@ describe("Items Collection", () => {
         updateDoc(doc(db, "items", "item001"), {
           title: "Updated Title",
           description: "Updated description",
-          updatedAt: Timestamp.now(),
+          updatedAt: serverTimestamp(),
         })
       );
     });
@@ -465,8 +465,8 @@ describe("Exchanges Collection", () => {
           status: "pending",
           ownerConfirmed: false,
           requesterConfirmed: false,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         })
       );
     });
@@ -482,7 +482,7 @@ describe("Exchanges Collection", () => {
           requesterId: OTHER_STUDENT.uid, // Impersonation
           requesterEmail: OTHER_STUDENT.email,
           status: "pending",
-          createdAt: Timestamp.now(),
+          createdAt: serverTimestamp(),
         })
       );
     });
@@ -549,7 +549,7 @@ describe("Chat Messages Collection", () => {
           senderId: ELIGIBLE_STUDENT.uid,
           senderEmail: ELIGIBLE_STUDENT.email,
           message: "Hello!",
-          createdAt: Timestamp.now(),
+          createdAt: serverTimestamp(),
         })
       );
     });
@@ -562,7 +562,7 @@ describe("Chat Messages Collection", () => {
           senderId: OTHER_STUDENT.uid, // Impersonation
           senderEmail: OTHER_STUDENT.email,
           message: "Fake message",
-          createdAt: Timestamp.now(),
+          createdAt: serverTimestamp(),
         })
       );
     });
@@ -638,7 +638,7 @@ describe("Reports Collection", () => {
           reasonCode: "fake_item",
           description: "This item is fake",
           status: "new",
-          createdAt: Timestamp.now(),
+          createdAt: serverTimestamp(),
         })
       );
     });
@@ -653,7 +653,7 @@ describe("Reports Collection", () => {
           reporterEmail: OTHER_STUDENT.email,
           reasonCode: "fake_item",
           status: "new",
-          createdAt: Timestamp.now(),
+          createdAt: serverTimestamp(),
         })
       );
     });
