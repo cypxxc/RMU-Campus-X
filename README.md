@@ -2,12 +2,12 @@
 
 **ระบบแพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม**
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.1.1-black?logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.1.5-black?logo=next.js)](https://nextjs.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.3.6-f9f1e1?logo=bun)](https://bun.sh/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Firebase](https://img.shields.io/badge/Firebase-12.5-orange?logo=firebase)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/Tests-84%20passed-success)]()
+[![Tests](https://img.shields.io/badge/Tests-119%20unit%20%7C%2070%20E2E-success)]()
 [![Sentry](https://img.shields.io/badge/Sentry-Enabled-362D59?logo=sentry)](https://sentry.io)
 
 ---
@@ -31,12 +31,14 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                       API LAYER (Next.js)                       │
 ├─────────────────────────────────────────────────────────────────┤
-│  /api/admin/*     │  /api/exchanges/*   │  /api/line/*          │
-│  /api/reports/*   │  /api/support/*     │  /api/upload/*        │
+│  /api/items/*     │  /api/users/me     │  /api/favorites/*     │
+│  /api/exchanges/* │  /api/notifications│  /api/reviews         │
+│  /api/admin/*     │  /api/reports      │  /api/support          │
+│  /api/line/*      │  /api/upload       │  /api/health           │
 │  ────────────────────────────────────────────────────────────── │
-│  • Distributed Rate Limiting (Upstash Redis)                    │
+│  • Client เรียก API เป็นหลัก (lib/api-client, authFetchJson)   │
+│  • Rate Limiting (Upstash Redis) + termsAccepted ใน API       │
 │  • Firebase Admin SDK Authentication                            │
-│  • API Response Wrapper with Timeout                            │
 │  • Server-Side Validation & Type Safety                         │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
@@ -54,15 +56,15 @@
 
 ### Data Flow Diagram
 
+- **Client → API:** ฟีเจอร์หลัก (items, users, favorites, notifications, reviews) เรียกผ่าน `lib/api-client` (`authFetchJson`) ไปที่ API Routes
+- **API → Firestore:** API Routes ใช้ Firebase Admin SDK อ่าน/เขียน Firestore และตรวจ auth, termsAccepted, สิทธิ์
+
 ```
-User Action → React Component → API Route → Firebase/Service → Response
-     │              │               │              │              │
-     │              ↓               ↓              ↓              ↓
-     │         Validation      Rate Limit     Firestore      JSON/Error
-     │              │               │              │              │
-     │              ↓               ↓              ↓              ↓
-     └──────────► Toast ◄──────────┴──────────────┴──────────────┘
-                Notification
+User Action → Component → lib/db/* (authFetchJson) → API Route → Firestore/Service → { success, data }
+     │              │                    │                    │
+     │              ↓                    ↓                    ↓
+     │         Validation           Rate Limit          termsAccepted / canPost
+     └──────────► Toast ◄─────────────────────────────────────────────
 ```
 
 ### Clean Architecture Patterns
@@ -91,7 +93,7 @@ User Action → React Component → API Route → Firebase/Service → Response
 
 | เทคโนโลยี | เวอร์ชัน | การใช้งาน |
 |-----------|----------|-----------|
-| **Next.js** | 16.1.1 | Framework หลัก (App Router, RSC, Turbopack) |
+| **Next.js** | 16.1.5 | Framework หลัก (App Router, RSC, Turbopack) |
 | **React** | 19.2.3 | UI Library |
 | **Bun** | 1.3.6 | JavaScript Runtime & Package Manager |
 | **TypeScript** | 5.x | Type Safety |
@@ -115,8 +117,8 @@ User Action → React Component → API Route → Firebase/Service → Response
 
 | เทคโนโลยี | เวอร์ชัน | การใช้งาน |
 |-----------|----------|-----------|
-| **Vitest** | 4.0.17 | Unit Testing (69 tests, via Bun) |
-| **Playwright** | 1.57.0 | E2E Testing (64 tests, 4 browsers) |
+| **Vitest** | 4.0.17 | Unit Testing (119 tests) |
+| **Playwright** | 1.57.0 | E2E Testing (84 tests, 4 browsers; WebKit บางชุด skip) |
 | **ESLint** | 8.57.1 | Code Linting |
 | **Zod** | 3.25.76 | Schema Validation |
 | **GitHub Actions** | - | CI/CD Pipeline |
@@ -131,6 +133,7 @@ rmu-campus-x/
 │   ├── (auth)/                       # Authentication Pages
 │   │   ├── login/                    # หน้าเข้าสู่ระบบ
 │   │   ├── register/                 # หน้าลงทะเบียน
+│   │   ├── consent/                  # หน้ายอมรับข้อกำหนดและนโยบายความเป็นส่วนตัว
 │   │   └── verify-email/             # หน้ายืนยันอีเมล
 │   │
 │   ├── admin/                        # Admin Dashboard
@@ -143,10 +146,17 @@ rmu-campus-x/
 │   ├── api/                          # API Routes
 │   │   ├── admin/                    # Admin APIs
 │   │   ├── exchanges/                # Exchange APIs
+│   │   ├── favorites/                # รายการโปรด (list, check, add, delete)
+│   │   ├── items/                    # สิ่งของ (list, create, get, update, delete)
 │   │   ├── line/                     # LINE Integration
+│   │   ├── notifications/            # แจ้งเตือน (list, mark read, read-all, delete)
 │   │   ├── reports/                  # Report APIs
+│   │   ├── reviews/                  # รีวิว (list, create)
 │   │   ├── support/                  # Support APIs
-│   │   └── upload/                   # Image Upload API
+│   │   ├── upload/                   # Image Upload API
+│   │   ├── users/me/                 # โปรไฟล์ + accept-terms
+│   │   ├── users/[id]/               # โปรไฟล์สาธารณะ (ไม่ต้อง auth)
+│   │   └── health/                   # Health Check
 │   │
 │   ├── dashboard/                    # หน้า Dashboard หลัก
 │   ├── chat/[exchangeId]/            # หน้าแชท
@@ -160,6 +170,7 @@ rmu-campus-x/
 ├── components/                       # React Components
 │   ├── ui/                           # Base UI Components (Shadcn)
 │   ├── auth-provider.tsx             # Authentication Context
+│   ├── consent-guard.tsx             # ส่งผู้ใช้ที่ยังไม่ยอมรับ terms ไป /consent
 │   ├── filter-sidebar.tsx            # Category Filters
 │   ├── item-card.tsx                 # Item Display Card
 │   ├── item-card-skeleton.tsx        # Loading Skeleton
@@ -167,11 +178,14 @@ rmu-campus-x/
 │   └── ...                           # Other Components
 │
 ├── lib/                              # Utility Libraries
-│   ├── db/                           # Database Operations
-│   │   ├── items.ts                  # Items CRUD
+│   ├── api-client.ts                 # authFetchJson / getAuthToken (เรียก API จาก client)
+│   ├── db/                           # Database / API wrappers
+│   │   ├── items.ts                  # Items (เรียก /api/items)
 │   │   ├── exchanges.ts              # Exchanges CRUD
-│   │   ├── users.ts                  # Users CRUD
-│   │   ├── notifications.ts          # Notifications
+│   │   ├── favorites.ts              # รายการโปรด (เรียก /api/favorites)
+│   │   ├── users.ts, users-profile.ts # Users (เรียก /api/users/me, /api/users/[id])
+│   │   ├── notifications.ts          # แจ้งเตือน (เรียก /api/notifications)
+│   │   ├── reviews.ts                # รีวิว (เรียก /api/reviews)
 │   │   ├── reports.ts                # Reports
 │   │   └── logs.ts                   # Activity Logs
 │   │
@@ -217,6 +231,7 @@ rmu-campus-x/
 
 - **สมัครสมาชิกด้วยอีเมล @rmu.ac.th** - จำกัดเฉพาะนักศึกษา
 - **ยืนยันอีเมล (Email Verification)** - ป้องกันบัญชีปลอม
+- **ยอมรับข้อกำหนดและนโยบาย (Consent)** - หลังล็อกอินต้องยอมรับข้อกำหนดการใช้และนโยบายความเป็นส่วนตัวก่อนใช้งาน (หน้า `/consent`, `ConsentGuard`)
 - **เชื่อมต่อ LINE Account** - รับแจ้งเตือนผ่าน LINE
 - **ระบบ Role** - User / Admin
 
@@ -243,7 +258,7 @@ rmu-campus-x/
 
 ### 5. ระบบแจ้งเตือน (Notification System)
 
-- **In-App Notifications** - แจ้งเตือนในระบบ
+- **In-App Notifications** - แจ้งเตือนในระบบ (list, mark read, mark all read, delete ผ่าน API)
 - **LINE Push Notifications** - แจ้งเตือนผ่าน LINE
 - **Admin Alerts** - แจ้ง Admin เมื่อมีรายงานใหม่
 
@@ -258,6 +273,7 @@ rmu-campus-x/
 ### 7. ความปลอดภัย (Security)
 
 - **Distributed Rate Limiting** - Upstash Redis backing (100 req/min)
+- **termsAccepted** - API ที่เกี่ยวกับการโพสต์/รายงาน/support ตรวจยอมรับข้อกำหนดแล้ว
 - **Image Magic Byte Validation** - ตรวจสอบไฟล์จริง (JPEG, PNG, GIF, WebP)
 - **API Validation Wrapper** - Server-side Zod validation ทุก request
 - **Exchange State Machine** - ป้องกันสถานะเปลี่ยนผิดปกติ
@@ -288,17 +304,20 @@ rmu-campus-x/
 
 ### 10. Testing & Quality Assurance
 
-- **Unit Tests** - Vitest สำหรับทดสอบ functions หลัก
-- **Security Tests** - ทดสอบ input validation & sanitization
-- **Database Tests** - ทดสอบ Firestore operations
-- **Coverage Reports** - ดู code coverage ด้วย `bun run test:coverage`
+- **Unit Tests** - Vitest ~119 tests (API validation, security, exchange state machine, db, reports, auth, rate-limit, item-deletion, utils)
+- **E2E Tests** - Playwright 84 tests (API security, dashboard, navigation, auth pages) — รัน 4 browsers; ชุด Basic Navigation / Landing / Auth Pages ข้ามบน WebKit เนื่องจาก Next.js hydration ใน Playwright
+- **Firestore Rules Tests** - `npm run test:rules` (ต้องรัน Firebase Emulator)
+- **Coverage** - `npm run test:coverage`
 
 ```bash
-# Run tests
-bun run test
+# Unit tests
+npm run test
 
-# Run with coverage
-bun run test:coverage
+# E2E tests (Chromium, Firefox, WebKit, Mobile Chrome)
+npm run test:e2e
+
+# Type-check + unit test + build
+npm run check-all
 ```
 
 ### 11. Monitoring & Error Tracking (`lib/monitoring.ts`)
@@ -353,8 +372,8 @@ endTimer() // logs duration
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/cypxxc/5-1-2569.git
-cd rmu-campus-x
+git clone https://github.com/cypxxc/RMU-Campus-X.git
+cd RMU-Campus-X
 
 # 2. ติดตั้ง dependencies
 bun install
@@ -375,14 +394,17 @@ bun dev
 
 | Script | คำอธิบาย |
 |--------|----------|
-| `bun dev` | รันโหมด Development (Turbopack) |
-| `bun run build` | Build สำหรับ Production |
-| `bun start` | รัน Production Server |
-| `bun run lint` | ตรวจสอบ Code Quality |
-| `bun run test` | รัน Unit Tests (Vitest) |
-| `bun run test:e2e` | รัน E2E Tests (Playwright) |
-| `bun run test:e2e:ui` | รัน E2E Tests พร้อม UI |
-| `bun run check-all` | รัน Type-check, Tests และ Build ทั้งหมด |
+| `npm run dev` / `bun dev` | รันโหมด Development (Turbopack) |
+| `npm run build` / `bun run build` | Build สำหรับ Production |
+| `npm run start` / `bun start` | รัน Production Server |
+| `npm run lint` | ตรวจสอบ Code Quality (ESLint) |
+| `npm run type-check` | ตรวจสอบ TypeScript |
+| `npm run test` | รัน Unit Tests (Vitest) |
+| `npm run test:coverage` | Unit tests พร้อม coverage |
+| `npm run test:rules` | ทดสอบ Firestore rules (ต้องรัน Firebase Emulator) |
+| `npm run test:e2e` | รัน E2E Tests (Playwright, 4 browsers) |
+| `npm run test:e2e:ui` | รัน E2E Tests พร้อม UI |
+| `npm run check-all` | Type-check + Unit test + Build |
 
 ---
 
@@ -441,24 +463,27 @@ bun run test:coverage
 
 ```bash
 # ติดตั้ง browsers (ครั้งแรก)
-bunx playwright install
+npx playwright install
 
-# รันทุก test
-bun run test:e2e
+# รันทุก test (Chromium, Firefox, WebKit, Mobile Chrome)
+npm run test:e2e
 
 # รันพร้อม UI
-bun run test:e2e:ui
+npm run test:e2e:ui
 
-# ดู test report
-bunx playwright show-report
+# ดู test report หลังรัน
+npx playwright show-report
 ```
+
+**หมายเหตุ:** ชุด Basic Navigation, Landing Page Content และ Auth Pages จะถูก **skip บน WebKit** เนื่องจากปัญหา Next.js hydration ใน Playwright; เคสอื่นรันครบทั้ง 4 browsers
 
 ### Test Coverage
 
 | ประเภท | ครอบคลุม |
 |--------|----------|
-| Unit Tests | API Wrapper, Utilities |
-| E2E Tests | Dashboard, Navigation |
+| Unit Tests (Vitest) | API validation, security, exchange state machine, db, reports, auth, rate-limit, item-deletion, utils |
+| E2E Tests (Playwright) | API security (401, error structure), Dashboard redirect, Navigation, Landing, Auth pages |
+| Firestore Rules | `__tests__/rules/` (รันกับ Emulator) |
 
 ---
 
@@ -484,24 +509,38 @@ bun start
 
 ## 📖 API Documentation
 
-> 🔗 **Interactive API Docs:** [/api-docs](/api-docs) (Swagger UI)
+> 🔗 **Interactive API Docs:** [/api-docs](/api-docs) (Swagger UI)  
+> 📄 **รายละเอียดครบ:** [docs/API.md](docs/API.md)
 
-### API Endpoints
+### API Endpoints (สรุป)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/admin/items` | ดึงรายการสิ่งของ (Admin) |
-| DELETE | `/api/admin/items/[id]` | ลบสิ่งของ (Admin) |
-| GET | `/api/admin/users` | ดึงรายการผู้ใช้ (Admin) |
-| PATCH | `/api/admin/users/[id]` | อัปเดตสถานะผู้ใช้ (Admin) |
-| GET | `/api/admin/reports` | ดึงรายการรายงาน (Admin) |
-| PATCH | `/api/admin/reports/[id]` | อัปเดตสถานะรายงาน (Admin) |
-| GET | `/api/exchanges` | ดึงรายการแลกเปลี่ยน |
-| POST | `/api/exchanges` | สร้างคำขอแลกเปลี่ยน |
-| PATCH | `/api/exchanges/[id]` | อัปเดตสถานะแลกเปลี่ยน |
-| POST | `/api/upload` | อัปโหลดรูปภาพ |
-| POST | `/api/line/link` | เชื่อมต่อ LINE Account |
-| POST | `/api/line/webhook` | LINE Webhook |
+| กลุ่ม | Method | Endpoint | คำอธิบาย |
+|-------|--------|----------|----------|
+| **Items** | GET | `/api/items` | list (filter, search, pagination) |
+| | POST | `/api/items` | สร้าง item (ต้อง auth + terms + canPost) |
+| | GET | `/api/items/[id]` | ดึงรายการเดียว |
+| | PATCH / DELETE | `/api/items/[id]` | แก้ไข/ลบ (เจ้าของเท่านั้น) |
+| **Users** | GET | `/api/users/me` | โปรไฟล์ผู้ใช้ที่ล็อกอิน |
+| | PATCH | `/api/users/me` | แก้ไขโปรไฟล์ |
+| | POST | `/api/users/me/accept-terms` | ยอมรับข้อกำหนดและนโยบาย |
+| | GET | `/api/users/[id]` | โปรไฟล์สาธารณะ (ไม่ต้อง auth) |
+| **Favorites** | GET | `/api/favorites` | list รายการโปรด |
+| | GET | `/api/favorites/check?itemId=` | ตรวจว่า item ถูกโปรดหรือไม่ |
+| | POST | `/api/favorites` | เพิ่มรายการโปรด |
+| | DELETE | `/api/favorites/[itemId]` | ลบรายการโปรด |
+| **Notifications** | GET | `/api/notifications` | list แจ้งเตือน (pagination) |
+| | POST | `/api/notifications` | สร้าง notification (system/cross-user) |
+| | PATCH | `/api/notifications/[id]` | mark as read |
+| | POST | `/api/notifications/read-all` | mark all as read |
+| | DELETE | `/api/notifications/[id]` | ลบการแจ้งเตือน |
+| **Reviews** | GET | `/api/reviews?targetUserId=` | list รีวิวที่ user ได้รับ |
+| | POST | `/api/reviews` | สร้างรีวิว |
+| **Exchanges** | GET | `/api/exchanges` | list การแลกเปลี่ยน |
+| | POST | `/api/exchanges` | สร้างคำขอแลกเปลี่ยน (ต้อง terms) |
+| | POST | `/api/exchanges/respond` | ตอบรับ/ปฏิเสธ |
+| | PATCH | `/api/exchanges/[id]` | อัปเดตสถานะ |
+| **Reports / Support** | POST | `/api/reports`, `/api/support` | สร้างรายงาน / ticket (ต้อง terms) |
+| **Admin / LINE / Upload** | - | `/api/admin/*`, `/api/line/*`, `/api/upload` | ดู docs/API.md |
 
 ### Rate Limiting
 
@@ -513,13 +552,8 @@ bun start
 
 ### Response Format
 
-```typescript
-interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-}
-```
+- **สำเร็จ:** `{ success: true, data: T }` (จาก `successResponse()`)
+- **ผิดพลาด:** `{ error: string }` พร้อม HTTP status 4xx/5xx
 
 ---
 
@@ -583,10 +617,12 @@ interface ApiResponse<T> {
 | **Searching** | `lib/search.ts` | Fuzzy search + scoring |
 | **Backups** | `.github/workflows/backup.yml` | Automated daily Firestore backups |
 | **Restore** | `scripts/restore-firestore.ts` | Restore data from backup |
-| **Validation** | `lib/api-validation.ts` | Centralized API validation wrapper |
+| **Validation** | `lib/api-validation.ts` | Centralized API validation + requireTermsAccepted |
 | **State Machine** | `lib/exchange-state-machine.ts` | Exchange status transitions |
+| **API Client** | `lib/api-client.ts` | authFetchJson / getAuthToken สำหรับเรียก API จาก client |
 | **Health Check** | `/api/health` | System status monitoring |
 | **App Check** | `lib/app-check.ts` | Firebase App Check (bot protection) |
+| **System Analysis** | `docs/SYSTEM-ANALYSIS.md` | รายงานวิเคราะห์ระบบและจุดที่แก้แล้ว |
 
 ---
 
