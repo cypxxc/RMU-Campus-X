@@ -276,11 +276,15 @@ rmu-campus-x/
 | การปรับปรุง | รายละเอียด |
 |-------------|------------|
 | **Pagination** | Admin pages ใช้ pagination แทน fetch all |
-| **Lazy Loading** | Components ที่ไม่จำเป็นโหลดตอนหลัง |
+| **Lazy Loading** | Components ที่ไม่จำเป็นโหลดตอนหลัง (Next.js Dynamic Imports) |
 | **Count Aggregations** | API stats ใช้ count() แทน fetch all docs |
 | **Query Limits** | จำกัด query ไม่เกิน 200 items |
 | **Batch Queries** | รวม queries เพื่อลด reads |
 | **Image Caching** | Service Worker cache รูปจาก Cloudinary |
+| **Server Components** | `app/page.tsx` refactored to RSC for faster FCP |
+| **Image Optimization** | ใช้ `sharp` สำหรับ Production Image Optimization |
+| **Middleware Optimization** | Exclude static files จาก Edge Function เพื่อลด Latency |
+| **Vercel Best Practices** | ปฏิบัติตามมาตรฐาน Vercel Labs (Core Web Vitals) |
 
 ### 10. Testing & Quality Assurance
 

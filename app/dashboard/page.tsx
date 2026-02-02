@@ -239,19 +239,33 @@ export default function DashboardPage() {
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                  {(categories.length > 0 || status !== "all" || debouncedSearchQuery) && (
-                    <Button
-                      variant="outline"
-                      className="mt-1"
-                      onClick={() => {
-                        setCategories([])
-                        setStatus("all")
-                        setSearchQuery("")
-                      }}
-                    >
-                      ล้างการค้นหาและตัวกรอง
-                    </Button>
-                  )}
+                  <div className="flex flex-col sm:flex-row gap-2 items-center">
+                    {(categories.length > 0 || status !== "all" || debouncedSearchQuery) && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setCategories([])
+                          setStatus("all")
+                          setSearchQuery("")
+                        }}
+                      >
+                        ล้างการค้นหาและตัวกรอง
+                      </Button>
+                    )}
+                    {user && !debouncedSearchQuery && (
+                      <Button
+                        variant="default"
+                        onClick={() => {
+                          // Trigger post item modal - look for the header button
+                          const postButton = document.querySelector('[data-post-item-trigger]') as HTMLButtonElement
+                          postButton?.click()
+                        }}
+                      >
+                        <Package className="mr-2 h-4 w-4" />
+                        โพสต์สิ่งของ
+                      </Button>
+                    )}
+                  </div>
                 </EmptyContent>
               </Empty>
             ) : (

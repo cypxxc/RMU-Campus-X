@@ -50,20 +50,36 @@ export default function LoginPage() {
         description: "ยินดีต้อนรับกลับมา",
       })
       router.push("/dashboard")
-    } catch (error: any) {
-      let variant: "default" | "destructive" = "destructive"
+    } catch (error: unknown) {
+      const firebaseError = error as { code?: string; message?: string }
+      const variant: "default" | "destructive" = "destructive"
       let title = "เข้าสู่ระบบไม่สำเร็จ"
       let description = "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
 
-      // Handle specific errors
-      if (error.message.includes("verify your email") || error.message.includes("กรุณายืนยันอีเมล")) {
-        title = "กรุณายืนยันอีเมล"
-        description = "เราได้ส่งลิงก์ยืนยันไปที่อีเมลของคุณแล้ว"
-      } else if (error.message.includes("Ghost Account") || error.message.includes("BANNED")) {
-         title = "เข้าใช้งานไม่ได้"
-         description = error.message // Use standard message from backend
-      } else if (error.code === 'auth/invalid-credential') {
-         description = "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
+      // Handle specific errors - prioritize error codes over message matching
+      switch (firebaseError.code) {
+        case 'auth/invalid-credential':
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          description = "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
+          break
+        case 'auth/too-many-requests':
+          title = "ลองมากเกินไป"
+          description = "กรุณารอสักครู่แล้วลองใหม่อีกครั้ง"
+          break
+        case 'auth/user-disabled':
+          title = "บัญชีถูกระงับ"
+          description = "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ"
+          break
+        default:
+          // Fallback to message matching for custom backend errors
+          if (firebaseError.message?.includes("verify your email") || firebaseError.message?.includes("กรุณายืนยันอีเมล")) {
+            title = "กรุณายืนยันอีเมล"
+            description = "เราได้ส่งลิงก์ยืนยันไปที่อีเมลของคุณแล้ว"
+          } else if (firebaseError.message?.includes("Ghost Account") || firebaseError.message?.includes("BANNED")) {
+            title = "เข้าใช้งานไม่ได้"
+            description = firebaseError.message || "บัญชีนี้ถูกระงับการใช้งาน"
+          }
       }
 
       toast({

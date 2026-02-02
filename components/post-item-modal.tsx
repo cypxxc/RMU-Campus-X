@@ -206,17 +206,16 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
       resetForm()
       onOpenChange(false)
       
-      // Reload items - call onSuccess callback or reload page as fallback
+      // Reload items - call onSuccess callback to refresh list
       if (onSuccess) {
         onSuccess()
-      } else {
-        window.location.reload()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "ไม่สามารถโพสต์สิ่งของได้"
       console.error("[PostItemModal] Error posting item:", error)
       toast({
         title: "เกิดข้อผิดพลาด",
-        description: error.message || "ไม่สามารถโพสต์สิ่งของได้",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
