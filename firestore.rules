@@ -63,6 +63,13 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true; // Public profiles (needed for posts/comments)
 
+      // VALIDATION HELPERS
+      function isValidUser(data) {
+        return (data.displayName == null || (data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 50))
+            && (data.photoURL == null || (data.photoURL is string && data.photoURL.size() < 2000));
+            // Note: email, status, etc. are already strictly checked in create/update conditions
+      }
+
       // ✅ REGISTER (CREATE)
       allow create: if isOwner(userId)    // Must own the UID
                     && isRMU()            // Must use RMU Email
@@ -71,13 +78,15 @@ service cloud.firestore {
                     && request.resource.data.email == request.auth.token.email // Email must match Auth
                     && request.resource.data.get('isAdmin', false) == false    // Cannot set self as Admin
                     && request.resource.data.get('status', 'ACTIVE') == 'ACTIVE' // Must be ACTIVE
-                    && request.resource.data.get('warningCount', 0) == 0;      // Cannot reset warnings
+                    && request.resource.data.get('warningCount', 0) == 0       // Cannot reset warnings
+                    && isValidUser(request.resource.data);
 
       // ✅ UPDATE PROFILE
       // Prevent changing immutable identity fields (uid, email, status)
       // Line settings allowed.
       allow update: if isOwner(userId)
-                    && notUpdating(['email', 'uid', 'isAdmin', 'status', 'warningCount', 'createdAt', 'bannedReason', 'suspendedUntil']);
+                    && notUpdating(['email', 'uid', 'isAdmin', 'status', 'warningCount', 'createdAt', 'bannedReason', 'suspendedUntil'])
+                    && isValidUser(request.resource.data);
       
       // ADMIN ACCESS
       allow write: if isAdmin();
@@ -85,19 +94,36 @@ service cloud.firestore {
 
     // ----------------------------------------------------------------------------
     // 📦 ITEMS COLLECTION
-    // Goal: Only Verified+Active users post. Owners edit distinct fields.
+    // Goal: Only Verified+Active users post. Owners edit distinct fields. All data must be valid.
     // ----------------------------------------------------------------------------
     match /items/{itemId} {
       allow read: if true;
 
+      // VALIDATION HELPERS
+      function isValidItem(data) {
+        return data.title is string && data.title.size() > 0 && data.title.size() <= 100
+            && data.description is string && data.description.size() <= 2000
+            && data.category in ['electronics', 'books', 'furniture', 'clothing', 'sports', 'other']
+            && data.status in ['available', 'pending', 'completed']
+            && data.location is string && data.location.size() <= 100
+            && (data.imageUrls == null || (data.imageUrls is list && data.imageUrls.size() <= 5));
+      }
+
       allow create: if isAuthenticated() 
                     && isVerifiedEmail() 
                     && isActiveUser() 
-                    && request.resource.data.postedBy == request.auth.uid;
+                    && request.resource.data.postedBy == request.auth.uid
+                    && isValidItem(request.resource.data)
+                    // Initial status must be available
+                    && request.resource.data.status == 'available'
+                    // Cannot fake timestamp (must be close to now)
+                    && request.resource.data.postedAt == request.time; 
 
       allow update: if isAuthenticated()
                     && (
-                      (resource.data.postedBy == request.auth.uid && notUpdating(['postedBy', 'postedByEmail'])) // Owner edits
+                      (resource.data.postedBy == request.auth.uid 
+                       && notUpdating(['postedBy', 'postedByEmail', 'postedAt']) // Prevent changing immutable fields
+                       && isValidItem(request.resource.data))
                       || isAdmin()
                       || (isActiveUser() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) // Exchange flow
                     );

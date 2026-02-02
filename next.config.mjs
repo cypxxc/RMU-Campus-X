@@ -87,6 +87,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://vercel.live https://*.vercel-insights.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "worker-src 'self' blob:",
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: blob: https: http:",
               "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://*.vercel-insights.com https://vercel.live wss://*.firebaseio.com https://res.cloudinary.com https://api.line.me https://*.sentry.io https://*.ingest.sentry.io",
