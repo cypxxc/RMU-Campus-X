@@ -7,18 +7,54 @@ service firebase.storage {
     // 🛡️ SECURITY UTILITIES
     // ============================================================================
     
+    // Basic Authentication Check
     function isAuthenticated() {
       return request.auth != null;
     }
     
+    // Ownership Check
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
+    // Admin Check via Firestore lookup
+    function isAdmin() {
+      return isAuthenticated() 
+          && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // RMU Email Domain Check
+    function hasRMUEmail() {
+      return isAuthenticated() 
+          && request.auth.token.email != null
+          && request.auth.token.email.matches('^[0-9]{12}@rmu[.]ac[.]th$');
+    }
+    
+    // Verified Email Check
+    function isVerifiedEmail() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+    
+    // Active User Status Check
+    function isActiveUser() {
+      let userDoc = firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+      return userDoc != null && userDoc.data.status in ['ACTIVE', 'WARNING'];
+    }
+    
+    // Combined Eligibility Check
+    function isEligibleStudent() {
+      return isAuthenticated()
+          && isVerifiedEmail()
+          && hasRMUEmail()
+          && isActiveUser();
+    }
+    
+    // Content Type Validation (Images Only)
     function isValidImage() {
       return request.resource.contentType.matches('image/.*');
     }
     
+    // Size Limit Check
     function isUnderSizeLimit(maxSizeMB) {
       return request.resource.size < maxSizeMB * 1024 * 1024;
     }
@@ -28,34 +64,51 @@ service firebase.storage {
     // Only the user can upload/update their own avatar
     // ============================================================================
     match /avatars/{userId}/{fileName} {
+      // Public read - avatars are displayed on profiles and posts
       allow read: if true;
+      
+      // Write: Owner only with validation
       allow write: if isOwner(userId)
                    && isValidImage()
                    && isUnderSizeLimit(5);
-      allow delete: if isOwner(userId);
+      
+      // Delete: Owner or admin
+      allow delete: if isOwner(userId) || isAdmin();
     }
     
     // ============================================================================
     // 📦 ITEM IMAGES
-    // Any authenticated user can upload item images
+    // Eligible students can upload item images
     // ============================================================================
     match /items/{itemId}/{fileName} {
+      // Public read - item images visible to all
       allow read: if true;
-      allow write: if isAuthenticated()
+      
+      // Write: Eligible student or admin
+      allow write: if (isEligibleStudent() || isAdmin())
                    && isValidImage()
                    && isUnderSizeLimit(10);
-      allow delete: if isAuthenticated();
+      
+      // Delete: Eligible student (owner check done at app level) or admin
+      allow delete: if isEligibleStudent() || isAdmin();
     }
     
     // ============================================================================
     // 💬 CHAT IMAGES
-    // Authenticated users can upload chat images
+    // Exchange participants can upload chat images
     // ============================================================================
     match /chat/{exchangeId}/{fileName} {
+      // Read: Authenticated users (participant check at app level)
       allow read: if isAuthenticated();
+      
+      // Write: Active user with validation
       allow write: if isAuthenticated()
+                   && isActiveUser()
                    && isValidImage()
                    && isUnderSizeLimit(5);
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
     }
     
     // ============================================================================
@@ -63,14 +116,21 @@ service firebase.storage {
     // Users can upload evidence for reports
     // ============================================================================
     match /reports/{reportId}/{fileName} {
+      // Read: Authenticated (reporter/admin check at app level)
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated()
+      
+      // Write: Eligible student with validation
+      allow write: if isEligibleStudent()
                    && isValidImage()
                    && isUnderSizeLimit(10);
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
     }
     
     // ============================================================================
     // 🚫 CATCH-ALL: Block everything else
+    // Critical: This must come AFTER all specific paths
     // ============================================================================
     match /{allPaths=**} {
       allow read, write: if false;

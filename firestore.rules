@@ -4,31 +4,31 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ============================================================================
-    // 🛡️ 1. SECURITY UTILITIES
+    // 🛡️ SECURITY UTILITIES
     // ============================================================================
 
-    // Standard Auth Check
+    // Basic Authentication Check
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Strict Ownership Check
+    // Strict Ownership Check (document ID matches auth UID)
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Role Check: Admin (Database Lookup)
-    // Note: Most Admin actions now use Admin SDK (Server-Side), bypassing these rules.
-    // This remains for potential direct console access or read operations.
+    // Admin Check via Database Lookup
+    // Admin documents are manually created - no client can write to admins collection
     function isAdmin() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isAuthenticated() 
+          && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Email Domain Check (RMU Only)
-    // Safe case-insensitive check relying on lower-cased token or strict regex
-    function isRMU() {
+    // RMU Email Domain Check (Student ID format: 12 digits @rmu.ac.th)
+    function hasRMUEmail() {
       return isAuthenticated() 
-             && request.auth.token.email.matches('.*@rmu[.]ac[.]th$');
+          && request.auth.token.email != null
+          && request.auth.token.email.matches('^[0-9]{12}@rmu[.]ac[.]th$');
     }
 
     // Verified Email Check
@@ -36,228 +36,378 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
 
-    // Active User Check
-    // Prevents Banned/Suspended users from creating content
+    // Active User Status Check
+    // Reads user profile to check if not banned/suspended
     function isActiveUser() {
-      let status = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status;
-      return status == 'ACTIVE' || status == 'WARNING';
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null 
+          && userDoc.data.status in ['ACTIVE', 'WARNING'];
     }
 
-    // Helper: Check if only specific keys are being modified
-    // Useful for strict update policies
+    // Combined Eligibility Check for RMU Students
+    // Must be: authenticated + verified email + RMU domain + active status
+    function isEligibleStudent() {
+      return isAuthenticated()
+          && isVerifiedEmail()
+          && hasRMUEmail()
+          && isActiveUser();
+    }
+
+    // Helper: Check if specific keys are NOT being modified
     function notUpdating(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
     }
 
+    // Helper: Check if ONLY specific keys are being modified
+    function onlyUpdating(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
     // ============================================================================
-    // 📂 2. COLLECTION RULES
+    // 📂 COLLECTION RULES
     // ============================================================================
 
     // ----------------------------------------------------------------------------
     // 👤 USERS COLLECTION
-    // Security Goal:
-    // 1. Creation: Client can ONLY create their own doc with limited fields.
-    // 2. No "Ghost Accounts": Cannot overwrite existing doc.
-    // 3. No Privilege Escalation: Cannot set 'isAdmin', 'status', 'warningCount' etc.
+    // Public read for displaying user info on posts/comments
+    // Create: Only own document with strict validation
+    // Update: Only safe fields, no privilege escalation
     // ----------------------------------------------------------------------------
     match /users/{userId} {
-      allow read: if true; // Public profiles (needed for posts/comments)
+      // Public read - needed for displaying poster info
+      allow read: if true;
 
-      // VALIDATION HELPERS
-      function isValidUser(data) {
-        return (data.displayName == null || (data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 50))
-            && (data.photoURL == null || (data.photoURL is string && data.photoURL.size() < 2000));
-            // Note: email, status, etc. are already strictly checked in create/update conditions
+      // Validation: User profile data
+      function isValidUserData(data) {
+        return (data.displayName == null || 
+                (data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 50))
+            && (data.photoURL == null || 
+                (data.photoURL is string && data.photoURL.size() < 2000))
+            && (data.bio == null || 
+                (data.bio is string && data.bio.size() <= 300));
       }
 
-      // ✅ REGISTER (CREATE)
-      allow create: if isOwner(userId)    // Must own the UID
-                    && isRMU()            // Must use RMU Email
-                    && !exists(/databases/$(database)/documents/users/$(userId)) // Prevent Overwrite
-                    // DATA INTEGRITY:
-                    && request.resource.data.email == request.auth.token.email // Email must match Auth
-                    && request.resource.data.get('isAdmin', false) == false    // Cannot set self as Admin
-                    && request.resource.data.get('status', 'ACTIVE') == 'ACTIVE' // Must be ACTIVE
-                    && request.resource.data.get('warningCount', 0) == 0       // Cannot reset warnings
-                    && isValidUser(request.resource.data);
+      // CREATE: Register new user
+      // - Must be owner of the UID
+      // - Must have RMU email
+      // - Cannot overwrite existing document
+      // - Cannot set privileged fields
+      allow create: if isOwner(userId)
+                    && hasRMUEmail()
+                    && !exists(/databases/$(database)/documents/users/$(userId))
+                    // Email must match authenticated email
+                    && request.resource.data.email == request.auth.token.email
+                    // Cannot set admin flag
+                    && request.resource.data.get('isAdmin', false) == false
+                    // Must start as ACTIVE
+                    && request.resource.data.get('status', 'ACTIVE') == 'ACTIVE'
+                    // Cannot manipulate warning count
+                    && request.resource.data.get('warningCount', 0) == 0
+                    // Data validation
+                    && isValidUserData(request.resource.data);
 
-      // ✅ UPDATE PROFILE
-      // Prevent changing immutable identity fields (uid, email, status)
-      // Line settings allowed.
+      // UPDATE: Profile updates
+      // - Only owner can update
+      // - Cannot change immutable/privileged fields
       allow update: if isOwner(userId)
-                    && notUpdating(['email', 'uid', 'isAdmin', 'status', 'warningCount', 'createdAt', 'bannedReason', 'suspendedUntil'])
-                    && isValidUser(request.resource.data);
-      
-      // ADMIN ACCESS
+                    && notUpdating(['email', 'uid', 'isAdmin', 'status', 'warningCount', 
+                                    'createdAt', 'bannedReason', 'suspendedUntil'])
+                    && isValidUserData(request.resource.data);
+
+      // ADMIN: Full access for admin operations
       allow write: if isAdmin();
     }
 
     // ----------------------------------------------------------------------------
     // 📦 ITEMS COLLECTION
-    // Goal: Only Verified+Active users post. Owners edit distinct fields. All data must be valid.
+    // Public read for browsing
+    // Create/Update: Only eligible students with validation
     // ----------------------------------------------------------------------------
     match /items/{itemId} {
+      // Public read - item listings visible to all authenticated users
       allow read: if true;
 
-      // VALIDATION HELPERS
-      function isValidItem(data) {
-        return data.title is string && data.title.size() > 0 && data.title.size() <= 100
+      // Validation: Item data
+      function isValidItemData(data) {
+        return data.title is string && data.title.size() >= 1 && data.title.size() <= 100
             && data.description is string && data.description.size() <= 2000
             && data.category in ['electronics', 'books', 'furniture', 'clothing', 'sports', 'other']
             && data.status in ['available', 'pending', 'completed']
-            && data.location is string && data.location.size() <= 100
+            && (data.location == null || (data.location is string && data.location.size() <= 100))
             && (data.imageUrls == null || (data.imageUrls is list && data.imageUrls.size() <= 5));
       }
 
-      allow create: if isAuthenticated() 
-                    && isVerifiedEmail() 
-                    && isActiveUser() 
+      // CREATE: Post new item
+      allow create: if isEligibleStudent()
                     && request.resource.data.postedBy == request.auth.uid
-                    && isValidItem(request.resource.data)
-                    // Initial status must be available
+                    && request.resource.data.postedByEmail == request.auth.token.email
                     && request.resource.data.status == 'available'
-                    // Cannot fake timestamp (must be close to now)
-                    && request.resource.data.postedAt == request.time; 
+                    && request.resource.data.postedAt == request.time
+                    && isValidItemData(request.resource.data);
 
-      allow update: if isAuthenticated()
-                    && (
+      // UPDATE: Edit item
+      allow update: if isAuthenticated() && (
+                      // Owner can update (except immutable fields)
                       (resource.data.postedBy == request.auth.uid 
-                       && notUpdating(['postedBy', 'postedByEmail', 'postedAt']) // Prevent changing immutable fields
-                       && isValidItem(request.resource.data))
+                       && notUpdating(['postedBy', 'postedByEmail', 'postedAt'])
+                       && isValidItemData(request.resource.data))
+                      // Admin can update anything
                       || isAdmin()
-                      || (isActiveUser() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) // Exchange flow
+                      // Active users can update only status (for exchange flow)
+                      || (isActiveUser() 
+                          && onlyUpdating(['status', 'updatedAt'])
+                          && request.resource.data.status in ['available', 'pending', 'completed'])
                     );
 
-      allow delete: if (isAuthenticated() && resource.data.postedBy == request.auth.uid) || isAdmin();
+      // DELETE: Only owner or admin
+      allow delete: if (isAuthenticated() && resource.data.postedBy == request.auth.uid) 
+                    || isAdmin();
     }
 
     // ----------------------------------------------------------------------------
-    // 🤝 EXCHANGES
-    // Goal: Private transaction flow.
+    // 🤝 EXCHANGES COLLECTION
+    // Private transaction flow between two parties
     // ----------------------------------------------------------------------------
     match /exchanges/{exchangeId} {
+      // Participant check for existing documents
       function isParticipant() {
-        return resource.data.requesterId == request.auth.uid || 
-               resource.data.ownerId == request.auth.uid;
+        return resource.data.requesterId == request.auth.uid 
+            || resource.data.ownerId == request.auth.uid;
       }
 
+      // Valid exchange status transitions
+      function isValidStatusTransition(oldStatus, newStatus) {
+        return (oldStatus == 'pending' && newStatus in ['accepted', 'rejected', 'cancelled'])
+            || (oldStatus == 'accepted' && newStatus in ['in_progress', 'cancelled'])
+            || (oldStatus == 'in_progress' && newStatus in ['completed', 'cancelled']);
+      }
+
+      // READ: Only participants or admin
       allow read: if isAuthenticated() && (isParticipant() || isAdmin());
-      
-      // List Protection: Prevent dumping database
-      // Note: list rules cannot validate resource.data per-document
-      // Security comes from query filters that client must include
-      // Code uses where("requesterId", "==", userId) or where("ownerId", "==", userId)
+
+      // LIST: With query protection
       allow list: if isAuthenticated() && request.query.limit <= 50;
 
-      allow create: if isAuthenticated() 
-                    && isVerifiedEmail() 
-                    && isActiveUser()
-                    && request.resource.data.requesterId == request.auth.uid;
+      // CREATE: Eligible student initiates exchange
+      allow create: if isEligibleStudent()
+                    && request.resource.data.requesterId == request.auth.uid
+                    && request.resource.data.requesterEmail == request.auth.token.email
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.createdAt == request.time;
 
+      // UPDATE: Participants or admin
       allow update: if isAuthenticated() && (
-        (isParticipant() && isActiveUser()) || isAdmin()
-      );
-      
-      // Delete (Cancel/Clean up)
+                      (isParticipant() && isActiveUser()
+                       && notUpdating(['requesterId', 'requesterEmail', 'ownerId', 'ownerEmail', 
+                                       'itemId', 'itemTitle', 'createdAt']))
+                      || isAdmin()
+                    );
+
+      // DELETE: Admin only (cleanup)
       allow delete: if isAdmin();
     }
 
     // ----------------------------------------------------------------------------
-    // 💬 CHAT MESSAGES
-    // Goal: Secure Messaging for Participants Only
+    // 💬 CHAT MESSAGES COLLECTION
+    // Private messaging between exchange participants
     // ----------------------------------------------------------------------------
     match /chatMessages/{messageId} {
-      // Only participants of the exchange can read messages
+      // Check if user is participant in the related exchange
       function isMessageParticipant() {
         let exchange = get(/databases/$(database)/documents/exchanges/$(resource.data.exchangeId));
-        return exchange.data.requesterId == request.auth.uid || 
-               exchange.data.ownerId == request.auth.uid;
+        return exchange != null && (
+          exchange.data.requesterId == request.auth.uid 
+          || exchange.data.ownerId == request.auth.uid
+        );
       }
-      
+
+      // Check for new message creation
+      function canSendMessage() {
+        let exchange = get(/databases/$(database)/documents/exchanges/$(request.resource.data.exchangeId));
+        return exchange != null && (
+          exchange.data.requesterId == request.auth.uid 
+          || exchange.data.ownerId == request.auth.uid
+        );
+      }
+
+      // READ: Only exchange participants or admin
       allow read: if isAuthenticated() && (isMessageParticipant() || isAdmin());
-      
+
+      // CREATE: Participants can send messages
       allow create: if isAuthenticated() 
                     && isActiveUser()
-                    && request.resource.data.senderId == request.auth.uid;
-    }
+                    && request.resource.data.senderId == request.auth.uid
+                    && request.resource.data.senderEmail == request.auth.token.email
+                    && request.resource.data.createdAt == request.time
+                    && canSendMessage();
 
-    // ----------------------------------------------------------------------------
-    // 🎫 SUPPORT & REPORTS
-    // ----------------------------------------------------------------------------
-    match /reports/{reportId} {
-      allow read: if isOwner(resource.data.reporterId) || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
-      allow update: if isAdmin(); 
-    }
+      // Messages are immutable - no updates
+      allow update: if false;
 
-    match /support_tickets/{ticketId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      // User can only add messages, not change status/priority/admin fields
-      allow update: if isAdmin() 
-                    || (isOwner(resource.data.userId) 
-                        && notUpdating(['status', 'priority', 'repliedBy', 'repliedByEmail', 'repliedAt', 'adminReply', 'resolvedAt']));
-    }
-
-    match /notifications/{notificationId} {
-      allow read: if isOwner(resource.data.userId);
-      // CREATE: Only for yourself (rare edge case) - system notifications use Admin SDK
-      allow create: if isOwner(request.resource.data.userId);
-      // UPDATE/DELETE: Only owner can mark as read or delete their notifications
-      allow update, delete: if isOwner(resource.data.userId);
-    }
-
-    match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if isAuthenticated() && request.resource.data.reviewerId == request.auth.uid;
+      // DELETE: Admin only
       allow delete: if isAdmin();
     }
-    
+
+    // ----------------------------------------------------------------------------
+    // 🎫 REPORTS COLLECTION
+    // Students can create reports, only admin can manage
+    // ----------------------------------------------------------------------------
+    match /reports/{reportId} {
+      // READ: Reporter can read own, admin can read all
+      allow read: if isAuthenticated() && (
+                    resource.data.reporterId == request.auth.uid || isAdmin()
+                  );
+
+      // CREATE: Eligible student can submit report
+      allow create: if isEligibleStudent()
+                    && request.resource.data.reporterId == request.auth.uid
+                    && request.resource.data.reporterEmail == request.auth.token.email
+                    && request.resource.data.status == 'new'
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.reportType in ['item_report', 'exchange_report', 'chat_report', 'user_report'];
+
+      // UPDATE: Admin only
+      allow update: if isAdmin();
+
+      // DELETE: Admin only
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------------
+    // 🎫 SUPPORT TICKETS COLLECTION
+    // ----------------------------------------------------------------------------
+    match /support_tickets/{ticketId} {
+      // READ: Owner or admin
+      allow read: if isAuthenticated() && (
+                    resource.data.userId == request.auth.uid || isAdmin()
+                  );
+
+      // CREATE: Authenticated user
+      allow create: if isAuthenticated()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.userEmail == request.auth.token.email
+                    && request.resource.data.status == 'new';
+
+      // UPDATE: User can only add messages, admin can update anything
+      allow update: if isAdmin() 
+                    || (resource.data.userId == request.auth.uid 
+                        && notUpdating(['status', 'priority', 'repliedBy', 'repliedByEmail', 
+                                        'repliedAt', 'adminReply', 'resolvedAt', 'userId', 'userEmail']));
+
+      // DELETE: Admin only
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------------
+    // 🔔 NOTIFICATIONS COLLECTION
+    // Private to notification owner
+    // ----------------------------------------------------------------------------
+    match /notifications/{notificationId} {
+      // READ: Owner only
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // CREATE: Only for yourself (self-notifications)
+      // Cross-user notifications use Admin SDK
+      allow create: if isAuthenticated() 
+                    && request.resource.data.userId == request.auth.uid;
+
+      // UPDATE: Owner can mark as read
+      allow update: if isAuthenticated() 
+                    && resource.data.userId == request.auth.uid
+                    && onlyUpdating(['isRead']);
+
+      // DELETE: Owner can delete own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ----------------------------------------------------------------------------
+    // ⭐ REVIEWS COLLECTION
+    // Public read, reviewer can create, no edits
+    // ----------------------------------------------------------------------------
+    match /reviews/{reviewId} {
+      allow read: if true;
+
+      allow create: if isEligibleStudent()
+                    && request.resource.data.reviewerId == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+
+      // Reviews are immutable
+      allow update: if false;
+
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------------
+    // ❤️ FAVORITES COLLECTION
+    // Private to owner
+    // ----------------------------------------------------------------------------
     match /favorites/{favoriteId} {
       // favoriteId format: {userId}_{itemId}
-      // Allow read if user owns this favorite (based on favoriteId prefix or doc data)
-      allow read: if isAuthenticated() && 
-        (favoriteId.split('_')[0] == request.auth.uid || 
-         (resource != null && resource.data.userId == request.auth.uid));
-      // Allow create if userId in data matches auth user
-      allow create: if isOwner(request.resource.data.userId);
-      // Allow delete if user owns this favorite
-      allow delete: if resource.data.userId == request.auth.uid;
+      // READ: Owner only
+      allow read: if isAuthenticated() && (
+                    favoriteId.split('_')[0] == request.auth.uid 
+                    || (resource != null && resource.data.userId == request.auth.uid)
+                  );
+
+      // CREATE: Owner only
+      allow create: if isAuthenticated() 
+                    && request.resource.data.userId == request.auth.uid;
+
+      // DELETE: Owner only
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // No updates - just create/delete
+      allow update: if false;
     }
 
-    
+    // ----------------------------------------------------------------------------
+    // 📝 DRAFTS COLLECTION
+    // Private to owner
+    // ----------------------------------------------------------------------------
     match /drafts/{draftId} {
-      // CREATE uses request.resource (incoming data, document doesn't exist yet)
-      allow create: if isOwner(request.resource.data.userId);
-      // READ/UPDATE/DELETE uses resource (existing document data)
-      allow read, update, delete: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() 
+                    && request.resource.data.userId == request.auth.uid;
+
+      allow read, update, delete: if isAuthenticated() 
+                                  && resource.data.userId == request.auth.uid;
     }
 
     // ----------------------------------------------------------------------------
-    // 👮 ADMIN & SYSTEM LOGS
+    // 👮 ADMIN & SYSTEM COLLECTIONS
+    // Highly restricted access
     // ----------------------------------------------------------------------------
+
+    // ADMINS: Read own status, no client writes
     match /admins/{userId} {
-      // Allow users to check their own admin status, or full read for admins
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if false; // Manual setup only
+      allow write: if false; // Manual setup via Firebase Console only
     }
 
-
-    // Admin Logs: Read-only for admins. Writes happen via Admin SDK (Server).
+    // ADMIN LOGS: Admin read only, writes via Admin SDK
     match /adminLogs/{logId} {
       allow read: if isAdmin();
-      allow write: if false; 
-    }
-    
-    // User Warnings: Read-only for user/admin. Writes via Admin SDK (Server).
-    match /userWarnings/{warningId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
       allow write: if false;
     }
-    
-    // Cases: Admin only
+
+    // USER WARNINGS: Owner/Admin read, writes via Admin SDK
+    match /userWarnings/{warningId} {
+      allow read: if isAuthenticated() && (
+                    resource.data.userId == request.auth.uid || isAdmin()
+                  );
+      allow write: if false;
+    }
+
+    // CASES: Admin panel data
     match /cases/{caseId} {
-        allow read, write: if isAdmin();
+      allow read, write: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------------
+    // 🚫 DEFAULT DENY
+    // Catch-all rule - explicitly deny everything else
+    // ----------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
