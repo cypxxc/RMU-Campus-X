@@ -71,7 +71,8 @@ export function createFirebaseAdminReportDeps(): ReportCreateDeps {
 
         if (!usersSnapshot.empty) {
           const userData = usersSnapshot.docs[0]!.data() as User
-          if (userData.lineUserId && userData.lineNotifications?.enabled) {
+          const enabled = userData.lineNotifications?.enabled !== false
+          if (userData.lineUserId && enabled) {
             lineUserIds.push(userData.lineUserId)
           }
         }
