@@ -14,6 +14,8 @@ interface AuthContextType {
   logout: () => Promise<void>
   /** Call after updating user doc (e.g. termsAccepted) to refresh context */
   refreshUserProfile: () => Promise<void>
+  /** หลังยอมรับ terms บน consent page เรียกเพื่ออัปเดต context ทันที (ไม่ต้องรอ refresh) */
+  markTermsAccepted: () => void
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   termsAccepted: false,
   logout: async () => {},
   refreshUserProfile: async () => {},
+  markTermsAccepted: () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -126,7 +129,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { getFirebaseDb } = await import("@/lib/firebase")
       const { doc, getDocFromServer } = await import("firebase/firestore")
       const db = getFirebaseDb()
-      // อ่านจาก server เพื่อไม่ให้ได้ค่า cache เก่าหลัง API อัปเดต termsAccepted
       const userDocSnap = await getDocFromServer(doc(db, "users", user.uid))
       if (userDocSnap.exists()) {
         setTermsAccepted(userDocSnap.data()?.termsAccepted === true)
@@ -136,9 +138,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Memoize the context value to prevent unnecessary re-renders
+  const markTermsAccepted = () => setTermsAccepted(true)
+
   const value = useMemo(
-    () => ({ user, loading, isAdmin, termsAccepted, logout, refreshUserProfile }),
+    () => ({ user, loading, isAdmin, termsAccepted, logout, refreshUserProfile, markTermsAccepted }),
     [user, loading, isAdmin, termsAccepted]
   )
 
