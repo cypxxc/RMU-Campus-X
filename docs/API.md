@@ -24,43 +24,79 @@ Authorization: Bearer <firebase_id_token>
 
 ---
 
+## API Coverage (ครบทั้งระบบ)
+
+| Method | Endpoint | คำอธิบาย | Auth |
+|--------|----------|----------|------|
+| **Items** | | | |
+| GET | `/api/items` | list items (filter, search, pagination) | ✅ |
+| POST | `/api/items` | สร้าง item | ✅ + terms |
+| GET | `/api/items/[id]` | ดึงรายการเดียว | ✅ |
+| PATCH | `/api/items/[id]` | แก้ไข (เจ้าของเท่านั้น) | ✅ |
+| DELETE | `/api/items/[id]` | ลบ (เจ้าของเท่านั้น) | ✅ |
+| **Exchanges** | | | |
+| POST | `/api/exchanges` | สร้างคำขอแลกเปลี่ยน | ✅ + terms |
+| POST | `/api/exchanges/respond` | ตอบรับ/ปฏิเสธ | ✅ |
+| POST | `/api/exchanges/cancel` | ยกเลิก | ✅ |
+| GET | `/api/exchanges/[id]` | ดึงรายละเอียด (participant เท่านั้น) | ✅ |
+| PATCH | `/api/exchanges/[id]` | อัปเดตสถานะ (participant + state machine) | ✅ |
+| **Notifications** | | | |
+| GET | `/api/notifications` | list การแจ้งเตือนของผู้ใช้ | ✅ |
+| POST | `/api/notifications` | สร้าง notification (system/cross-user) | ✅ |
+| PATCH | `/api/notifications/[id]` | mark as read | ✅ |
+| **Favorites** | | | |
+| GET | `/api/favorites` | list รายการโปรด | ✅ |
+| POST | `/api/favorites` | add รายการโปรด (body: itemId, itemTitle?, itemImage?) | ✅ |
+| DELETE | `/api/favorites/[itemId]` | ลบรายการโปรด | ✅ |
+| **Users** | | | |
+| GET | `/api/users/me` | ดึงโปรไฟล์ผู้ใช้ | ✅ |
+| PATCH | `/api/users/me` | แก้ไขโปรไฟล์ (displayName, photoURL, bio) | ✅ |
+| POST | `/api/users/me/accept-terms` | ยอมรับข้อกำหนดและนโยบาย | ✅ |
+| DELETE | `/api/users/me/delete` | ลบบัญชี | ✅ |
+| **Reviews** | | | |
+| GET | `/api/reviews?targetUserId=xxx` | list รีวิวที่ user ได้รับ | ✅ |
+| POST | `/api/reviews` | สร้างรีวิว | ✅ |
+| **Reports** | | | |
+| POST | `/api/reports` | สร้างรายงาน | ✅ + terms |
+| **Support** | | | |
+| POST | `/api/support` | สร้าง ticket | ✅ + terms |
+| **Admin, LINE, Upload, Health** | (ดูรายละเอียดในเอกสารด้านล่าง) | | |
+
+---
+
 ## Endpoints
 
 ### Items
 
-#### Get Items
+#### Get Items (list)
 ```http
 GET /api/items
 ```
+*Requires authentication.* Query: `categories`, `status`, `search`, `pageSize`, `lastId`. Response: `{ success, items, lastId, hasMore }`.
 
-**Query Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `category` | string | Filter by category |
-| `status` | string | Filter by status (available, pending, completed) |
-| `search` | string | Search query |
-| `limit` | number | Items per page (default: 20) |
-| `cursor` | string | Pagination cursor |
-
-**Response:**
-```json
-{
-  "items": [...],
-  "hasMore": true,
-  "nextCursor": "abc123"
-}
+#### Create Item
+```http
+POST /api/items
 ```
+*Requires auth + terms + canPost.* Body: title, description, category, location, locationDetail?, imageUrls?.
 
 #### Get Item by ID
 ```http
 GET /api/items/[id]
 ```
+*Requires authentication.*
+
+#### Update Item
+```http
+PATCH /api/items/[id]
+```
+*Requires authentication – เจ้าของเท่านั้น.* Body: partial (title, description, category, location, locationDetail).
 
 #### Delete Item
 ```http
-DELETE /api/items/[id]/delete
+DELETE /api/items/[id]
 ```
-*Requires authentication*
+*Requires authentication – เจ้าของเท่านั้น.*
 
 ---
 

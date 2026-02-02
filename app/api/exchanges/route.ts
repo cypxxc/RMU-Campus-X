@@ -10,7 +10,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { withValidation, type ValidationContext } from "@/lib/api-validation"
 import { sendPushMessage } from "@/lib/line"
-import { getAdminDb } from "@/lib/firebase-admin"
+import { getAdminDb, canUserExchange } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { sanitizeText } from "@/lib/security"
 
@@ -60,6 +60,21 @@ export const POST = withValidation(
       requesterEmail,
       requesterName,
     } = data
+
+    if (requesterId !== ctx.userId) {
+      return NextResponse.json(
+        { error: "requesterId must match authenticated user", code: "FORBIDDEN" },
+        { status: 403 }
+      )
+    }
+
+    const allowed = await canUserExchange(ctx.userId)
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "บัญชีของคุณถูกจำกัดสิทธิ์การแลกเปลี่ยน กรุณาติดต่อผู้ดูแลระบบ", code: "RESTRICTED" },
+        { status: 403 }
+      )
+    }
 
     try {
       const db = getAdminDb()
@@ -150,7 +165,7 @@ export const POST = withValidation(
       )
     }
   },
-  { requireAuth: true }
+  { requireAuth: true, requireTermsAccepted: true }
 )
 
 /**

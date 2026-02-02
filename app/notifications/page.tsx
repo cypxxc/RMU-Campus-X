@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from "@/lib/firestore"
 import type { AppNotification } from "@/types"
-import { DocumentSnapshot } from "firebase/firestore"
 import { Bell, MessageCircle, AlertTriangle, Package, Info, Loader2, ArrowLeft, CheckCheck, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -29,7 +28,7 @@ export default function NotificationsPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
-  const paginationDocs = useRef<Map<number, DocumentSnapshot | null>>(new Map([[1, null]]))
+  const paginationLastIds = useRef<Map<number, string | null>>(new Map([[1, null]]))
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
@@ -37,18 +36,17 @@ export default function NotificationsPage() {
     if (!user) return
     setLoading(true)
     try {
-      const lastDoc = page === 1 ? null : paginationDocs.current.get(page) ?? null
+      const lastId = page === 1 ? null : paginationLastIds.current.get(page) ?? null
       const result = await getNotifications(user.uid, {
         pageSize: PAGE_SIZE,
-        lastDoc
+        lastId,
       })
       
       setNotifications(result.notifications)
       setTotalCount(result.totalCount)
       
-      // Store lastDoc for next page
-      if (result.lastDoc && result.hasMore) {
-        paginationDocs.current.set(page + 1, result.lastDoc)
+      if (result.lastId != null && result.hasMore) {
+        paginationLastIds.current.set(page + 1, result.lastId)
       }
     } catch (error: any) {
       toast({

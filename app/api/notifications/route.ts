@@ -1,6 +1,7 @@
 /**
  * Notifications API Route
- * Creates notifications for users using Admin SDK (for system/cross-user notifications)
+ * POST: สร้าง notification (system/cross-user)
+ * GET: list notifications ของผู้ใช้ที่ล็อกอิน
  */
 
 import { NextRequest } from "next/server"
@@ -12,8 +13,52 @@ interface NotificationBody {
   userId: string
   title: string
   message: string
-  type: 'exchange' | 'support' | 'system' | 'warning'
+  type: "exchange" | "support" | "system" | "warning"
   relatedId?: string
+}
+
+/** GET /api/notifications – list ของผู้ใช้ที่ล็อกอิน */
+export async function GET(request: NextRequest) {
+  try {
+    const token = getAuthToken(request)
+    if (!token) return ApiErrors.unauthorized("Missing authentication token")
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+
+    const { searchParams } = new URL(request.url)
+    const pageSize = Math.min(Number(searchParams.get("pageSize")) || 20, 50)
+    const lastId = searchParams.get("lastId") ?? undefined
+
+    const db = getAdminDb()
+    let q = db
+      .collection("notifications")
+      .where("userId", "==", decoded.uid)
+      .orderBy("createdAt", "desc")
+      .limit(pageSize + 1)
+
+    if (lastId) {
+      const lastSnap = await db.collection("notifications").doc(lastId).get()
+      if (lastSnap.exists) q = q.startAfter(lastSnap)
+    }
+
+    const snapshot = await q.get()
+    const notifications = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+    const hasMore = notifications.length > pageSize
+    const page = notifications.slice(0, pageSize)
+
+    const countSnap = await db.collection("notifications").where("userId", "==", decoded.uid).count().get()
+    const totalCount = countSnap.data().count
+
+    return successResponse({
+      notifications: page,
+      lastId: page.length ? page[page.length - 1]?.id ?? null : null,
+      hasMore,
+      totalCount,
+    })
+  } catch (e) {
+    console.error("[Notifications API] GET Error:", e)
+    return ApiErrors.internalError("Internal server error")
+  }
 }
 
 export async function POST(request: NextRequest) {

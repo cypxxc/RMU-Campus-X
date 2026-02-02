@@ -9,20 +9,27 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   isAdmin: boolean
+  /** true only when user doc has termsAccepted === true */
+  termsAccepted: boolean
   logout: () => Promise<void>
+  /** Call after updating user doc (e.g. termsAccepted) to refresh context */
+  refreshUserProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isAdmin: false,
+  termsAccepted: false,
   logout: async () => {},
+  refreshUserProfile: async () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined
@@ -57,12 +64,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   displayName: user.displayName || user.email?.split("@")[0] || "",
                   photoURL: user.photoURL || "",
                   status: "ACTIVE",
+                  warningCount: 0,
+                  restrictions: {
+                    canPost: true,
+                    canExchange: true,
+                    canChat: true,
+                  },
                   createdAt: serverTimestamp(),
                   updatedAt: serverTimestamp(),
+                  // termsAccepted left false/undefined so user must accept on consent page
                 })
+                setTermsAccepted(false)
               } else {
-                // Check for auto-unsuspend efficiently
                 const userData = userDocSnap.data()
+                setTermsAccepted(userData?.termsAccepted === true)
+                // Check for auto-unsuspend efficiently
                 if (userData?.status === 'SUSPENDED') {
                   const { checkAndAutoUnsuspend } = await import("@/lib/firestore")
                   await checkAndAutoUnsuspend(user.uid, userData)
@@ -74,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } else {
             setIsAdmin(false)
+            setTermsAccepted(false)
           }
           
           setLoading(false)
@@ -103,8 +120,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const refreshUserProfile = async () => {
+    if (!user) return
+    try {
+      const { getFirebaseDb } = await import("@/lib/firebase")
+      const { doc, getDoc } = await import("firebase/firestore")
+      const db = getFirebaseDb()
+      const userDocSnap = await getDoc(doc(db, "users", user.uid))
+      if (userDocSnap.exists()) {
+        setTermsAccepted(userDocSnap.data()?.termsAccepted === true)
+      }
+    } catch (error) {
+      console.error("Refresh user profile error:", error)
+    }
+  }
+
   // Memoize the context value to prevent unnecessary re-renders
-  const value = useMemo(() => ({ user, loading, isAdmin, logout }), [user, loading, isAdmin])
+  const value = useMemo(
+    () => ({ user, loading, isAdmin, termsAccepted, logout, refreshUserProfile }),
+    [user, loading, isAdmin, termsAccepted]
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

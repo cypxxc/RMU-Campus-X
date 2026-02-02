@@ -8,6 +8,7 @@ import { QueryProvider } from "@/components/query-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { SiteFooter } from "@/components/site-footer"
 import { LazyHelpBot } from "@/components/lazy-help-bot"
+import { ConsentGuard } from "@/components/consent-guard"
 import { WebVitals } from "@/components/web-vitals"
 import "./globals.css"
 
@@ -73,6 +74,7 @@ export default function RootLayout({
       <body className="font-sans antialiased bg-background text-foreground">
         <QueryProvider>
           <AuthProvider>
+            <ConsentGuard>
             <ThemeProvider
               attribute="class"
               defaultTheme="system"
@@ -86,6 +88,7 @@ export default function RootLayout({
               <WebVitals />
               <LazyHelpBot />
             </ThemeProvider>
+            </ConsentGuard>
           </AuthProvider>
         </QueryProvider>
       </body>

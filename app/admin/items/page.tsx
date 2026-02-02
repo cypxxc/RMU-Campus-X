@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, query, where, getDocs, DocumentSnapshot } from "firebase/firestore"
+import { collection, query, where, getDocs } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import { deleteItem, updateItem, createAdminLog, getItems } from "@/lib/firestore"
 import type { Item, ItemStatus } from "@/types"
@@ -56,8 +56,8 @@ export default function AdminItemsPage() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
   const [processing, setProcessing] = useState(false)
   
-  // Pagination
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null)
+  // Pagination (API ใช้ lastId)
+  const [lastId, setLastId] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(true)
   const [isLoadMore, setIsLoadMore] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
@@ -102,36 +102,36 @@ export default function AdminItemsPage() {
     checkAdmin()
   }, [authLoading, checkAdmin, router, user])
 
-  const loadItems = useCallback(async ({ reset = false, lastDoc: lastDocOverride, searchQuery: searchQueryOverride }: { reset?: boolean; lastDoc?: DocumentSnapshot | null; searchQuery?: string } = {}) => {
+  const loadItems = useCallback(async ({ reset = false, lastId: lastIdOverride, searchQuery: searchQueryOverride }: { reset?: boolean; lastId?: string | null; searchQuery?: string } = {}) => {
     try {
       if (reset) {
         setLoading(true)
-        setLastDoc(null)
+        setLastId(null)
       } else {
         setIsLoadMore(true)
       }
 
-      const { data, error } = await getItems({
+      const result = await getItems({
         pageSize,
-        lastDoc: reset ? undefined : (lastDocOverride || undefined),
-        searchQuery: searchQueryOverride || undefined
+        lastId: reset ? undefined : (lastIdOverride ?? undefined),
+        searchQuery: searchQueryOverride || undefined,
       })
 
-      if (error) {
-        throw new Error(error)
+      if (!result.success && result.error) {
+        throw new Error(result.error)
       }
 
-      if (data) {
+      if (result.data) {
+        const data = result.data
         if (reset) {
           setItems(data.items)
         } else {
           setItems(prev => [...prev, ...data.items])
         }
-        setLastDoc(data.lastDoc)
+        setLastId(data.lastId)
         setHasMore(data.hasMore)
         setTotalCount(data.totalCount)
       }
-
     } catch (error) {
       console.error("[AdminItems] Error loading items:", error)
       toast({ title: "โหลดข้อมูลล้มเหลว", variant: "destructive" })
@@ -414,7 +414,7 @@ export default function AdminItemsPage() {
         <div className="flex justify-center mt-8">
             <Button 
                 variant="outline" 
-                onClick={() => loadItems({ reset: false, lastDoc, searchQuery })} 
+                onClick={() => loadItems({ reset: false, lastId: lastId ?? undefined, searchQuery })} 
                 disabled={isLoadMore}
                 className="w-full max-w-[200px]"
             >

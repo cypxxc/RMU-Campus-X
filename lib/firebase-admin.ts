@@ -116,6 +116,50 @@ export async function verifyIdToken(token: string, checkStatus: boolean = false)
 }
 
 /**
+ * Get user doc from Firestore (server-side).
+ * Use to check termsAccepted, restrictions, etc.
+ */
+export async function getAdminUserDoc(uid: string) {
+  const db = getAdminDb()
+  const snap = await db.collection('users').doc(uid).get()
+  return snap.exists ? snap.data() : null
+}
+
+/**
+ * Check if user has accepted terms. Returns false if no doc or termsAccepted !== true.
+ */
+export async function hasAcceptedTerms(uid: string): Promise<boolean> {
+  const data = await getAdminUserDoc(uid)
+  return data?.termsAccepted === true
+}
+
+/**
+ * Check if user is allowed to create exchanges (status + restrictions.canExchange).
+ */
+export async function canUserExchange(uid: string): Promise<boolean> {
+  const data = await getAdminUserDoc(uid)
+  if (!data) return false
+  const status = data.status
+  if (status !== 'ACTIVE' && status !== 'WARNING') return false
+  const restrictions = data.restrictions
+  if (restrictions && restrictions.canExchange === false) return false
+  return true
+}
+
+/**
+ * Check if user is allowed to post items (status + restrictions.canPost).
+ */
+export async function canUserPost(uid: string): Promise<boolean> {
+  const data = await getAdminUserDoc(uid)
+  if (!data) return false
+  const status = data.status
+  if (status !== 'ACTIVE' && status !== 'WARNING') return false
+  const restrictions = data.restrictions
+  if (restrictions && restrictions.canPost === false) return false
+  return true
+}
+
+/**
  * Debug version that throws errors instead of returning null
  */
 export async function verifyIdTokenDebug(token: string) {
