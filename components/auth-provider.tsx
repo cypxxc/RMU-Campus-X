@@ -18,6 +18,8 @@ interface AuthContextType {
   markTermsAccepted: () => void
 }
 
+const TERMS_ACCEPTED_KEY = "rmu_terms_accepted"
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
@@ -50,18 +52,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const { getFirebaseDb } = await import("@/lib/firebase")
               const { doc, getDoc, getDocFromServer, setDoc, serverTimestamp } = await import("firebase/firestore")
               const db = getFirebaseDb()
-              
-              // User doc ต้องอ่านจาก server เพื่อได้ termsAccepted ล่าสุด (ไม่ใช้ cache) — ป้องกันรีเฟรชแล้วกลับไป /consent
-              const [adminDoc, userDocSnap] = await Promise.all([
-                getDoc(doc(db, "admins", user.uid)),
-                getDocFromServer(doc(db, "users", user.uid))
-              ])
-              
+              const userRef = doc(db, "users", user.uid)
+
+              const adminDoc = await getDoc(doc(db, "admins", user.uid))
               setIsAdmin(adminDoc.exists())
-              
-              // Auto-create user document if not exists (critical for posting)
+
+              // อ่าน user doc: ลอง server ก่อน ถ้า fail (network/permission) ใช้ cache — ป้องกันรีเฟรชแล้วกลับไป /consent
+              let userDocSnap
+              try {
+                userDocSnap = await getDocFromServer(userRef)
+              } catch {
+                userDocSnap = await getDoc(userRef)
+              }
+
               if (!userDocSnap.exists()) {
-                await setDoc(doc(db, "users", user.uid), {
+                await setDoc(userRef, {
                   uid: user.uid,
                   email: user.email,
                   displayName: user.displayName || user.email?.split("@")[0] || "",
@@ -75,14 +80,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   },
                   createdAt: serverTimestamp(),
                   updatedAt: serverTimestamp(),
-                  // termsAccepted left false/undefined so user must accept on consent page
                 })
                 setTermsAccepted(false)
               } else {
                 const userData = userDocSnap.data()
-                setTermsAccepted(userData?.termsAccepted === true)
-                // Check for auto-unsuspend efficiently
-                if (userData?.status === 'SUSPENDED') {
+                const accepted = userData?.termsAccepted === true
+                setTermsAccepted(accepted)
+                if (accepted && typeof sessionStorage !== "undefined") sessionStorage.setItem(TERMS_ACCEPTED_KEY, "1")
+                if (userData?.status === "SUSPENDED") {
                   const { checkAndAutoUnsuspend } = await import("@/lib/firestore")
                   await checkAndAutoUnsuspend(user.uid, userData)
                 }
@@ -90,6 +95,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } catch (error) {
               console.error("Auth init error:", error)
               setIsAdmin(false)
+              try {
+                const { getFirebaseDb } = await import("@/lib/firebase")
+                const { doc, getDoc } = await import("firebase/firestore")
+                const db = getFirebaseDb()
+                const snap = await getDoc(doc(db, "users", user.uid))
+                if (snap.exists()) setTermsAccepted(snap.data()?.termsAccepted === true)
+                else if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1") setTermsAccepted(true)
+              } catch {
+                if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1") setTermsAccepted(true)
+              }
             }
           } else {
             setIsAdmin(false)
@@ -138,7 +153,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const markTermsAccepted = () => setTermsAccepted(true)
+  const markTermsAccepted = () => {
+    setTermsAccepted(true)
+    if (typeof sessionStorage !== "undefined") sessionStorage.setItem(TERMS_ACCEPTED_KEY, "1")
+  }
 
   const value = useMemo(
     () => ({ user, loading, isAdmin, termsAccepted, logout, refreshUserProfile, markTermsAccepted }),
