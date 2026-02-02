@@ -133,13 +133,17 @@ service cloud.firestore {
 
       // Validation: Item data
       function isValidItemData(data) {
+        let title = data.get('title', '');
+        let description = data.get('description', '');
+        let category = data.get('category', '');
+        let status = data.get('status', '');
         let location = data.get('location', null);
         let imageUrls = data.get('imageUrls', null);
 
-        return data.title is string && data.title.size() >= 1 && data.title.size() <= 100
-            && data.description is string && data.description.size() <= 2000
-            && data.category in ['electronics', 'books', 'furniture', 'clothing', 'sports', 'other']
-            && data.status in ['available', 'pending', 'completed']
+        return title is string && title.size() >= 1 && title.size() <= 100
+            && description is string && description.size() <= 2000
+            && category in ['electronics', 'books', 'furniture', 'clothing', 'sports', 'other']
+            && status in ['available', 'pending', 'completed']
             && (location == null || (location is string && location.size() <= 100))
             && (imageUrls == null || (imageUrls is list && imageUrls.size() <= 5));
       }
@@ -149,7 +153,7 @@ service cloud.firestore {
                     && request.resource.data.postedBy == request.auth.uid
                     && request.resource.data.postedByEmail == request.auth.token.email
                     && request.resource.data.status == 'available'
-                    && request.resource.data.postedAt == request.time
+                    // && request.resource.data.postedAt == request.time
                     && isValidItemData(request.resource.data);
 
       // UPDATE: Edit item
@@ -199,14 +203,16 @@ service cloud.firestore {
       allow create: if isEligibleStudent()
                     && request.resource.data.requesterId == request.auth.uid
                     && request.resource.data.requesterEmail == request.auth.token.email
-                    && request.resource.data.status == 'pending'
-                    && request.resource.data.createdAt == request.time;
+                    && request.resource.data.status == 'pending';
+                    // && request.resource.data.createdAt == request.time;
 
       // UPDATE: Participants or admin
       allow update: if isAuthenticated() && (
                       (isParticipant() && isActiveUser()
                        && notUpdating(['requesterId', 'requesterEmail', 'ownerId', 'ownerEmail', 
-                                       'itemId', 'itemTitle', 'createdAt']))
+                                       'itemId', 'itemTitle', 'createdAt'])
+                       && (request.resource.data.status == resource.data.status 
+                           || isValidStatusTransition(resource.data.status, request.resource.data.status)))
                       || isAdmin()
                     );
 

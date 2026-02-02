@@ -255,7 +255,7 @@ describe("Users Collection", () => {
       const db = getAuth(ELIGIBLE_STUDENT).firestore();
       await assertFails(
         updateDoc(doc(db, "users", ELIGIBLE_STUDENT.uid), {
-          status: "ACTIVE", // Even same value is disallowed
+          status: "SUSPENDED", // Must be different from current (ACTIVE)
         })
       );
     });
