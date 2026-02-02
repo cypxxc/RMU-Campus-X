@@ -48,13 +48,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (user) {
             try {
               const { getFirebaseDb } = await import("@/lib/firebase")
-              const { doc, getDoc, setDoc, serverTimestamp } = await import("firebase/firestore")
+              const { doc, getDoc, getDocFromServer, setDoc, serverTimestamp } = await import("firebase/firestore")
               const db = getFirebaseDb()
               
-              // Parallel Fetch: Check admin status AND user document
+              // User doc ต้องอ่านจาก server เพื่อได้ termsAccepted ล่าสุด (ไม่ใช้ cache) — ป้องกันรีเฟรชแล้วกลับไป /consent
               const [adminDoc, userDocSnap] = await Promise.all([
                 getDoc(doc(db, "admins", user.uid)),
-                getDoc(doc(db, "users", user.uid))
+                getDocFromServer(doc(db, "users", user.uid))
               ])
               
               setIsAdmin(adminDoc.exists())
