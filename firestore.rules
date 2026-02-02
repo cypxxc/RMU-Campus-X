@@ -31,11 +31,11 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
 
-    // ✅ FIX: use exists() before get().data
+    // ✅ FIX: use exists() before get().data; default status to ACTIVE if missing
     function isActiveUser() {
       let p = /databases/$(database)/documents/users/$(request.auth.uid);
       return exists(p)
-        && (get(p).data.status in ['ACTIVE', 'WARNING']);
+        && (get(p).data.get('status', 'ACTIVE') in ['ACTIVE', 'WARNING']);
     }
 
     function isEligibleStudent() {

@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import { authFetchJson } from "@/lib/api-client"
 import { cancelExchange, deleteExchange, createNotification } from "@/lib/firestore"
 import type { Exchange } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -50,42 +49,9 @@ export default function MyExchangesPage() {
 
     setLoading(true)
     try {
-      const db = getFirebaseDb()
-      const requesterQuery = query(
-        collection(db, "exchanges"),
-        where("requesterId", "==", user.uid),
-        orderBy("createdAt", "desc"),
-      )
-
-      const ownerQuery = query(
-        collection(db, "exchanges"),
-        where("ownerId", "==", user.uid),
-        orderBy("createdAt", "desc"),
-      )
-
-      const [requesterSnapshot, ownerSnapshot] = await Promise.all([getDocs(requesterQuery), getDocs(ownerQuery)])
-
-      const requesterExchanges = requesterSnapshot.docs.map(
-        (doc) =>
-          ({
-            id: doc.id,
-            ...doc.data(),
-          }) as Exchange,
-      )
-
-      const ownerExchanges = ownerSnapshot.docs.map(
-        (doc) =>
-          ({
-            id: doc.id,
-            ...doc.data(),
-          }) as Exchange,
-      )
-
-      const allExchanges = [...requesterExchanges, ...ownerExchanges].sort(
-        (a, b) => (b.createdAt?.toDate?.() || new Date()).getTime() - (a.createdAt?.toDate?.() || new Date()).getTime(),
-      )
-
-      setExchanges(allExchanges)
+      const res = await authFetchJson<{ exchanges?: Exchange[] }>("/api/exchanges", { method: "GET" })
+      const list = res.data?.exchanges ?? []
+      setExchanges(list as Exchange[])
     } catch (error: any) {
       toast({
         title: "เกิดข้อผิดพลาด",
@@ -277,7 +243,7 @@ export default function MyExchangesPage() {
               {exchanges
                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                 .map((exchange, index) => {
-                const createdDate = exchange.createdAt?.toDate?.() || new Date()
+                const createdDate = typeof exchange.createdAt === "string" ? new Date(exchange.createdAt) : (exchange.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || new Date()
                 const isRequester = user?.uid === exchange.requesterId
 
                 return (

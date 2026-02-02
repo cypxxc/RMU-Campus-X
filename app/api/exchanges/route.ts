@@ -2,19 +2,68 @@
  * Exchange API Route
  * สร้างและจัดการ Exchange พร้อมส่ง LINE Notification
  * ใช้ Firebase Admin SDK for robust server-side operations
- * 
- * ✅ Uses withValidation wrapper for consistent validation and auth
+ *
+ * GET /api/exchanges — ดึงรายการแลกเปลี่ยนของ user (ใช้ Admin SDK ไม่ติด Firestore rules)
+ * POST /api/exchanges — สร้าง exchange ใหม่
  */
 
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { withValidation, type ValidationContext } from "@/lib/api-validation"
 import { sendPushMessage } from "@/lib/line"
-import { getAdminDb, canUserExchange } from "@/lib/firebase-admin"
+import { getAdminDb, canUserExchange, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { sanitizeText } from "@/lib/security"
+import { ApiErrors, getAuthToken } from "@/lib/api-response"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
+
+function serializeExchange(doc: { id: string; data: () => Record<string, unknown> | undefined }): Record<string, unknown> {
+  const data = doc.data()
+  if (!data) return { id: doc.id }
+  const out: Record<string, unknown> = { id: doc.id, ...data }
+  const ts = (x: unknown) => x && typeof (x as { toDate?: () => Date }).toDate === "function" ? (x as { toDate: () => Date }).toDate().toISOString() : x
+  if (data.createdAt) out.createdAt = ts(data.createdAt)
+  if (data.updatedAt) out.updatedAt = ts(data.updatedAt)
+  if (data.cancelledAt) out.cancelledAt = ts(data.cancelledAt)
+  return out
+}
+
+/**
+ * GET /api/exchanges
+ * ดึงรายการแลกเปลี่ยนของ user (requester หรือ owner) — ใช้ Admin SDK ไม่ติด Firestore rules
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const token = getAuthToken(request)
+    if (!token) return ApiErrors.unauthorized("Missing authentication token")
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+
+    const uid = decoded.uid
+    const db = getAdminDb()
+
+    const [requesterSnap, ownerSnap] = await Promise.all([
+      db.collection("exchanges").where("requesterId", "==", uid).orderBy("createdAt", "desc").get(),
+      db.collection("exchanges").where("ownerId", "==", uid).orderBy("createdAt", "desc").get(),
+    ])
+
+    const byId = new Map<string, Record<string, unknown>>()
+    requesterSnap.docs.forEach((d) => byId.set(d.id, serializeExchange(d)))
+    ownerSnap.docs.forEach((d) => byId.set(d.id, serializeExchange(d)))
+
+    const list = Array.from(byId.values()).sort((a, b) => {
+      const ta = typeof a.createdAt === "string" ? new Date(a.createdAt).getTime() : 0
+      const tb = typeof b.createdAt === "string" ? new Date(b.createdAt).getTime() : 0
+      return tb - ta
+    })
+
+    return NextResponse.json({ success: true, data: { exchanges: list } })
+  } catch (e) {
+    console.error("[Exchanges API] GET Error:", e)
+    return ApiErrors.internalError("Internal server error")
+  }
+}
 
 /**
  * Zod schema for exchange creation request
