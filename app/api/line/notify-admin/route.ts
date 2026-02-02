@@ -57,17 +57,18 @@ async function getAdminLineUserIds(): Promise<string[]> {
     const adminData = adminDoc.data() as { email?: string }
     const adminId = adminDoc.id
 
-    // 1) Prefer direct lookup by id
+    // 1) Prefer direct lookup by id (admin doc id = user uid)
     const userDocById = await db.collection("users").doc(adminId).get()
     if (userDocById.exists) {
       const user = userDocById.data() as AdminUserDoc
-      if (user.lineUserId && user.lineNotifications?.enabled) {
+      const enabled = user.lineNotifications?.enabled !== false
+      if (user.lineUserId && enabled) {
         lineUserIds.add(user.lineUserId)
         continue
       }
     }
 
-    // 2) Fallback by email
+    // 2) Fallback by email (admins collection usually has email, users keyed by uid)
     if (adminData.email) {
       const userSnap = await db
         .collection("users")
@@ -77,7 +78,8 @@ async function getAdminLineUserIds(): Promise<string[]> {
 
       if (!userSnap.empty) {
         const user = userSnap.docs[0]!.data() as AdminUserDoc
-        if (user.lineUserId && user.lineNotifications?.enabled) {
+        const enabled = user.lineNotifications?.enabled !== false
+        if (user.lineUserId && enabled) {
           lineUserIds.add(user.lineUserId)
         }
       }
