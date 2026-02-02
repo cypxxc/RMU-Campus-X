@@ -35,10 +35,11 @@ service firebase.storage {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
     
-    // Active User Status Check
+    // Active User Status Check (use exists() before get() to avoid error when doc missing)
     function isActiveUser() {
-      let userDoc = firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
-      return userDoc != null && userDoc.data.status in ['ACTIVE', 'WARNING'];
+      let userPath = /databases/(default)/documents/users/$(request.auth.uid);
+      return firestore.exists(userPath)
+          && firestore.get(userPath).data.status in ['ACTIVE', 'WARNING'];
     }
     
     // Combined Eligibility Check

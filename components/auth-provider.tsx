@@ -124,9 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return
     try {
       const { getFirebaseDb } = await import("@/lib/firebase")
-      const { doc, getDoc } = await import("firebase/firestore")
+      const { doc, getDocFromServer } = await import("firebase/firestore")
       const db = getFirebaseDb()
-      const userDocSnap = await getDoc(doc(db, "users", user.uid))
+      // อ่านจาก server เพื่อไม่ให้ได้ค่า cache เก่าหลัง API อัปเดต termsAccepted
+      const userDocSnap = await getDocFromServer(doc(db, "users", user.uid))
       if (userDocSnap.exists()) {
         setTermsAccepted(userDocSnap.data()?.termsAccepted === true)
       }

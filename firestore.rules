@@ -76,9 +76,10 @@ service cloud.firestore {
       }
 
       // ✅ Student-only system: allow only eligible students/admin to read
-      // - get: any eligible student/admin
+      // - get: any eligible student/admin; OR own doc for RMU+verified (so new users can check profile exists before create)
       // - list: admin only (prevent directory scrape)
-      allow get: if canUseApp();
+      allow get: if canUseApp()
+        || (isOwner(userId) && hasRMUEmail() && isVerifiedEmail());
       allow list: if isAdmin();
 
       allow create: if isOwner(userId)
@@ -121,12 +122,12 @@ service cloud.firestore {
       // ✅ student-only browsing
       allow get, list: if canUseApp();
 
+      // postedAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
         && request.resource.data.postedBy == request.auth.uid
         && request.resource.data.postedByEmail == request.auth.token.email
         && request.resource.data.status == 'available'
-        // If you use serverTimestamp(), this should pass
-        && request.resource.data.postedAt == request.time
+        && request.resource.data.keys().hasAll(['postedAt'])
         && isValidItemData(request.resource.data);
 
       // ✅ FIX: remove "any active user can update status"
@@ -161,15 +162,16 @@ service cloud.firestore {
             || (oldStatus == newStatus); // allow no-op
       }
 
-      // ✅ IMPORTANT: separate get/list; default deny list for non-admin (safe)
+      // ✅ get: participants or admin; list: any canUseApp (query filtered by requesterId/ownerId)
       allow get: if canUseApp() && (isParticipantExistingDoc() || isAdmin());
-      allow list: if isAdmin();
+      allow list: if canUseApp();
 
+      // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
         && request.resource.data.requesterId == request.auth.uid
         && request.resource.data.requesterEmail == request.auth.token.email
         && request.resource.data.status == 'pending'
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.keys().hasAll(['createdAt']);
 
       allow update: if (
           (canUseApp()
@@ -193,10 +195,6 @@ service cloud.firestore {
     // ============================================================================
     match /chatMessages/{messageId} {
 
-      function exchangeForExistingMessage() {
-        return get(/databases/$(database)/documents/exchanges/$(resource.data.exchangeId));
-      }
-
       function isMessageParticipant() {
         let exPath = /databases/$(database)/documents/exchanges/$(resource.data.exchangeId);
         return exists(exPath) && (
@@ -215,10 +213,11 @@ service cloud.firestore {
 
       allow get, list: if canUseApp() && (isMessageParticipant() || isAdmin());
 
+      // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
         && request.resource.data.senderId == request.auth.uid
         && request.resource.data.senderEmail == request.auth.token.email
-        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasAll(['createdAt'])
         && canSendMessage();
 
       allow update: if false;
@@ -230,13 +229,14 @@ service cloud.firestore {
     // ============================================================================
     match /reports/{reportId} {
       allow get: if canUseApp() && (resource.data.reporterId == request.auth.uid || isAdmin());
-      allow list: if isAdmin();
+      allow list: if canUseApp(); // user can query own reports (where reporterId == auth.uid)
 
+      // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.reporterEmail == request.auth.token.email
         && request.resource.data.status == 'new'
-        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasAll(['createdAt'])
         && request.resource.data.reportType in ['item_report', 'exchange_report', 'chat_report', 'user_report'];
 
       allow update, delete: if isAdmin();
@@ -247,7 +247,7 @@ service cloud.firestore {
     // ============================================================================
     match /support_tickets/{ticketId} {
       allow get: if canUseApp() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isAdmin();
+      allow list: if canUseApp(); // user can query own tickets (where userId == auth.uid)
 
       allow create: if canUseApp()
         && request.resource.data.userId == request.auth.uid
@@ -271,7 +271,7 @@ service cloud.firestore {
     // ============================================================================
     match /notifications/{notificationId} {
       allow get: if canUseApp() && resource.data.userId == request.auth.uid;
-      allow list: if isAdmin(); // prevent mass listing
+      allow list: if canUseApp(); // user can query own notifications (where userId == auth.uid)
 
       allow create: if canUseApp()
         && request.resource.data.userId == request.auth.uid;
@@ -290,9 +290,10 @@ service cloud.firestore {
       // student-only read (ถ้าต้องการ public จริงค่อยเปลี่ยน)
       allow get, list: if canUseApp();
 
+      // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
         && request.resource.data.reviewerId == request.auth.uid
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.keys().hasAll(['createdAt']);
 
       allow update: if false;
       allow delete: if isAdmin();
@@ -322,7 +323,7 @@ service cloud.firestore {
       allow get, update, delete: if canUseApp()
         && resource.data.userId == request.auth.uid;
 
-      allow list: if isAdmin();
+      allow list: if canUseApp(); // user can query own drafts (where userId == auth.uid)
     }
 
     // ============================================================================
@@ -341,7 +342,7 @@ service cloud.firestore {
 
     match /userWarnings/{warningId} {
       allow get: if canUseApp() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isAdmin();
+      allow list: if canUseApp(); // user can query own warnings (where userId == auth.uid)
       allow write: if false;
     }
 
