@@ -89,7 +89,7 @@ export const registerUser = async (rawEmail: string, password: string) => {
       console.error("[Register] CRITICAL: Rollback failed!", deleteError)
     }
 
-    throw new Error("ระบบไม่สามารถสร้างข้อมูลผู้ใช้ได้ (กรุณาลองใหม่อีกครั้ง)")
+    throw new Error(`ระบบไม่สามารถสร้างข้อมูลผู้ใช้ได้: ${(firestoreError as any).message || firestoreError} (กรุณาลองใหม่อีกครั้ง)`)
   }
 }
 
