@@ -20,7 +20,7 @@ const ThreeBackground = dynamic(
 )
 
 export default function ConsentPage() {
-  const { user, loading: authLoading, termsAccepted, refreshUserProfile } = useAuth()
+  const { user, loading: authLoading, termsAccepted, refreshUserProfile, markTermsAccepted } = useAuth()
   const [acceptTermsCheck, setAcceptTermsCheck] = useState(false)
   const [acceptPrivacyCheck, setAcceptPrivacyCheck] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -59,12 +59,13 @@ export default function ConsentPage() {
     setLoading(true)
     try {
       await acceptTerms(user.uid)
-      await refreshUserProfile()
+      markTermsAccepted()
+      refreshUserProfile().catch(() => {})
       toast({
         title: "ยอมรับเรียบร้อย",
         description: "คุณสามารถใช้งานแพลตฟอร์มได้แล้ว",
       })
-      router.push("/dashboard")
+      router.replace("/dashboard")
     } catch (error) {
       console.error("Accept terms error:", error)
       toast({
