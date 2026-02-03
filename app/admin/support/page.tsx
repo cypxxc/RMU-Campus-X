@@ -28,13 +28,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, MessageSquare, Send, Eye, CheckCircle2, Clock, Inbox, ArrowLeft, RefreshCw, Search } from "lucide-react"
+import { Loader2, MessageSquare, Send, Eye, CheckCircle2, Clock, Inbox, ArrowLeft, Search } from "lucide-react"
 import Link from "next/link"
 
 const ticketCategoryLabels: Record<string, string> = {
   general: "ปัญหาทั่วไป",
-  bug: "แจ้งบัค",
-  feature: "เสนอแนะฟีเจอร์",
+  bug: "แจ้งข้อผิดพลาด",
+  feature: "เสนอแนะฟังก์ชัน",
   account: "ปัญหาบัญชี",
   other: "อื่นๆ",
 }
@@ -219,10 +219,20 @@ export default function AdminSupportPage() {
     }
   }
   
-  const refreshAll = () => {
-      loadTickets('pending', true)
-      loadTickets('history', true)
-  }
+  const refreshAll = useCallback(() => {
+    loadTickets("pending", true)
+    loadTickets("history", true)
+  }, [loadTickets])
+
+  // อัปเดตอัตโนมัติทุก 30 วินาที เฉพาะเมื่อแท็บเปิดอยู่
+  useEffect(() => {
+    if (!isAdmin) return
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      refreshAll()
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [isAdmin, refreshAll])
 
   // Filter logic for search (client-side filtering of loaded data as requested in plan, or server side? Plan said Server pagination.)
   // We can't easily Mix Server Pagination + Client Search without refetching. 
@@ -263,15 +273,11 @@ export default function AdminSupportPage() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <MessageSquare className="h-8 w-8 text-primary" />
-              Support Tickets
+              คำร้องขอความช่วยเหลือ
             </h1>
             <p className="text-muted-foreground">จัดการคำร้องและตอบกลับผู้ใช้</p>
           </div>
         </div>
-        <Button onClick={refreshAll} variant="outline" className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          รีเฟรช
-        </Button>
       </div>
 
       {/* Stats */}
@@ -337,12 +343,12 @@ export default function AdminSupportPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
-              รายการ Tickets
+              รายการคำร้อง
             </CardTitle>
             <div className="relative w-full md:w-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="ค้นหา Ticket (ในรายการ)..."
+                placeholder="ค้นหาคำร้อง..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 bg-background w-full md:w-[300px]"
@@ -380,7 +386,7 @@ export default function AdminSupportPage() {
                       setTicketUser(null)
                     }
                  }} 
-                 emptyMessage="ไม่มี Tickets รอดำเนินการ"
+                 emptyMessage="ไม่มีคำร้องรอดำเนินการ"
                />
             </TabsContent>
             
@@ -399,7 +405,7 @@ export default function AdminSupportPage() {
                       setTicketUser(null)
                     }
                  }} 
-                 emptyMessage="ไม่มีประวัติ Tickets"
+                 emptyMessage="ไม่มีประวัติคำร้อง"
                />
             </TabsContent>
           </Tabs>
@@ -497,7 +503,7 @@ export default function AdminSupportPage() {
                        <div className="flex-1 space-y-2">
                           <div className={`flex items-baseline justify-between ${msg.sender === 'admin' ? 'flex-row-reverse' : ''}`}>
                              <span className={`text-sm font-semibold ${msg.sender === 'admin' ? 'text-primary' : 'text-foreground/80'}`}>
-                                {msg.sender === 'admin' ? 'Admin Response' : (ticketUser?.displayName || selectedTicket?.userEmail?.split('@')[0] || 'ผู้ใช้งาน')}
+                                {msg.sender === 'admin' ? 'คำตอบจากทีมงาน' : (ticketUser?.displayName || selectedTicket?.userEmail?.split('@')[0] || 'ผู้ใช้งาน')}
                              </span>
                              <span className="text-xs text-muted-foreground">
                                 {((msg.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -588,7 +594,7 @@ export default function AdminSupportPage() {
              ) : (
                 <div className="text-center py-2 text-muted-foreground text-sm flex items-center justify-center gap-2">
                    <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-                   Ticket นี้ถูกปิดแล้ว ไม่สามารถตอบกลับได้
+                   คำร้องนี้ถูกปิดแล้ว ไม่สามารถตอบกลับได้
                 </div>
              )}
           </div>

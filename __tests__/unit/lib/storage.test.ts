@@ -24,16 +24,18 @@ describe('Storage - Image Validation', () => {
       expect(result.valid).toBe(true)
     })
 
-    it('should accept valid WebP image', () => {
+    it('should reject WebP image (only JPG/PNG allowed)', () => {
       const file = createMockFile('test.webp', 'image/webp', 1024)
       const result = validateImageFile(file)
-      expect(result.valid).toBe(true)
+      expect(result.valid).toBe(false)
+      expect(result.error).toContain('JPEG')
     })
 
-    it('should accept valid GIF image', () => {
+    it('should reject GIF image (only JPG/PNG allowed)', () => {
       const file = createMockFile('test.gif', 'image/gif', 1024)
       const result = validateImageFile(file)
-      expect(result.valid).toBe(true)
+      expect(result.valid).toBe(false)
+      expect(result.error).toContain('JPEG')
     })
 
     it('should reject non-image files', () => {

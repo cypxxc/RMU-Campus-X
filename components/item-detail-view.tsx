@@ -3,39 +3,66 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createExchange, updateItem, createNotification, getUserProfile } from "@/lib/firestore"
-import type { Item, User } from "@/types"
+import type { Item, User, ItemStatus, ItemCategory } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog"
-import { HandHeart, X, Maximize2, Package, MapPin, Calendar, User as UserIcon, AlertTriangle, Info } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
+import { HandHeart, X, Maximize2, Package, MapPin, Calendar, User as UserIcon, AlertTriangle, Info, CheckCircle2, Clock, Trash2, Pencil } from "lucide-react"
+import { formatPostedAt, safeToDate } from "@/lib/utils"
 import Image from "next/image"
 import Link from "next/link"
 import { ReportModal } from "@/components/report-modal"
 import { useAccountStatus } from "@/hooks/use-account-status"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
-import { CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS } from "@/lib/constants"
+import { CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS, CATEGORY_OPTIONS, LOCATION_OPTIONS } from "@/lib/constants"
 import { FavoriteButton } from "@/components/favorite-button"
 
 interface ItemDetailViewProps {
   item: Item
   isModal?: boolean
   onClose?: () => void
+  /** โหมด admin: ซ่อนปุ่มขอรับ/รายงาน/โปรด แสดงแถบจัดการ (สถานะ, ลบ) */
+  variant?: "default" | "admin"
+  onAdminStatusChange?: (itemId: string, status: ItemStatus) => void
+  onAdminDelete?: (item: Item) => void
+  onAdminItemUpdated?: (item: Item) => void
+  adminProcessing?: boolean
 }
 
-export function ItemDetailView({ item, isModal = false, onClose: _onClose }: ItemDetailViewProps) {
+export function ItemDetailView({
+  item,
+  isModal = false,
+  onClose: _onClose,
+  variant = "default",
+  onAdminStatusChange,
+  onAdminDelete,
+  onAdminItemUpdated,
+  adminProcessing = false,
+}: ItemDetailViewProps) {
   const [requesting, setRequesting] = useState(false)
   const [showRequestDialog, setShowRequestDialog] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
   const [showImageZoom, setShowImageZoom] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editTitle, setEditTitle] = useState("")
+  const [editDescription, setEditDescription] = useState("")
+  const [editCategory, setEditCategory] = useState<ItemCategory>("other")
+  const [editLocation, setEditLocation] = useState("")
   const [poster, setPoster] = useState<User | null>(null)
   const [posterLoading, setPosterLoading] = useState(true)
   const { user } = useAuth()
@@ -146,8 +173,50 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
     }
   }
 
-  const postedDate = item.postedAt?.toDate?.() || new Date()
+  const postedDate = safeToDate(item.postedAt, new Date(0))
   const isOwner = user?.uid === item.postedBy
+  const isAdminMode = variant === "admin"
+
+  const openEditModal = () => {
+    setEditTitle(item.title)
+    setEditDescription(item.description || "")
+    setEditCategory((item.category as ItemCategory) || "other")
+    setEditLocation(item.location || "")
+    setShowEditModal(true)
+  }
+
+  const handleAdminEditSubmit = async () => {
+    if (!item?.id || editSaving) return
+    setEditSaving(true)
+    try {
+      const { authFetchJson } = await import("@/lib/api-client")
+      const token = await (async () => {
+        const { getAuth } = await import("firebase/auth")
+        const auth = getAuth()
+        return auth.currentUser?.getIdToken() ?? null
+      })()
+      if (!token) throw new Error("กรุณาเข้าสู่ระบบใหม่")
+      const res = await fetch(`/api/admin/items/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+          category: editCategory,
+          location: editLocation.trim(),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error?.message || data.error || "แก้ไขไม่สำเร็จ")
+      toast({ title: "แก้ไขโพสสำเร็จ เจ้าของจะได้รับการแจ้งเตือน" })
+      setShowEditModal(false)
+      onAdminItemUpdated?.({ ...item, title: editTitle, description: editDescription, category: editCategory, location: editLocation })
+    } catch (e) {
+      toast({ title: "แก้ไขไม่สำเร็จ", description: e instanceof Error ? e.message : undefined, variant: "destructive" })
+    } finally {
+      setEditSaving(false)
+    }
+  }
 
   // Get images array (new format) or fallback to single imageUrl (old format)
   const allImages = item.imageUrls?.length ? item.imageUrls : (item.imageUrl ? [item.imageUrl] : [])
@@ -239,24 +308,12 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
                       <MapPin className="h-5 w-5 text-primary" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">สถานที่</span>
+                      <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">สถานที่นัดรับ</span>
                       <p className="font-semibold text-base wrap-break-word">{item.location}</p>
                     </div>
                   </div>
                 )}
 
-                {item.locationDetail && (
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
-                      <Info className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">รายละเอียดสถานที่</span>
-                      <p className="font-semibold text-base wrap-break-word">{item.locationDetail}</p>
-                    </div>
-                  </div>
-                )}
-                
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-background border flex items-center justify-center shrink-0 shadow-sm">
                     <UserIcon className="h-5 w-5 text-primary" />
@@ -286,7 +343,7 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
                   <div>
                     <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">โพสต์เมื่อ</span>
                     <p className="font-semibold text-base">
-                      {formatDistanceToNow(postedDate, { addSuffix: true, locale: th })}
+                      {formatPostedAt(postedDate)}
                     </p>
                   </div>
                 </div>
@@ -294,8 +351,8 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
             </CardContent>
           </Card>
 
-          {/* Action Buttons */}
-          {user && !isOwner && item.status === "available" && (
+          {/* Action Buttons (ซ่อนในโหมด admin) */}
+          {!isAdminMode && user && !isOwner && item.status === "available" && (
             <div className="flex flex-col sm:flex-row gap-3">
               <Button 
                 className="flex-1 h-12 text-base font-bold gap-2 rounded-xl shadow-md" 
@@ -317,8 +374,8 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
             </div>
           )}
 
-          {/* Unavailable Item Message */}
-          {user && !isOwner && item.status !== "available" && (
+          {/* Unavailable Item Message (ซ่อนในโหมด admin) */}
+          {!isAdminMode && user && !isOwner && item.status !== "available" && (
             <div className="p-4 rounded-xl bg-muted/50 border text-center" role="status">
               <p className="text-sm text-muted-foreground mb-3">
                 {item.status === "pending" && "สิ่งของนี้กำลังอยู่ระหว่างการแลกเปลี่ยน"}
@@ -333,7 +390,7 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
             </div>
           )}
 
-          {isOwner && (
+          {!isAdminMode && isOwner && (
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-center gap-2">
               <Package className="h-4 w-4 text-primary" />
               <p className="text-sm font-bold text-primary">
@@ -342,10 +399,55 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
             </div>
           )}
 
-          {!user && (
+          {!isAdminMode && !user && (
             <Button className="w-full h-12 font-bold rounded-xl" asChild>
               <Link href="/login">เข้าสู่ระบบเพื่อขอรับสิ่งของ</Link>
             </Button>
+          )}
+
+          {/* แถบจัดการ Admin */}
+          {isAdminMode && onAdminStatusChange && onAdminDelete && (
+            <div className="p-4 border-t bg-muted/20 rounded-xl flex flex-wrap items-center justify-between gap-3">
+              <Button variant="ghost" size="sm" onClick={_onClose} className="text-muted-foreground hover:text-foreground">
+                ปิด
+              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={openEditModal} disabled={adminProcessing} className="gap-2">
+                  <Pencil className="h-4 w-4" />
+                  แก้ไข
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onAdminStatusChange(item.id, "available")}
+                  disabled={adminProcessing || item.status === "available"}
+                  className="border-green-200 hover:bg-green-50 text-green-700 dark:border-green-900 dark:hover:bg-green-950/50 dark:text-green-400"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  พร้อมให้
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onAdminStatusChange(item.id, "pending")}
+                  disabled={adminProcessing || item.status === "pending"}
+                  className="border-blue-200 hover:bg-blue-50 text-blue-700 dark:border-blue-900 dark:hover:bg-blue-950/50 dark:text-blue-400"
+                >
+                  <Clock className="h-4 w-4 mr-2" />
+                  รอดำเนินการ
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="shadow-sm"
+                  onClick={() => onAdminDelete(item)}
+                  disabled={adminProcessing}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  ลบโพส
+                </Button>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -382,6 +484,94 @@ export function ItemDetailView({ item, isModal = false, onClose: _onClose }: Ite
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Edit Dialog */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 space-y-1 border-b bg-muted/30">
+            <DialogTitle className="text-xl font-bold">แก้ไขโพส (ผู้ดูแล)</DialogTitle>
+            <DialogDescription asChild>
+              <p className="text-sm text-muted-foreground flex items-center gap-2 pt-1">
+                <Info className="h-4 w-4 shrink-0 text-primary" />
+                เจ้าของโพสจะได้รับการแจ้งเตือนทั้งในเว็บและ LINE
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5 px-6 py-5">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-title" className="text-sm font-medium text-foreground">
+                ชื่อสิ่งของ
+              </Label>
+              <Input
+                id="edit-title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="ชื่อสิ่งของ"
+                minLength={3}
+                maxLength={100}
+                className="h-10 border-2 bg-background focus-visible:ring-2"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-description" className="text-sm font-medium text-foreground">
+                รายละเอียด
+              </Label>
+              <Textarea
+                id="edit-description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="อธิบายสิ่งของ"
+                rows={4}
+                minLength={10}
+                maxLength={1000}
+                className="min-h-[100px] border-2 bg-background focus-visible:ring-2 resize-y"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium text-foreground">หมวดหมู่</Label>
+              <Select value={editCategory} onValueChange={(v) => setEditCategory(v as ItemCategory)}>
+                <SelectTrigger className="h-10 border-2 bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium text-foreground">สถานที่นัดรับ</Label>
+              <Select value={editLocation || ""} onValueChange={setEditLocation}>
+                <SelectTrigger className="h-10 border-2 bg-background">
+                  <SelectValue placeholder="เลือกสถานที่" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOCATION_OPTIONS.map((loc) => (
+                    <SelectItem key={loc} value={loc}>
+                      {loc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="px-6 py-4 border-t bg-muted/20 gap-3 sm:gap-2">
+            <Button variant="outline" onClick={() => setShowEditModal(false)} disabled={editSaving} className="min-w-[100px]">
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleAdminEditSubmit}
+              disabled={editSaving || editTitle.trim().length < 3 || editDescription.trim().length < 10 || !editLocation.trim()}
+              className="min-w-[120px]"
+            >
+              {editSaving ? "กำลังบันทึก..." : "บันทึก"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -30,7 +30,6 @@ import {
   Package,
   MessageSquare,
   ClipboardList,
-  RefreshCw,
   ArrowLeft,
   Search
 } from "lucide-react"
@@ -46,18 +45,18 @@ const ACTION_TYPE_LABELS: Record<AdminActionType, { label: string; color: string
   user_activate: { label: "ปลดล็อคผู้ใช้", color: "bg-green-100 text-green-800", icon: CheckCircle2 },
   report_status_change: { label: "เปลี่ยนสถานะรายงาน", color: "bg-blue-100 text-blue-800", icon: ClipboardList },
   report_resolve: { label: "แก้ไขรายงาน", color: "bg-green-100 text-green-800", icon: CheckCircle2 },
-  item_delete: { label: "ลบสิ่งของ", color: "bg-red-100 text-red-800", icon: Package },
-  item_status_change: { label: "เปลี่ยนสถานะสิ่งของ", color: "bg-blue-100 text-blue-800", icon: Package },
-  ticket_reply: { label: "ตอบกลับ Ticket", color: "bg-purple-100 text-purple-800", icon: MessageSquare },
-  ticket_status_change: { label: "เปลี่ยนสถานะ Ticket", color: "bg-blue-100 text-blue-800", icon: MessageSquare },
+  item_delete: { label: "ลบโพส", color: "bg-red-100 text-red-800", icon: Package },
+  item_status_change: { label: "เปลี่ยนสถานะโพส", color: "bg-blue-100 text-blue-800", icon: Package },
+  ticket_reply: { label: "ตอบกลับคำร้อง", color: "bg-purple-100 text-purple-800", icon: MessageSquare },
+  ticket_status_change: { label: "เปลี่ยนสถานะคำร้อง", color: "bg-blue-100 text-blue-800", icon: MessageSquare },
   other: { label: "อื่นๆ", color: "bg-gray-100 text-gray-800", icon: FileWarning },
 }
 
 const TARGET_TYPE_LABELS: Record<string, string> = {
   user: "ผู้ใช้",
-  item: "สิ่งของ",
+  item: "โพส",
   report: "รายงาน",
-  ticket: "Ticket",
+  ticket: "คำร้อง",
   exchange: "การแลกเปลี่ยน",
 }
 
@@ -145,6 +144,16 @@ export default function AdminLogsPage() {
     }
   }, [isAdmin, loadLogs])
 
+  // อัปเดตอัตโนมัติทุก 30 วินาที เฉพาะเมื่อแท็บเปิดอยู่
+  useEffect(() => {
+    if (!isAdmin) return
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      loadLogs()
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [isAdmin, loadLogs])
+
   if (loading || !isAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -191,10 +200,6 @@ export default function AdminLogsPage() {
               <p className="text-muted-foreground">ประวัติการดำเนินการของผู้ดูแลระบบ</p>
             </div>
           </div>
-          <Button onClick={loadLogs} variant="outline" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            รีเฟรช
-          </Button>
         </div>
 
         {/* Logs Table */}

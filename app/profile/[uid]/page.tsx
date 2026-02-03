@@ -32,6 +32,21 @@ import type { User, Item } from "@/types"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { ProfileBadges } from "@/components/profile/profile-badges"
 
+/** แปลงค่า createdAt ที่อาจเป็น Firestore Timestamp, Date หรือ string เป็น Date */
+function toDate(createdAt: unknown): Date | null {
+  if (createdAt == null) return null
+  if (typeof (createdAt as { toDate?: () => Date }).toDate === "function") {
+    return (createdAt as { toDate: () => Date }).toDate()
+  }
+  if (createdAt instanceof Date) return createdAt
+  try {
+    const d = new Date(createdAt as string | number)
+    return isNaN(d.getTime()) ? null : d
+  } catch {
+    return null
+  }
+}
+
 export default function PublicProfilePage() {
   const params = useParams()
   const router = useRouter()
@@ -234,7 +249,7 @@ export default function PublicProfilePage() {
                   <div className="flex items-center justify-center sm:justify-start gap-3 mt-2 text-muted-foreground text-sm font-medium">
                     <span className="flex items-center gap-1 bg-muted/50 px-2.5 py-1 rounded-full">
                        <Calendar className="h-3.5 w-3.5" />
-                       สมาชิก {profile.createdAt ? formatDistanceToNow(profile.createdAt.toDate(), { addSuffix: true, locale: th }) : '-'}
+                       สมาชิก {toDate(profile.createdAt) ? formatDistanceToNow(toDate(profile.createdAt)!, { addSuffix: true, locale: th }) : '-'}
                     </span>
                     {profile.rating && profile.rating.count > 0 && (
                       <span className="flex items-center gap-1 bg-yellow-500/10 text-yellow-600 px-2.5 py-1 rounded-full">
@@ -365,7 +380,7 @@ export default function PublicProfilePage() {
                            </div>
                         </div>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {review.createdAt ? formatDistanceToNow(review.createdAt.toDate(), { addSuffix: true, locale: th }) : ''}
+                          {toDate(review.createdAt) ? formatDistanceToNow(toDate(review.createdAt)!, { addSuffix: true, locale: th }) : ''}
                         </span>
                       </div>
                     </CardContent>

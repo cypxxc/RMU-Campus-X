@@ -31,7 +31,7 @@ const routeMap: Record<string, string> = {
   login: "เข้าสู่ระบบ",
   "verify-email": "ยืนยันอีเมล",
   notifications: "การแจ้งเตือน",
-  faq: "คำถามที่พบบ่อย",
+  faq: "FAQ",
   terms: "ข้อกำหนดและเงื่อนไข",
   privacy: "นโยบายความเป็นส่วนตัว",
   report: "แจ้งปัญหาการใช้งาน",

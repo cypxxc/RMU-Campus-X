@@ -274,7 +274,7 @@ export function ActionDialog({ open, type, user, onOpenChange, onConfirm }: Acti
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="shrink-0 mt-0.5">•</span>
-                  <span>สิ่งของและการแลกเปลี่ยนที่มีอยู่จะถูกซ่อนชั่วคราว</span>
+                  <span>โพสและการแลกเปลี่ยนที่มีอยู่จะถูกซ่อนชั่วคราว</span>
                 </li>
               </ul>
             )}

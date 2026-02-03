@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb, getAdminAuth, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 import { cloudinary } from "@/lib/cloudinary"
+import { recalculateUserRating } from "@/lib/services/admin/user-cleanup"
 
 export const runtime = 'nodejs'
 
@@ -85,21 +86,52 @@ export async function DELETE(request: NextRequest) {
     const notifSnapshot = await db.collection("notifications").where("userId", "==", userId).get()
     notifSnapshot.docs.forEach(d => refsToDelete.push(d.ref))
 
-    // 2.6 Reports & Support Tickets (Cleanup user's submission history?)
-    // Policy: Keep reports for system integrity? Or anonymize?
-    // Current Decision: Delete reports SUBMITTED by them. Keep reports AGAINST them (handled by Admin logic usually, but here... maybe keep against?)
-    // Let's safe delete submitted ones.
-    const reportsSnap = await db.collection("reports").where("reporterId", "==", userId).get()
-    reportsSnap.docs.forEach(d => refsToDelete.push(d.ref))
+    // 2.6 Reports — ลบทั้งที่ user เป็นผู้รายงาน และที่ user ถูกระบุในรายงาน (ให้สอดคล้องการลบออกจากทั้งระบบ)
+    const reportsRef = db.collection("reports")
+    const [reporterSnap, targetSnap, reportedUserSnap] = await Promise.all([
+      reportsRef.where("reporterId", "==", userId).get(),
+      reportsRef.where("targetId", "==", userId).get(),
+      reportsRef.where("reportedUserId", "==", userId).get(),
+    ])
+    const reportIds = new Set<string>()
+    const addReport = (d: FirebaseFirestore.QueryDocumentSnapshot) => {
+      if (!reportIds.has(d.id)) {
+        reportIds.add(d.id)
+        refsToDelete.push(d.ref)
+      }
+    }
+    reporterSnap.docs.forEach(addReport)
+    targetSnap.docs.forEach(addReport)
+    reportedUserSnap.docs.forEach(addReport)
 
     const supportSnap = await db.collection("support_tickets").where("userId", "==", userId).get()
     supportSnap.docs.forEach(d => refsToDelete.push(d.ref))
+
+    const warningsSnap = await db.collection("userWarnings").where("userId", "==", userId).get()
+    warningsSnap.docs.forEach(d => refsToDelete.push(d.ref))
     
     // 2.7 Drafts & Favorites
     const draftsSnap = await db.collection("drafts").where("userId", "==", userId).get()
     draftsSnap.docs.forEach(d => refsToDelete.push(d.ref))
     const favSnap = await db.collection("favorites").where("userId", "==", userId).get()
     favSnap.docs.forEach(d => refsToDelete.push(d.ref))
+
+    // 2.8 User sessions
+    const sessionsSnap = await db.collection("userSessions").where("userId", "==", userId).get()
+    sessionsSnap.docs.forEach(d => refsToDelete.push(d.ref))
+
+    // 2.9 Reviews: ลบทั้งรีวิวที่ user เป็นผู้เขียน และที่ user เป็นผู้ถูกรีวิว
+    const ratingRecalcUserIds: string[] = []
+    const [reviewsAsReviewer, reviewsAsTarget] = await Promise.all([
+      db.collection("reviews").where("reviewerId", "==", userId).get(),
+      db.collection("reviews").where("targetUserId", "==", userId).get(),
+    ])
+    reviewsAsTarget.docs.forEach(d => refsToDelete.push(d.ref))
+    reviewsAsReviewer.docs.forEach(d => {
+      refsToDelete.push(d.ref)
+      const targetId = d.data()?.targetUserId
+      if (targetId && targetId !== userId) ratingRecalcUserIds.push(targetId)
+    })
 
     console.log(`[SelfDelete] Found ${refsToDelete.length} docs and ${cloudinaryPublicIds.length} images`)
 
@@ -130,7 +162,17 @@ export async function DELETE(request: NextRequest) {
         await batch.commit()
     }
 
-    // 3.3 Auth Delete
+    // 3.3 Recalculate rating for users who had received reviews from this user
+    const recalcIds = [...new Set(ratingRecalcUserIds)]
+    for (const uid of recalcIds) {
+      try {
+        await recalculateUserRating(uid)
+      } catch (e) {
+        console.error(`[SelfDelete] Recalc rating for ${uid} failed:`, e)
+      }
+    }
+
+    // 3.4 Auth Delete
     try {
         await auth.deleteUser(userId)
     } catch (error: any) {

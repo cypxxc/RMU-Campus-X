@@ -47,7 +47,7 @@ export default function LoginPage() {
       await loginUser(email, password, rememberMe)
       toast({
         title: "เข้าสู่ระบบสำเร็จ",
-        description: "ยินดีต้อนรับกลับมา",
+        description: "ยินดีต้อนรับ",
       })
       router.push("/dashboard")
     } catch (error: unknown) {
@@ -108,7 +108,7 @@ export default function LoginPage() {
             </div>
             
             <div className="space-y-1">
-              <CardTitle className="text-2xl font-bold">ยินดีต้อนรับกลับ</CardTitle>
+              <CardTitle className="text-2xl font-bold">ยินดีต้อนรับ</CardTitle>
               <CardDescription className="text-muted-foreground">
                 เข้าสู่ระบบ RMU-Campus X
               </CardDescription>

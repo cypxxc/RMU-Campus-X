@@ -25,8 +25,8 @@ interface SupportTicketModalProps {
 
 const categoryOptions: { value: SupportTicketCategory; label: string; icon: string }[] = [
   { value: "general", label: "คำถามทั่วไป", icon: "❓" },
-  { value: "bug", label: "แจ้งปัญหา/บัค", icon: "🐛" },
-  { value: "feature", label: "ขอฟีเจอร์ใหม่", icon: "💡" },
+  { value: "bug", label: "แจ้งข้อผิดพลาด", icon: "🐛" },
+  { value: "feature", label: "เสนอแนะฟังก์ชัน", icon: "💡" },
   { value: "account", label: "ปัญหาบัญชี", icon: "👤" },
   { value: "exchange", label: "ปัญหาการแลกเปลี่ยน", icon: "🔄" },
   { value: "other", label: "อื่นๆ", icon: "📦" },

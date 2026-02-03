@@ -7,8 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Package, Edit, Trash2 } from "lucide-react"
 import Image from "next/image"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
+import { formatPostedAt, safeToDate } from "@/lib/utils"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 interface MyItemsListProps {
@@ -71,7 +70,7 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
     <>
       <div className="grid grid-cols-1 gap-4">
         {paginatedItems.map((item, index) => {
-          const postedDate = (item.postedAt as any)?.toDate?.() || new Date()
+          const postedDate = safeToDate(item.postedAt, new Date(0))
           return (
             <BounceWrapper 
               key={item.id} 
@@ -111,7 +110,7 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
                     </p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        ประกาศเมื่อ {formatDistanceToNow(postedDate, { addSuffix: true, locale: th })}
+                        ประกาศเมื่อ {formatPostedAt(postedDate)}
                       </span>
                       <div className="flex gap-2">
                         <Button 

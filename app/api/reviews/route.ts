@@ -26,7 +26,18 @@ export async function GET(req: NextRequest) {
       .limit(limitCount)
       .get()
 
-    const reviews = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+    const rawReviews = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+    // ไม่แสดงรีวิวจากผู้ใช้ที่ถูกลบแล้ว (ป้องกันข้อมูลค้าง / รูปโปรไฟล์เสีย)
+    const reviewerIds = [...new Set(rawReviews.map((r: any) => r.reviewerId).filter(Boolean))]
+    const existingReviewerIds = new Set<string>()
+    if (reviewerIds.length > 0) {
+      const refs = reviewerIds.map((uid) => adminDb.collection("users").doc(uid))
+      const userSnaps = await adminDb.getAll(...refs)
+      userSnaps.forEach((snap, i) => {
+        if (snap.exists && reviewerIds[i]) existingReviewerIds.add(reviewerIds[i])
+      })
+    }
+    const reviews = rawReviews.filter((r: any) => existingReviewerIds.has(r.reviewerId))
     return successResponse({ reviews })
   } catch (e) {
     console.error("[Reviews API] GET Error:", e)

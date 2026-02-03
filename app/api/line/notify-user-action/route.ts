@@ -7,14 +7,15 @@ import { NextRequest, NextResponse } from "next/server"
 import { 
   notifyUserReported, 
   notifyUserWarning, 
-  notifyAccountStatusChange 
+  notifyAccountStatusChange,
+  notifyItemEditedByAdmin,
 } from "@/lib/line"
 import { verifyAdminAccess } from "@/lib/admin-api"
 import { getAdminDb } from "@/lib/firebase-admin"
 
 interface NotifyUserActionBody {
   userId: string
-  action: "reported" | "warning" | "status_change"
+  action: "reported" | "warning" | "status_change" | "item_edited_by_admin"
   // For reported
   reportType?: string
   targetTitle?: string
@@ -24,6 +25,8 @@ interface NotifyUserActionBody {
   // For status change
   status?: "ACTIVE" | "SUSPENDED" | "BANNED"
   suspendedUntil?: string // ISO date string
+  // For item_edited_by_admin
+  itemTitle?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -97,6 +100,12 @@ export async function POST(request: NextRequest) {
             body.reason,
             suspendedUntil
           )
+        }
+        break
+
+      case "item_edited_by_admin":
+        if (body.itemTitle) {
+          await notifyItemEditedByAdmin(lineUserId, body.itemTitle)
         }
         break
     }

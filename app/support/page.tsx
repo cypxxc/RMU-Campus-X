@@ -138,8 +138,8 @@ export default function SupportPage() {
 
   const categoryLabels: Record<string, string> = {
     general: "ปัญหาทั่วไป",
-    bug: "แจ้งบัค",
-    feature: "เสนอแนะฟีเจอร์",
+    bug: "แจ้งข้อผิดพลาด",
+    feature: "เสนอแนะฟังก์ชัน",
     account: "ปัญหาบัญชี",
     other: "อื่นๆ",
   }
@@ -178,9 +178,9 @@ export default function SupportPage() {
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <MessageSquare className="h-6 w-6 text-primary" />
-                Support Tickets
+                คำร้องของฉัน
               </h1>
-              <p className="text-muted-foreground text-sm">ประวัติการติดต่อ Support</p>
+              <p className="text-muted-foreground text-sm">ประวัติคำร้องขอความช่วยเหลือ</p>
             </div>
           </div>
           </div>
@@ -192,9 +192,9 @@ export default function SupportPage() {
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Inbox className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="font-bold text-lg mb-2">ยังไม่มี Tickets</h3>
+              <h3 className="font-bold text-lg mb-2">ยังไม่มีคำร้อง</h3>
               <p className="text-muted-foreground text-sm mb-4">
-                หากมีปัญหาหรือข้อสงสัย กรุณาติดต่อ Admin ผ่านช่องทางอื่น
+                หากมีปัญหาหรือข้อสงสัย กรุณาติดต่อทีมงานผ่านช่องทางอื่น
               </p>
             </CardContent>
           </Card>
@@ -298,7 +298,7 @@ export default function SupportPage() {
                       </div>
                       <span className="text-[10px] text-muted-foreground mt-1 px-1">
                         {formatDistanceToNow((msg.createdAt as any)?.toDate ? (msg.createdAt as any).toDate() : (msg.createdAt instanceof Date ? msg.createdAt : new Date()), { addSuffix: true, locale: th })}
-                         {!isMe && msg.senderEmail && ` • ${msg.senderEmail === 'Admin' ? 'Admin' : 'Support'}`}
+                         {!isMe && msg.senderEmail && ` • ${msg.senderEmail === 'Admin' ? 'ทีมงาน' : 'ทีมงาน'}`}
                       </span>
                    </div>
                  </div>

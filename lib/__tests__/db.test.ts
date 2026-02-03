@@ -118,14 +118,13 @@ describe('Security Utilities', () => {
       expect(isValidEmail('test@')).toBe(false)
     })
 
-    it('should validate RMU email strictly', () => {
+    it('should validate RMU email (student or staff @rmu.ac.th)', () => {
       const isRMUEmail = (email: string): boolean => {
-        return /^\d{12}@rmu\.ac\.th$/.test(email)
+        return /^[a-zA-Z0-9._+-]{1,64}@rmu\.ac\.th$/.test(email)
       }
 
       expect(isRMUEmail('123456789012@rmu.ac.th')).toBe(true)
-      expect(isRMUEmail('12345678901@rmu.ac.th')).toBe(false) // 11 digits
-      expect(isRMUEmail('abc456789012@rmu.ac.th')).toBe(false) // letters
+      expect(isRMUEmail('somchai@rmu.ac.th')).toBe(true)
       expect(isRMUEmail('123456789012@gmail.com')).toBe(false) // wrong domain
     })
   })

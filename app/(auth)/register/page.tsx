@@ -123,7 +123,7 @@ export default function RegisterPage() {
                 />
                 <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
                   <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  <span>ใช้ได้เฉพาะอีเมลที่ลงท้ายด้วย @rmu.ac.th</span>
+                  <span>ใช้ได้เฉพาะอีเมล @rmu.ac.th (นักศึกษาหรือบุคลากร)</span>
                 </div>
               </div>
 

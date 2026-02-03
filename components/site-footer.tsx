@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Logo } from "@/components/logo"
-import { Facebook, Instagram, Twitter, Mail, MapPin, Phone } from "lucide-react"
+import { Mail, MapPin, Phone } from "lucide-react"
 
 export function SiteFooter() {
   const currentYear = new Date().getFullYear()
@@ -18,17 +18,6 @@ export function SiteFooter() {
               แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษามหาวิทยาลัยราชภัฏมหาสารคาม 
               สร้างสังคมแห่งการแบ่งปันที่ยั่งยืน
             </p>
-            <div className="flex items-center gap-4 pt-2">
-              <a href="#" className="bg-background p-2 rounded-full border shadow-sm text-muted-foreground hover:text-primary hover:border-primary transition-all">
-                <Facebook className="h-4 w-4" />
-              </a>
-              <a href="#" className="bg-background p-2 rounded-full border shadow-sm text-muted-foreground hover:text-primary hover:border-primary transition-all">
-                <Instagram className="h-4 w-4" />
-              </a>
-              <a href="#" className="bg-background p-2 rounded-full border shadow-sm text-muted-foreground hover:text-primary hover:border-primary transition-all">
-                <Twitter className="h-4 w-4" />
-              </a>
-            </div>
           </div>
 
           {/* Quick Links */}
@@ -41,18 +30,8 @@ export function SiteFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/about" className="text-muted-foreground hover:text-primary transition-colors inline-block">
-                  เกี่ยวกับเรา
-                </Link>
-              </li>
-              <li>
                 <Link href="/faq" className="text-muted-foreground hover:text-primary transition-colors inline-block">
-                  คำถามที่พบบ่อย
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="text-muted-foreground hover:text-primary transition-colors inline-block">
-                  ติดต่อเรา
+                  FAQ
                 </Link>
               </li>
             </ul>
@@ -102,15 +81,10 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="border-t pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground text-center md:text-left">
+        <div className="border-t pt-8">
+          <p className="text-xs text-muted-foreground text-center">
             © {currentYear} RMU-Campus X. All rights reserved.
           </p>
-          <div className="flex items-center gap-6 text-xs text-muted-foreground">
-            <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-            <Link href="/terms" className="hover:text-foreground">Terms</Link>
-            <Link href="/sitemap" className="hover:text-foreground">Sitemap</Link>
-          </div>
         </div>
       </div>
     </footer>

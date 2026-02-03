@@ -15,6 +15,7 @@ import {
 import { getFirebaseDb } from "@/lib/firebase";
 import type { Exchange, ExchangeStatus } from "@/types";
 import { apiCall, TIMEOUT_CONFIG, type ApiResponse } from "@/lib/api-wrapper";
+import { authFetchJson } from "@/lib/api-client";
 import { createNotification } from "./notifications";
 
 // Exchanges
@@ -163,16 +164,10 @@ export const respondToExchange = async (
 ) => {
   return apiCall(
     async () => {
-      const response = await fetch("/api/exchanges/respond", {
+      await authFetchJson("/api/exchanges/respond", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ exchangeId, action, userId }),
+        body: { exchangeId, action, userId },
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to respond to exchange");
-      }
     },
     "respondToExchange",
     TIMEOUT_CONFIG.STANDARD
@@ -275,16 +270,10 @@ export const cancelExchange = async (
 ) => {
   return apiCall(
     async () => {
-      const response = await fetch("/api/exchanges/cancel", {
+      await authFetchJson("/api/exchanges/cancel", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ exchangeId, userId, reason }),
+        body: { exchangeId, userId, reason },
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to cancel exchange");
-      }
     },
     "cancelExchange",
     TIMEOUT_CONFIG.STANDARD

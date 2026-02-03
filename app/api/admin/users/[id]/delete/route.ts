@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb, verifyIdTokenDebug, extractBearerToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
-import { collectUserResources, executeCleanup, deleteUserAuth } from "@/lib/services/admin/user-cleanup"
+import { collectUserResources, executeCleanup, deleteUserAuth, recalculateUserRating } from "@/lib/services/admin/user-cleanup"
 
 export const runtime = 'nodejs'
 
@@ -40,15 +40,25 @@ export async function DELETE(
     console.log(`[HardDelete] Starting deletion for user: ${userId}`)
 
     // 2. Collection Phase
-    const { refsToDelete, cloudinaryPublicIds, userDoc } = await collectUserResources(userId)
+    const { refsToDelete, cloudinaryPublicIds, userDoc, ratingRecalcUserIds } = await collectUserResources(userId)
 
     console.log(`[HardDelete] Found ${refsToDelete.length} docs and ${cloudinaryPublicIds.length} images`)
 
     // 3. Execution Phase
     await executeCleanup(refsToDelete, cloudinaryPublicIds)
     await deleteUserAuth(userId)
+
+    // 4. Recalculate rating for users who had received reviews from the deleted user
+    const recalcIds = [...new Set(ratingRecalcUserIds)]
+    for (const uid of recalcIds) {
+      try {
+        await recalculateUserRating(uid)
+      } catch (e) {
+        console.error(`[HardDelete] Recalc rating for ${uid} failed:`, e)
+      }
+    }
     
-    // 4. Log Deletion to Admin Logs (System)
+    // 5. Log Deletion to Admin Logs (System)
     try {
         const logEntry = {
             actionType: "hard_delete_user",

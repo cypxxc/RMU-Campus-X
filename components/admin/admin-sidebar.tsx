@@ -21,12 +21,12 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    title: "Dashboard",
+    title: "ภาพรวม",
     href: "/admin",
     icon: LayoutDashboard,
   },
   {
-    title: "สิ่งของ",
+    title: "โพส",
     href: "/admin/items",
     icon: Package,
   },
@@ -68,7 +68,7 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
               <span className="text-primary-foreground font-bold text-sm">A</span>
             </div>
             <div>
-              <h2 className="font-semibold text-sm">Admin Panel</h2>
+              <h2 className="font-semibold text-sm">แผงจัดการ</h2>
               <p className="text-xs text-muted-foreground">RMU-Campus X</p>
             </div>
           </div>
@@ -122,7 +122,7 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
       {!isCollapsed && (
         <div className="p-4 border-t">
           <div className="text-xs text-muted-foreground text-center">
-            Admin Panel v1.0
+            แผงจัดการ v1.0
           </div>
         </div>
       )}

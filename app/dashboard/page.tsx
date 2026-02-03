@@ -71,10 +71,11 @@ export default function DashboardPage() {
   }, [categories, status])
 
   // Load items logic (ใช้ API – lastId สำหรับ pagination)
-  const loadItems = useCallback(async (page: number) => {
+  const loadItems = useCallback(async (page: number, options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false
     try {
-      setLoading(true)
-      
+      if (!silent) setLoading(true)
+
       const lastId = page === 1 ? null : paginationLastIds.current.get(page) ?? undefined
 
       const filters = {
@@ -86,10 +87,10 @@ export default function DashboardPage() {
       }
 
       const result = await getItems(filters)
-      
+
       if (result.success && result.data) {
         setItems(result.data.items)
-        
+
         const count = result.data.totalCount || 0
         setTotalCount(count)
         setTotalPages(count > 0 ? Math.ceil(count / PAGE_SIZE) : (result.data.hasMore ? page + 1 : page))
@@ -98,23 +99,47 @@ export default function DashboardPage() {
           paginationLastIds.current.set(page + 1, result.data.lastId)
         }
       } else {
-        console.error('[Dashboard] Error:', result.error)
-        toast.error('ไม่สามารถโหลดข้อมูลได้')
+        if (!silent) {
+          console.error("[Dashboard] Error:", result.error)
+          toast.error("ไม่สามารถโหลดข้อมูลได้")
+        }
         setItems([])
         setTotalCount(0)
       }
     } catch (error) {
-      console.error('[Dashboard] Error:', error)
-      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล')
+      if (!silent) {
+        console.error("[Dashboard] Error:", error)
+        toast.error("เกิดข้อผิดพลาดในการโหลดข้อมูล")
+      }
       setItems([])
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [categories, status, debouncedSearchQuery])
 
   // Load items when page or dependencies change
   useEffect(() => {
     loadItems(currentPage)
+  }, [loadItems, currentPage])
+
+  // อัปเดตอัตโนมัติเมื่อเปิดแท็บอยู่ (ไม่ต้องกดรีเฟรช)
+  const POLL_INTERVAL_MS = 25_000 // 25 วินาที
+  useEffect(() => {
+    if (typeof document === "undefined") return
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return
+      loadItems(currentPage, { silent: true })
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadItems(currentPage, { silent: true })
+      }
+    }, POLL_INTERVAL_MS)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+      clearInterval(interval)
+    }
   }, [loadItems, currentPage])
 
   const handlePageChange = (newPage: number) => {

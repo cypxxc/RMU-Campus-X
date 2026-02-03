@@ -57,6 +57,7 @@ export {
   notifyUserReported,
   notifyUserWarning,
   notifyAccountStatusChange,
+  notifyItemEditedByAdmin,
   // Account linking
   sendLinkCodeMessage,
   sendLinkSuccessMessage,

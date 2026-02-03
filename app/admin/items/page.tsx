@@ -28,23 +28,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Package, Search, Trash2, Eye, MapPin, Users, Clock, CheckCircle2, ArrowLeft, RefreshCw } from "lucide-react"
+import { Loader2, Package, Search, Trash2, Clock, CheckCircle2, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
+import { ItemCard } from "@/components/item-card"
+import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
+import { ItemDetailView } from "@/components/item-detail-view"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { BounceWrapper } from "@/components/ui/bounce-wrapper"
+import { memo, useRef } from "react"
 
-import Image from "next/image"
+const MemoizedItemCard = memo(ItemCard)
 
 const statusLabels: Record<string, string> = {
   available: "พร้อมให้",
   pending: "รอดำเนินการ",
   completed: "เสร็จสิ้น",
-}
-
-const categoryLabels: Record<string, string> = {
-  electronics: "อิเล็กทรอนิกส์",
-  books: "หนังสือ",
-  furniture: "เฟอร์นิเจอร์",
-  clothing: "เสื้อผ้า",
-  sports: "กีฬา",
-  other: "อื่นๆ",
 }
 
 export default function AdminItemsPage() {
@@ -56,12 +53,21 @@ export default function AdminItemsPage() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
   const [processing, setProcessing] = useState(false)
   
-  // Pagination (API ใช้ lastId)
-  const [lastId, setLastId] = useState<string | null>(null)
-  const [hasMore, setHasMore] = useState(true)
-  const [isLoadMore, setIsLoadMore] = useState(false)
+  // Pagination แบบหน้า (เหมือน dashboard)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 20
+  const paginationLastIds = useRef<Map<number, string | null>>(new Map([[1, null]]))
+
+  // สถิติโพสแบบ real-time จาก API (โพสทั้งหมด, ใหม่ 24 ชม., พร้อมให้รับ, แลกเปลี่ยนแล้ว)
+  const [itemStats, setItemStats] = useState<{
+    total: number
+    newLast24h: number
+    active: number
+    completed: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(false)
 
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -93,6 +99,31 @@ export default function AdminItemsPage() {
     }
   }, [router, toast, user])
 
+  const fetchItemStats = useCallback(async () => {
+    if (!user) return
+    setStatsLoading(true)
+    try {
+      const token = await user.getIdToken()
+      const res = await fetch("/api/admin/stats", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json?.success && json?.data?.items) {
+        const items = json.data.items
+        setItemStats({
+          total: items.total ?? 0,
+          newLast24h: items.newLast24h ?? 0,
+          active: items.active ?? 0,
+          completed: items.completed ?? 0,
+        })
+      }
+    } catch (e) {
+      console.error("[AdminItems] Error fetching stats:", e)
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [user])
+
   useEffect(() => {
     if (authLoading) return
     if (!user) {
@@ -102,19 +133,19 @@ export default function AdminItemsPage() {
     checkAdmin()
   }, [authLoading, checkAdmin, router, user])
 
-  const loadItems = useCallback(async ({ reset = false, lastId: lastIdOverride, searchQuery: searchQueryOverride }: { reset?: boolean; lastId?: string | null; searchQuery?: string } = {}) => {
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+
+  const loadItems = useCallback(async (page: number, options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false
     try {
-      if (reset) {
-        setLoading(true)
-        setLastId(null)
-      } else {
-        setIsLoadMore(true)
-      }
+      if (!silent) setLoading(true)
+
+      const lastId = page === 1 ? undefined : (paginationLastIds.current.get(page) ?? undefined)
 
       const result = await getItems({
         pageSize,
-        lastId: reset ? undefined : (lastIdOverride ?? undefined),
-        searchQuery: searchQueryOverride || undefined,
+        lastId,
+        searchQuery: debouncedSearchQuery.trim() || undefined,
       })
 
       if (!result.success && result.error) {
@@ -123,33 +154,56 @@ export default function AdminItemsPage() {
 
       if (result.data) {
         const data = result.data
-        if (reset) {
-          setItems(data.items)
-        } else {
-          setItems(prev => [...prev, ...data.items])
+        setItems(data.items)
+        setTotalCount(data.totalCount ?? 0)
+        const count = data.totalCount ?? 0
+        setTotalPages(count > 0 ? Math.ceil(count / pageSize) : (data.hasMore ? page + 1 : page))
+        if (data.lastId != null && data.hasMore) {
+          paginationLastIds.current.set(page + 1, data.lastId)
         }
-        setLastId(data.lastId)
-        setHasMore(data.hasMore)
-        setTotalCount(data.totalCount)
       }
     } catch (error) {
       console.error("[AdminItems] Error loading items:", error)
-      toast({ title: "โหลดข้อมูลล้มเหลว", variant: "destructive" })
+      if (!silent) toast({ title: "โหลดข้อมูลล้มเหลว", variant: "destructive" })
+      setItems([])
     } finally {
       setLoading(false)
-      setIsLoadMore(false)
     }
-  }, [pageSize, toast])
+  }, [pageSize, debouncedSearchQuery, toast])
 
-  // Reload when search changes (with debounce)
+  // Debounce search แล้ว reset หน้า 1
   useEffect(() => {
-    if (!isAdmin) return
     const delay = searchQuery ? 500 : 0
     const timer = setTimeout(() => {
-      loadItems({ reset: true, searchQuery })
+      setDebouncedSearchQuery(searchQuery)
+      setCurrentPage(1)
+      paginationLastIds.current = new Map([[1, null]])
     }, delay)
     return () => clearTimeout(timer)
-  }, [isAdmin, loadItems, searchQuery])
+  }, [searchQuery])
+
+  // โหลดเมื่อเปลี่ยนหน้าหรือคำค้น (หลัง debounce)
+  useEffect(() => {
+    if (!isAdmin) return
+    loadItems(currentPage)
+  }, [isAdmin, currentPage, debouncedSearchQuery, loadItems])
+
+  // โหลดสถิติโพสแบบ real-time เมื่อเป็น admin
+  useEffect(() => {
+    if (!isAdmin || !user) return
+    fetchItemStats()
+  }, [isAdmin, user, fetchItemStats])
+
+  // อัปเดตอัตโนมัติทุก 30 วินาที (สถิติ + รายการโพส) เฉพาะเมื่อแท็บเปิดอยู่
+  useEffect(() => {
+    if (!isAdmin) return
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      fetchItemStats()
+      loadItems(currentPage, { silent: true })
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [isAdmin, currentPage, fetchItemStats, loadItems])
 
   const handleDeleteItem = async () => {
     if (!deleteDialog.itemId || !user) return
@@ -168,15 +222,16 @@ export default function AdminItemsPage() {
         targetType: 'item',
         targetId: deleteDialog.itemId,
         targetInfo: itemToDelete?.title || "Unknown Item",
-        description: `ลบสิ่งของ: ${itemToDelete?.title || deleteDialog.itemId}`,
+        description: `ลบโพส: ${itemToDelete?.title || deleteDialog.itemId}`,
         status: 'success',
         metadata: { category: itemToDelete?.category }
       } as any)
 
-      toast({ title: "ลบสิ่งของสำเร็จ" })
+      toast({ title: "ลบโพสสำเร็จ" })
       
       // Remove from list locally
       setItems(prev => prev.filter(i => i.id !== deleteDialog.itemId))
+      fetchItemStats() // อัปเดตสถิติ real-time
       
       setDeleteDialog({ open: false, itemId: null })
     } catch (error: any) {
@@ -217,6 +272,7 @@ export default function AdminItemsPage() {
       if (selectedItem?.id === itemId) {
         setSelectedItem(prev => prev ? { ...prev, status: newStatus } : null)
       }
+      fetchItemStats() // อัปเดตสถิติ real-time
       
     } catch (error: any) {
       toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
@@ -233,13 +289,6 @@ export default function AdminItemsPage() {
     )
   }
 
-  // Count new items (last 24h) from fetched items
-  const newCount = items.filter(i => {
-     const postedAt = (i.postedAt as any)?.toDate?.() || new Date(0) // Safe access
-     const hoursAgo = (Date.now() - postedAt.getTime()) / (1000 * 60 * 60)
-     return hoursAgo <= 24
-  }).length
-
   return (
     <div className="min-h-screen bg-background py-6">
       <div className="max-w-7xl mx-auto px-6 space-y-6">
@@ -252,67 +301,65 @@ export default function AdminItemsPage() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Package className="h-8 w-8 text-primary" />
-              จัดการสิ่งของ
+              จัดการโพส
             </h1>
-            <p className="text-muted-foreground">ดูแลและจัดการสิ่งของทั้งหมดในระบบ</p>
+            <p className="text-muted-foreground">ดูแลและจัดการโพสในระบบ</p>
           </div>
         </div>
-        <Button onClick={() => loadItems({ reset: true, searchQuery })} variant="outline" className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          รีเฟรช
-        </Button>
       </div>
 
-      {/* Stats (Approximate based on loaded data + totalCount) */}
+      {/* สถิติโพสแบบ real-time จากระบบ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-primary/10 rounded-lg">
-                <Package className="h-5 w-5 text-primary" />
-             </div>
-             <div>
-               <div className="text-2xl font-bold">{totalCount}</div>
-               <p className="text-xs text-muted-foreground">สิ่งของทั้งหมด</p>
-             </div>
+            <div className="p-2 bg-primary/10 rounded-lg dark:bg-primary/20">
+              <Package className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold">
+                {itemStats ? itemStats.total : (statsLoading ? "…" : "—")}
+              </div>
+              <p className="text-xs text-muted-foreground">โพสทั้งหมดในระบบ</p>
+            </div>
           </CardContent>
         </Card>
-        {/* Note: New Count is only from loaded items, hard to get total new without specific query */}
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-blue-100 rounded-lg">
-                <Clock className="h-5 w-5 text-blue-600" />
-             </div>
-             <div>
-               <div className="text-2xl font-bold text-foreground">{newCount}</div>
-               <p className="text-xs text-muted-foreground">ใหม่ (ในหน้านี้)</p>
-             </div>
+            <div className="p-2 bg-blue-100 dark:bg-blue-950/50 rounded-lg">
+              <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-foreground">
+                {itemStats ? itemStats.newLast24h : (statsLoading ? "…" : "—")}
+              </div>
+              <p className="text-xs text-muted-foreground">โพสใหม่ (24 ชม.ล่าสุด)</p>
+            </div>
           </CardContent>
         </Card>
-        {/* Status counts are approximated from loaded list or would need separate counters */}
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-             </div>
-             <div>
-               <div className="text-2xl font-bold text-foreground">
-                 {items.filter(i => i.status === 'available').length}
-               </div>
-               <p className="text-xs text-muted-foreground">พร้อมให้ (โหลดแล้ว)</p>
-             </div>
+            <div className="p-2 bg-green-100 dark:bg-green-950/50 rounded-lg">
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-foreground">
+                {itemStats ? itemStats.active : (statsLoading ? "…" : "—")}
+              </div>
+              <p className="text-xs text-muted-foreground">พร้อมให้รับ</p>
+            </div>
           </CardContent>
         </Card>
         <Card className="border shadow-sm">
-           <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-gray-100 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-gray-600" />
-             </div>
-             <div>
-               <div className="text-2xl font-bold text-foreground">
-                 {items.filter(i => i.status === 'completed').length}
-               </div>
-               <p className="text-xs text-muted-foreground">เสร็จสิ้น (โหลดแล้ว)</p>
-             </div>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-2 bg-muted rounded-lg">
+              <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-foreground">
+                {itemStats ? itemStats.completed : (statsLoading ? "…" : "—")}
+              </div>
+              <p className="text-xs text-muted-foreground">แลกเปลี่ยนแล้ว</p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -321,7 +368,7 @@ export default function AdminItemsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <Package className="h-5 w-5 text-primary" />
-          รายการสิ่งของ
+          รายการโพส
           <Badge variant="secondary" className="ml-2 px-3 py-1">
             {totalCount} รายการ
           </Badge>
@@ -329,7 +376,7 @@ export default function AdminItemsPage() {
         <div className="relative w-full md:w-auto">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="ค้นหาสิ่งของ..."
+            placeholder="ค้นหาโพส..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 bg-background w-full md:w-[300px]"
@@ -337,239 +384,109 @@ export default function AdminItemsPage() {
         </div>
       </div>
 
-      {/* Items Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 contain-paint">
-        {items.length === 0 ? (
-           <div className="col-span-full py-16 text-center bg-linear-to-b from-transparent to-muted/20 rounded-xl border border-dashed">
-            <div className="p-4 rounded-full bg-muted/50 w-fit mx-auto mb-4">
-              <Package className="h-12 w-12 text-muted-foreground/50" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-1">
-              ไม่พบสิ่งของ
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {searchQuery ? "ลองเปลี่ยนคำค้นหาใหม่" : "ยังไม่มีสิ่งของในระบบ"}
-            </p>
-          </div>
-        ) : (
-          items.map((item) => (
-            <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow group">
-              <div className="relative aspect-video bg-muted">
-                {item.imageUrl ? (
-                  <Image
-                    src={item.imageUrl}
-                    alt={item.title}
-                    fill
-                    className="object-cover transition-transform group-hover:scale-105"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <Package className="h-10 w-10 text-muted-foreground/30" />
-                  </div>
-                )}
-                <div className="absolute top-2 left-2 flex flex-wrap gap-1 max-w-[90%]">
-                  <Badge className="bg-black/60 text-white text-[10px] backdrop-blur-sm">
-                    {categoryLabels[item.category]}
-                  </Badge>
-                  <Badge className={item.status === 'available' ? 'bg-green-500' : 'bg-orange-500'}>
-                    {statusLabels[item.status]}
-                  </Badge>
-                </div>
-              </div>
-              <CardContent className="p-4">
-                <h3 className="font-semibold line-clamp-1 group-hover:text-primary transition-colors">{item.title}</h3>
-                <p className="text-sm text-muted-foreground line-clamp-2 mt-1 min-h-[40px]">{item.description}</p>
-                <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
-                  <Users className="h-3 w-3" />
-                  <span className="truncate max-w-[120px]">{item.postedByEmail?.split('@')[0]}</span>
-                  {item.location && (
-                    <>
-                      <MapPin className="h-3 w-3 ml-2" />
-                      <span className="truncate max-w-[80px]">{item.location}</span>
-                    </>
-                  )}
-                </div>
-                <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedItem(item)} className="hover:bg-primary/10 hover:text-primary">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => setDeleteDialog({ open: true, itemId: item.id })}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+      {/* Items Grid — รูปแบบเดียวกับ dashboard + ปุ่มจัดการ admin */}
+      {loading && items.length === 0 ? (
+        <ItemCardSkeletonGrid count={6} />
+      ) : items.length === 0 ? (
+        <Empty className="py-16 bg-muted/10 border border-dashed">
+          <EmptyHeader>
+            <EmptyMedia variant="icon" className="rounded-2xl size-14 [&_svg:not([class*='size-'])]:size-7">
+              <Package className="h-7 w-7 text-muted-foreground" />
+            </EmptyMedia>
+            <EmptyTitle>
+              {searchQuery ? "ไม่พบโพสที่ค้นหา" : "ยังไม่มีโพสในระบบ"}
+            </EmptyTitle>
+            <EmptyDescription>
+              {searchQuery ? "ลองเปลี่ยนคำค้นหาใหม่" : "โพสจากผู้ใช้จะแสดงในหน้านี้"}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            {searchQuery && (
+              <Button variant="outline" onClick={() => setSearchQuery("")}>
+                ล้างคำค้นหา
+              </Button>
+            )}
+          </EmptyContent>
+        </Empty>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 content-auto">
+          {items.map((item, index) => (
+            <BounceWrapper key={item.id} variant="bounce-up" delay={Math.min(index, 4) * 0.03}>
+              <MemoizedItemCard
+                item={item}
+                variant="admin"
+                onViewDetails={(i) => setSelectedItem(i)}
+                onDelete={() => setDeleteDialog({ open: true, itemId: item.id })}
+                priority={index < 4}
+              />
+            </BounceWrapper>
+          ))}
+        </div>
+      )}
       
-      {/* Load More Button */}
-      {hasMore && (
-        <div className="flex justify-center mt-8">
-            <Button 
-                variant="outline" 
-                onClick={() => loadItems({ reset: false, lastId: lastId ?? undefined, searchQuery })} 
-                disabled={isLoadMore}
-                className="w-full max-w-[200px]"
+      {/* Pagination — ก่อนหน้า / ถัดไป แบบ dashboard */}
+      {totalPages > 1 && (
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-4">
+          <p className="text-sm text-muted-foreground order-2 sm:order-1">
+            หน้า {currentPage} จาก {totalPages}
+          </p>
+          <div className="flex items-center gap-2 order-1 sm:order-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCurrentPage((p) => Math.max(1, p - 1))
+                window.scrollTo({ top: 0, behavior: "smooth" })
+              }}
+              disabled={currentPage === 1 || loading}
+              className="gap-1 min-w-[100px]"
             >
-                {isLoadMore ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        กำลังโหลด...
-                    </>
-                ) : (
-                    "โหลดเพิ่มเติม"
-                )}
+              <ChevronLeft className="h-4 w-4" />
+              ก่อนหน้า
             </Button>
+            <span className="text-sm font-medium px-2 sm:hidden">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCurrentPage((p) => Math.min(totalPages, p + 1))
+                window.scrollTo({ top: 0, behavior: "smooth" })
+              }}
+              disabled={currentPage === totalPages || loading}
+              className="gap-1 min-w-[100px]"
+            >
+              ถัดไป
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* Item Detail Dialog */}
+      {/* Item Detail Dialog — ใช้ layout เดียวกับ dashboard + แถบจัดการ admin */}
       <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col gap-0 max-h-[90vh]">
-          <DialogHeader className="p-6 pb-4 pr-24 border-b bg-muted/10 shrink-0">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <DialogTitle className="text-xl font-bold tracking-tight">{selectedItem?.title}</DialogTitle>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Package className="h-4 w-4" />
-                  <span>ID: {selectedItem?.id}</span>
-                  <span className="text-border">•</span>
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3 w-3" />
-                    {selectedItem?.postedByEmail}
-                  </span>
-                </div>
-              </div>
-              {selectedItem && (
-                 <Badge className={selectedItem.status === 'available' ? 'bg-green-500 hover:bg-green-600' : 'bg-orange-500 hover:bg-orange-600'}>
-                   {statusLabels[selectedItem.status]}
-                 </Badge>
-              )}
-            </div>
-          </DialogHeader>
-
-          {selectedItem && (
-            <div className="flex-1 overflow-y-auto p-0">
-              <div className="grid md:grid-cols-2 gap-0 h-full">
-                {/* Image Section */}
-                <div className="bg-muted/30 p-6 flex items-center justify-center border-r min-h-[300px] md:min-h-auto relative group">
-                  {selectedItem.imageUrl ? (
-                    <div className="relative w-full h-full min-h-[300px] rounded-lg overflow-hidden shadow-sm">
-                      <Image 
-                        src={selectedItem.imageUrl} 
-                        alt={selectedItem.title} 
-                        fill 
-                        className="object-contain" 
-                        unoptimized 
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center text-muted-foreground/40">
-                      <Package className="h-24 w-24 mb-4" />
-                      <p>ไม่มีรูปภาพ</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Details Section */}
-                <div className="p-6 space-y-6">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground/80 mb-2 uppercase tracking-wider">รายละเอียด</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                      {selectedItem.description}
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-foreground/80 mb-2 uppercase tracking-wider">ข้อมูลเพิ่มเติม</h3>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 rounded-lg border bg-card">
-                        <p className="text-xs text-muted-foreground mb-1">หมวดหมู่</p>
-                        <p className="font-medium flex items-center gap-2">
-                          <Badge variant="outline" className="rounded-md">
-                            {categoryLabels[selectedItem.category]}
-                          </Badge>
-                        </p>
-                      </div>
-                      <div className="p-3 rounded-lg border bg-card">
-                        <p className="text-xs text-muted-foreground mb-1">สถานที่</p>
-                        <p className="font-medium flex items-center gap-2 truncate">
-                          <MapPin className="h-4 w-4 text-primary" />
-                          {selectedItem.location || "-"}
-                        </p>
-                      </div>
-                      <div className="p-3 rounded-lg border bg-card">
-                        <p className="text-xs text-muted-foreground mb-1">วันที่ลงประกาศ</p>
-                        <p className="font-medium">
-                          {(selectedItem.postedAt as any)?.toDate 
-                            ? (selectedItem.postedAt as any).toDate().toLocaleDateString('th-TH')
-                            : '-'
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="p-4 border-t bg-muted/20 shrink-0 flex items-center justify-between gap-2">
-             <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={() => setSelectedItem(null)}
-                >
-                  ปิด
-                </Button>
-             </div>
-             
-             {selectedItem && (
-               <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleUpdateStatus(selectedItem.id, 'available')}
-                    disabled={processing || selectedItem.status === 'available'}
-                    className="border-green-200 hover:bg-green-50 text-green-700 dark:border-green-900 dark:hover:bg-green-950/50 dark:text-green-400"
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    พร้อมให้
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleUpdateStatus(selectedItem.id, 'pending')}
-                    disabled={processing || selectedItem.status === 'pending'}
-                    className="border-blue-200 hover:bg-blue-50 text-blue-700 dark:border-blue-900 dark:hover:bg-blue-950/50 dark:text-blue-400"
-                  >
-                    <Clock className="h-4 w-4 mr-2" />
-                    รอดำเนินการ
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="shadow-sm"
-                    onClick={() => {
-                      setSelectedItem(null)
-                      setDeleteDialog({ open: true, itemId: selectedItem.id })
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    ลบ
-                  </Button>
-               </div>
-             )}
+        <DialogContent className="max-w-4xl overflow-hidden border-none shadow-2xl p-0 max-h-[90vh] flex flex-col">
+          <DialogTitle className="sr-only">รายละเอียดโพส</DialogTitle>
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+            {selectedItem && (
+              <ItemDetailView
+                item={selectedItem}
+                isModal
+                variant="admin"
+                onClose={() => setSelectedItem(null)}
+                onAdminStatusChange={handleUpdateStatus}
+                onAdminDelete={(i) => {
+                  setSelectedItem(null)
+                  setDeleteDialog({ open: true, itemId: i.id })
+                }}
+                onAdminItemUpdated={(updated) => {
+                  setSelectedItem(updated)
+                  setItems((prev) => prev.map((i) => (i.id === updated.id ? { ...i, ...updated } : i)))
+                }}
+                adminProcessing={processing}
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -585,13 +502,13 @@ export default function AdminItemsPage() {
               <div>
                 <AlertDialogTitle>ยืนยันการลบ</AlertDialogTitle>
                 <AlertDialogDescription className="mt-1">
-                  คุณต้องการลบสิ่งของนี้หรือไม่?
+                  คุณต้องการลบโพสนี้หรือไม่?
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
           <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400">
-            ⚠️ การกระทำนี้ไม่สามารถยกเลิกได้ สิ่งของจะถูกลบออกจากระบบอย่างถาวร
+            ⚠️ การกระทำนี้ไม่สามารถยกเลิกได้ โพสจะถูกลบออกจากระบบอย่างถาวร
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
@@ -601,7 +518,7 @@ export default function AdminItemsPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              ลบสิ่งของ
+              ลบโพส
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

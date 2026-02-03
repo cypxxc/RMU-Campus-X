@@ -38,6 +38,16 @@ export const POST = withValidation(
     const db = getAdminDb()
     const searchKeywords = generateKeywords(data.title, data.description)
 
+    // ดึงชื่อแสดงในโปรไฟล์เพื่อใส่ใน card (โพสต์โดย: ชื่อบัญชี)
+    let postedByName: string | null = null
+    try {
+      const userSnap = await db.collection("users").doc(ctx.userId).get()
+      const userData = userSnap.data()
+      postedByName = (userData?.displayName as string) || (ctx.email ? ctx.email.split("@")[0] : null) || null
+    } catch {
+      postedByName = ctx.email ? ctx.email.split("@")[0] : null
+    }
+
     const docRef = await db.collection("items").add({
       title: data.title,
       description: data.description,
@@ -48,13 +58,13 @@ export const POST = withValidation(
       status: "available",
       postedBy: ctx.userId,
       postedByEmail: ctx.email ?? "",
-      postedByName: null,
+      postedByName,
       postedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       searchKeywords,
     })
 
-    return NextResponse.json({ success: true, id: docRef.id }, { status: 201 })
+    return NextResponse.json({ success: true, data: { id: docRef.id } }, { status: 201 })
   },
   { requireAuth: true, requireTermsAccepted: true }
 )
@@ -127,6 +137,25 @@ export async function GET(request: NextRequest) {
     const hasMore = items.length >= query.pageSize
     const page = items.slice(0, query.pageSize)
 
+    // แสดงชื่อปัจจุบันจากโปรไฟล์ (ถ้า user เปลี่ยนชื่อแล้ว จะได้ชื่อล่าสุด)
+    const postedByIds = [...new Set(page.map((it: Item) => it.postedBy).filter(Boolean))]
+    const nameByUid = new Map<string, string>()
+    if (postedByIds.length > 0) {
+      const userRefs = postedByIds.map((uid) => db.collection("users").doc(uid))
+      const userSnaps = await db.getAll(...userRefs)
+      userSnaps.forEach((snap, i) => {
+        const uid = postedByIds[i]
+        if (!uid) return
+        const data = snap.data()
+        const name = (data?.displayName as string) || (data?.email as string)?.split("@")[0] || uid
+        nameByUid.set(uid, name)
+      })
+    }
+    const pageWithCurrentNames = page.map((it: Item) => ({
+      ...it,
+      postedByName: nameByUid.get(it.postedBy) ?? it.postedByName ?? it.postedByEmail?.split("@")[0] ?? null,
+    }))
+
     let totalCount = 0
     if (!query.lastId && page.length < query.pageSize) {
       totalCount = page.length
@@ -134,7 +163,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      items: page,
+      items: pageWithCurrentNames,
       lastId: page.length ? page[page.length - 1]?.id ?? null : null,
       hasMore,
       totalCount,

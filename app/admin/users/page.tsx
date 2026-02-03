@@ -28,8 +28,7 @@ import {
   Eye, 
   User as UserIcon, 
   ArrowLeft, 
-  RefreshCw,
-  Search 
+  Search
 } from "lucide-react"
 import { UserDetailModal } from "@/components/admin/admin-modals"
 import { ActionDialog } from "@/components/admin/action-dialog"
@@ -185,9 +184,52 @@ export default function AdminReportedUsersPage() {
     }
   }, [toast])
 
+  const runCleanupOrphans = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!user) return 0
+      const silent = options?.silent ?? true
+      try {
+        const token = await user.getIdToken()
+        const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+        const res = await fetch(`${baseUrl}/api/admin/users/cleanup-orphans`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err?.error?.message || "ลบข้อมูลไม่สำเร็จ")
+        }
+        const data = await res.json()
+        const deleted = data?.data?.deleted ?? 0
+        if (deleted > 0) {
+          toast({
+            title: "อัปเดตรายชื่อผู้ใช้แล้ว",
+            description: `ลบข้อมูลบัญชีที่ไม่มีในระบบแล้ว ${deleted} รายการ`,
+          })
+        }
+        return deleted
+      } catch (e: any) {
+        return 0
+      }
+    },
+    [user, toast]
+  )
+
   useEffect(() => {
     if (!isAdmin) return
-    loadData()
+    runCleanupOrphans({ silent: true }).then(() => {
+      loadData()
+    })
+  }, [isAdmin, runCleanupOrphans, loadData])
+
+  // อัปเดตอัตโนมัติทุก 30 วินาที เฉพาะเมื่อแท็บเปิดอยู่
+  useEffect(() => {
+    if (!isAdmin) return
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      loadData()
+    }, 30_000)
+    return () => clearInterval(interval)
   }, [isAdmin, loadData])
 
   const handleViewUser = async (user: UserWithReports) => {
@@ -337,10 +379,6 @@ export default function AdminReportedUsersPage() {
               <p className="text-muted-foreground">รายชื่อผู้ใช้ทั้งหมดในระบบและสถานะการถูกรายงาน</p>
             </div>
           </div>
-          <Button onClick={loadData} variant="outline" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            รีเฟรช
-          </Button>
         </div>
 
         {/* Users Table */}
@@ -402,7 +440,7 @@ export default function AdminReportedUsersPage() {
                           </div>
                           <div>
                              <div className="text-sm font-medium">{u.email}</div>
-                             {!u.createdAt && <Badge variant="secondary" className="text-[9px] h-4 px-1">Ghost</Badge>}
+                             {!u.createdAt && <Badge variant="secondary" className="text-[9px] h-4 px-1">ไม่มีในระบบ</Badge>}
                           </div>
                         </div>
                       </TableCell>

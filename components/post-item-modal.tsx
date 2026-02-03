@@ -29,7 +29,6 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState<ItemCategory>("other")
   const [location, setLocation] = useState("")
-  const [locationDetail, setLocationDetail] = useState("")
   const [loading, setLoading] = useState(false)
   const [userDisplayName, setUserDisplayName] = useState<string>("")
   const { user } = useAuth()
@@ -92,7 +91,6 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
     setDescription("")
     setCategory("other")
     setLocation("")
-    setLocationDetail("")
     clearImages()
   }
 
@@ -118,7 +116,6 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
       description,
       category,
       location,
-      locationDetail
     })
 
     if (!validationResult.success) {
@@ -159,7 +156,6 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
         description,
         category,
         location,
-        locationDetail,
         imageUrl: images[0] || "", // First image for backward compatibility
         imageUrls: images,
         status: "available",
@@ -346,42 +342,27 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
             </div>
           </div>
 
-          {/* Location Detail & Warning */}
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="location-detail" className="text-sm font-medium">
-                รายละเอียดสถานที่ (เช่น เลขห้อง, ชั้น, หรือจุดนัดพบ)
-              </Label>
-              <Input
-                id="location-detail"
-                placeholder="ระบุรายละเอียดเพิ่มเติม..."
-                value={locationDetail}
-                onChange={(e) => setLocationDetail(e.target.value)}
-                disabled={loading}
-                className={errors.locationDetail ? "border-destructive focus-visible:ring-destructive" : ""}
-              />
-              {errors.locationDetail && <p className="text-xs text-destructive">{errors.locationDetail}</p>}
-            </div>
-
-            {location === "อื่นๆ (ระบุในรายละเอียด)" && (
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                <div className="h-5 w-5 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-amber-500 text-[10px] font-bold">!</span>
-                </div>
-                <p className="text-xs text-amber-500 leading-tight">
-                  <span className="font-bold block mb-0.5">คำเตือน</span>
-                  ต้องกำหนดสถานที่นัดรับ <strong>ภายในโรงเรียน/มหาวิทยาลัยเท่านั้น</strong> เพื่อความปลอดภัยของนักศึกษา
-                </p>
+          {location === "อื่นๆ (ภายในมหาวิทยาลัย)" && (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+              <div className="h-5 w-5 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-amber-500 text-[10px] font-bold">!</span>
               </div>
-            )}
-          </div>
+              <p className="text-xs text-amber-500 leading-tight">
+                <span className="font-bold block mb-0.5">คำเตือน</span>
+                ต้องนัดรับ <strong>ภายในมหาวิทยาลัยเท่านั้น</strong> เพื่อความปลอดภัย
+              </p>
+            </div>
+          )}
 
           {/* Image Upload - Multiple Images */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
               รูปภาพ <span className="text-muted-foreground font-normal">({images.length}/5)</span>
             </Label>
-            
+            <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">ข้อกำหนดรูปภาพ:</span> สูงสุด 5 รูป • รูปแบบ JPEG, PNG เท่านั้น • ขนาดไม่เกิน <strong>10 MB</strong> ต่อรูป
+            </div>
+
             {/* Image Grid */}
             {images.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
@@ -418,7 +399,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                     <Input 
                       id="modal-image" 
                       type="file" 
-                      accept="image/*" 
+                      accept="image/jpeg,image/png" 
                       multiple
                       className="hidden" 
                       onChange={handleImageChange}
@@ -441,11 +422,11 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                 <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
                   คลิกเพื่ออัปโหลดรูปภาพ
                 </span>
-                <span className="text-xs text-muted-foreground mt-0.5">เลือกได้สูงสุด 5 รูป (PNG, JPG, GIF)</span>
+                <span className="text-xs text-muted-foreground mt-0.5">สูงสุด 5 รูป, ไม่เกิน 10 MB ต่อรูป (JPEG, PNG เท่านั้น)</span>
                 <Input 
                   id="modal-image-empty" 
                   type="file" 
-                  accept="image/*" 
+                  accept="image/jpeg,image/png" 
                   multiple
                   className="hidden" 
                   onChange={handleImageChange}

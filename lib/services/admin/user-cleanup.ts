@@ -6,13 +6,23 @@ export interface CleanupStats {
   deletedImages: number
 }
 
+/** Return type includes user IDs that need rating recalc after we remove reviews they received from the deleted user */
+export interface CollectUserResourcesResult {
+  refsToDelete: FirebaseFirestore.DocumentReference[]
+  cloudinaryPublicIds: string[]
+  userDoc: FirebaseFirestore.DocumentSnapshot
+  /** targetUserIds of reviews written BY the deleted user — recalc their rating after delete */
+  ratingRecalcUserIds: string[]
+}
+
 /**
  * Collect all user resources (document references and image IDs)
  */
-export async function collectUserResources(userId: string) {
+export async function collectUserResources(userId: string): Promise<CollectUserResourcesResult> {
   const db = getAdminDb()
   const refsToDelete: FirebaseFirestore.DocumentReference[] = []
   const cloudinaryPublicIds: string[] = []
+  const ratingRecalcUserIds: string[] = []
 
   // Helpers
   const addRef = (ref: FirebaseFirestore.DocumentReference) => refsToDelete.push(ref)
@@ -29,8 +39,8 @@ export async function collectUserResources(userId: string) {
     }
   }
 
-  // 2. Items
-  const itemsSnapshot = await db.collection("items").where("ownerId", "==", userId).get()
+  // 2. Items (ใช้ postedBy ตาม schema)
+  const itemsSnapshot = await db.collection("items").where("postedBy", "==", userId).get()
   itemsSnapshot.docs.forEach(doc => {
     addRef(doc.ref)
     const data = doc.data()
@@ -101,7 +111,44 @@ export async function collectUserResources(userId: string) {
   const supportSnap = await db.collection("support_tickets").where("userId", "==", userId).get()
   supportSnap.docs.forEach(d => addRef(d.ref))
 
-  return { refsToDelete, cloudinaryPublicIds, userDoc }
+  // 9. User sessions (ล็อกอิน / อุปกรณ์)
+  const sessionsSnap = await db.collection("userSessions").where("userId", "==", userId).get()
+  sessionsSnap.docs.forEach(d => addRef(d.ref))
+
+  // 10. Reviews: ลบทั้งรีวิวที่ user เป็นผู้เขียน (reviewerId) และที่ user เป็นผู้ถูกรีวิว (targetUserId)
+  const [reviewsAsReviewer, reviewsAsTarget] = await Promise.all([
+    db.collection("reviews").where("reviewerId", "==", userId).get(),
+    db.collection("reviews").where("targetUserId", "==", userId).get(),
+  ])
+  reviewsAsTarget.docs.forEach(d => addRef(d.ref))
+  reviewsAsReviewer.docs.forEach(d => {
+    addRef(d.ref)
+    const targetId = d.data()?.targetUserId
+    if (targetId && targetId !== userId) ratingRecalcUserIds.push(targetId)
+  })
+
+  return { refsToDelete, cloudinaryPublicIds, userDoc, ratingRecalcUserIds }
+}
+
+/**
+ * Recalculate and update a user's aggregate rating from remaining reviews (server-side).
+ * Call after deleting reviews that targeted this user (e.g. when reviewer was deleted).
+ */
+export async function recalculateUserRating(targetUserId: string): Promise<void> {
+  const db = getAdminDb()
+  const snapshot = await db
+    .collection("reviews")
+    .where("targetUserId", "==", targetUserId)
+    .get()
+  const totalReviews = snapshot.size
+  const userRef = db.collection("users").doc(targetUserId)
+  if (totalReviews === 0) {
+    await userRef.update({ rating: { average: 0, count: 0 } })
+    return
+  }
+  const totalScore = snapshot.docs.reduce((sum, d) => sum + (d.data().rating || 0), 0)
+  const average = Number((totalScore / totalReviews).toFixed(1))
+  await userRef.update({ rating: { average, count: totalReviews } })
 }
 
 /**
@@ -151,4 +198,38 @@ export async function deleteUserAuth(userId: string) {
           throw error
       }
   }
+}
+
+/**
+ * Delete Firestore user documents that no longer have a Firebase Auth user.
+ * Use when accounts were removed from Auth (e.g. Firebase Console) but docs remain.
+ */
+export async function deleteOrphanUserDocs(): Promise<{ deleted: number }> {
+  const db = getAdminDb()
+  const auth = getAdminAuth()
+  const usersSnap = await db.collection("users").get()
+  const toDelete: string[] = []
+
+  for (const doc of usersSnap.docs) {
+    const uid = doc.id
+    try {
+      await auth.getUser(uid)
+    } catch (err: any) {
+      if (err?.code === "auth/user-not-found") {
+        toDelete.push(uid)
+      } else {
+        throw err
+      }
+    }
+  }
+
+  const batchSize = 500
+  for (let i = 0; i < toDelete.length; i += batchSize) {
+    const batch = db.batch()
+    const chunk = toDelete.slice(i, i + batchSize)
+    chunk.forEach((uid) => batch.delete(db.collection("users").doc(uid)))
+    await batch.commit()
+  }
+
+  return { deleted: toDelete.length }
 }

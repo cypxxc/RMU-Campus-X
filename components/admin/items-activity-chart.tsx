@@ -59,7 +59,7 @@ export const ItemsActivityChart = memo(function ItemsActivityChart({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          กิจกรรมสิ่งของ (7 วันล่าสุด)
+          กิจกรรมโพส (ย้อนหลัง 7 วัน)
         </CardTitle>
       </CardHeader>
       <CardContent>

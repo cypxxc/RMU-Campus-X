@@ -41,8 +41,7 @@ import {
   Clock,
   Search,
   User as UserIcon,
-  ArrowLeft,
-  RefreshCw
+  ArrowLeft
 } from "lucide-react"
 import Image from "next/image"
 import { Input } from "@/components/ui/input"
@@ -78,7 +77,7 @@ const statusLabels: Record<string, string> = {
 
 // Report type labels (using reportType like item_report, user_report)
 const reportTypeLabels: Record<string, string> = {
-  item_report: "สิ่งของ",
+  item_report: "โพส",
   exchange_report: "การแลกเปลี่ยน",
   chat_report: "แชท",
   user_report: "ผู้ใช้",
@@ -86,7 +85,7 @@ const reportTypeLabels: Record<string, string> = {
 
 // Target type labels (using targetType like item, user)
 const targetTypeLabels: Record<string, string> = {
-  item: "สิ่งของ",
+  item: "โพส",
   exchange: "การแลกเปลี่ยน",
   chat: "แชท",
   user: "ผู้ใช้",
@@ -210,6 +209,16 @@ export default function AdminReportsPage() {
     run()
   }, [authLoading, loadData, router, toast, user])
 
+  // อัปเดตอัตโนมัติทุก 30 วินาที เฉพาะเมื่อแท็บเปิดอยู่
+  useEffect(() => {
+    if (!isAdmin) return
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      loadData()
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [isAdmin, loadData])
+
   const handleUpdateStatus = async (status: ReportStatus) => {
     if (!selectedReport || !user) return
 
@@ -283,62 +292,45 @@ export default function AdminReportsPage() {
             <p className="text-muted-foreground">ตรวจสอบและจัดการรายงานความไม่เหมาะสม</p>
           </div>
         </div>
-        <Button onClick={loadData} variant="outline" className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          รีเฟรช
-        </Button>
       </div>
 
-      {/* Stats - Keep using original 'reports' for stats to show full overview */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* สถิติรายงาน – 3 การ์ด: ทั้งหมด / รอตรวจสอบ / จบแล้ว */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-primary/10 rounded-lg">
-                <Flag className="h-5 w-5 text-primary" />
-             </div>
-             <div>
-               <div className="text-2xl font-bold">{reports.length}</div>
-               <p className="text-xs text-muted-foreground">ได้รับทั้งหมด</p>
-             </div>
+            <div className="p-2 bg-primary/10 rounded-lg dark:bg-primary/20">
+              <Flag className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold">{reports.length}</div>
+              <p className="text-xs text-muted-foreground">รายงานทั้งหมดในระบบ</p>
+            </div>
           </CardContent>
         </Card>
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-yellow-100 rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
-             </div>
-             <div>
-                <div className="text-2xl font-bold text-foreground">
-                   {reports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status)).length}
-                </div>
-                <p className="text-xs text-muted-foreground">รอดำเนินการ</p>
-             </div>
+            <div className="p-2 bg-amber-100 dark:bg-amber-950/50 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-foreground">
+                {reports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status)).length}
+              </div>
+              <p className="text-xs text-muted-foreground">รอตรวจสอบ (ยังไม่จบ)</p>
+            </div>
           </CardContent>
         </Card>
         <Card className="border shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-             </div>
-             <div>
-                <div className="text-2xl font-bold text-foreground">
-                  {reports.filter(r => ['resolved', 'action_taken'].includes(r.status)).length}
-                </div>
-                <p className="text-xs text-muted-foreground">ดำเนินการแล้ว</p>
-             </div>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-           <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-gray-100 rounded-lg">
-                <XCircle className="h-5 w-5 text-gray-600" />
-             </div>
-             <div>
-               <div className="text-2xl font-bold text-foreground">
-                  {reports.filter(r => ['rejected', 'closed'].includes(r.status)).length}
-               </div>
-               <p className="text-xs text-muted-foreground">ปิด/ปฏิเสธ</p>
-             </div>
+            <div className="p-2 bg-green-100 dark:bg-green-950/50 rounded-lg">
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-foreground">
+                {reports.filter(r => ['resolved', 'action_taken', 'rejected', 'closed'].includes(r.status)).length}
+              </div>
+              <p className="text-xs text-muted-foreground">จบแล้ว (แก้ไข/ปิด/ปฏิเสธ)</p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -465,7 +457,7 @@ export default function AdminReportsPage() {
                           ) : (
                              <Package className="h-4 w-4 text-blue-500" />
                           )}
-                          เป้าหมาย ({selectedReport.targetType === 'user' ? 'ผู้ใช้' : 'สิ่งของ'})
+                          เป้าหมาย ({selectedReport.targetType === 'user' ? 'ผู้ใช้' : 'โพส'})
                        </h3>
                        <div className="space-y-3 text-sm">
                           <div className="grid grid-cols-3 gap-2">

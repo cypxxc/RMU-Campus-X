@@ -5,9 +5,8 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { Item } from "@/types"
-import { Package, MapPin, Calendar } from 'lucide-react'
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
+import { Package, MapPin, Calendar, Trash2 } from 'lucide-react'
+import { formatPostedAt, safeToDate } from "@/lib/utils"
 import Image from "next/image"
 import Link from "next/link"
 import { FavoriteButton } from "@/components/favorite-button"
@@ -16,7 +15,10 @@ interface ItemCardProps {
   item: Item
   showRequestButton?: boolean
   onViewDetails?: (item: Item) => void
+  onDelete?: (item: Item) => void
   priority?: boolean
+  /** โหมด admin: ซ่อนปุ่มโปรด, แสดงปุ่มลบ */
+  variant?: 'default' | 'admin'
 }
 
 const categoryLabels: Record<string, string> = {
@@ -41,14 +43,21 @@ const statusColors: Record<string, string> = {
 }
 
 // ✅ Memoized to prevent re-renders when parent re-renders
-export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showRequestButton = true, onViewDetails, priority = false }: ItemCardProps) {
-  const postedDate = item.postedAt?.toDate?.() || new Date()
+export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showRequestButton = true, onViewDetails, onDelete, priority = false, variant = 'default' }: ItemCardProps) {
+  const postedDate = safeToDate(item.postedAt, new Date(0))
+  const isAdmin = variant === 'admin'
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (onViewDetails) {
       e.preventDefault()
       onViewDetails(item)
     }
+  }
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onDelete?.(item)
   }
 
   return (
@@ -74,19 +83,23 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
                   <span aria-hidden="true">+{item.imageUrls.length - 1}</span>
                 </div>
               )}
-              {/* Favorite Button */}
-              <div className="absolute top-2 left-2 z-10 transition-transform duration-200 hover:scale-110">
-                <FavoriteButton item={item} />
-              </div>
+              {/* Favorite Button (ซ่อนในโหมด admin) */}
+              {!isAdmin && (
+                <div className="absolute top-2 left-2 z-10 transition-transform duration-200 hover:scale-110">
+                  <FavoriteButton item={item} />
+                </div>
+              )}
               {/* Gradient overlay */}
               <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </div>
           ) : (
             <div className="relative aspect-4/3 w-full bg-muted flex items-center justify-center">
               <Package className="h-12 w-12 text-muted-foreground/50" />
-               <div className="absolute top-2 left-2 z-10 transition-transform duration-200 hover:scale-110">
-                <FavoriteButton item={item} />
-              </div>
+              {!isAdmin && (
+                <div className="absolute top-2 left-2 z-10 transition-transform duration-200 hover:scale-110">
+                  <FavoriteButton item={item} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -125,9 +138,9 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
               {item.location}
             </span>
           )}
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5" title={postedDate.toISOString()}>
             <Calendar className="h-3.5 w-3.5" />
-            {formatDistanceToNow(postedDate, { addSuffix: true, locale: th })}
+            {formatPostedAt(postedDate)}
           </span>
         </div>
 
@@ -139,19 +152,30 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
             className="text-xs font-bold hover:text-primary hover:underline transition-colors flex items-center gap-1"
             title="คลิกเพื่อดูโปรไฟล์"
           >
-            {item.postedByName || "ผู้ใช้งาน"}
+            {item.postedByName || item.postedByEmail?.split("@")[0] || "ผู้ใช้งาน"}
           </Link>
         </div>
       </CardContent>
 
-      <CardFooter className="p-4 pt-0 mt-auto">
+      <CardFooter className="p-4 pt-0 mt-auto flex gap-2 items-center">
         {onViewDetails ? (
-          <Button variant="secondary" className="w-full font-bold h-9 rounded-lg" onClick={handleCardClick}>
+          <Button variant="secondary" className="flex-1 font-bold h-9 rounded-lg" onClick={handleCardClick}>
             ดูรายละเอียด
           </Button>
         ) : (
-          <Button asChild className="w-full font-bold h-9 rounded-lg" size="sm">
+          <Button asChild className="flex-1 font-bold h-9 rounded-lg" size="sm">
             <Link href={`/item/${item.id}`}>ดูรายละเอียด</Link>
+          </Button>
+        )}
+        {isAdmin && onDelete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0 h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={handleDeleteClick}
+            title="ลบโพส"
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
         )}
       </CardFooter>

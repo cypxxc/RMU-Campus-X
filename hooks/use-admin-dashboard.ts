@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore"
+import { collection, getDocs, getCountFromServer, query, orderBy, limit } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import { getReports } from "@/lib/firestore"
 import type { Item, User, SupportTicket } from "@/types"
@@ -37,8 +37,8 @@ export function useAdminDashboardData() {
         ...doc.data() 
       })) as Item[]
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 30 * 1000, // Poll every 30 seconds
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchInterval: 15 * 1000, // อัปเดตอัตโนมัติทุก 15 วินาที
     refetchOnWindowFocus: true,
   })
 
@@ -98,7 +98,21 @@ export function useAdminDashboardData() {
       return usersWithReports
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
-    refetchInterval: 60 * 1000, // Poll every 60 seconds
+    refetchInterval: 20 * 1000, // อัปเดตอัตโนมัติทุก 20 วินาที
+    refetchOnWindowFocus: true,
+  })
+
+  // Total users count - efficient count without loading all documents
+  const totalUsersCountQuery = useQuery({
+    queryKey: ['admin', 'total-users-count'],
+    queryFn: async () => {
+      const db = getFirebaseDb()
+      const usersRef = collection(db, 'users')
+      const snapshot = await getCountFromServer(usersRef)
+      return snapshot.data().count
+    },
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 20 * 1000,
     refetchOnWindowFocus: true,
   })
 
@@ -118,8 +132,8 @@ export function useAdminDashboardData() {
         ...doc.data() 
       })) as SupportTicket[]
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 45 * 1000, // Poll every 45 seconds
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchInterval: 15 * 1000, // อัปเดตอัตโนมัติทุก 15 วินาที
     refetchOnWindowFocus: true,
   })
 
@@ -127,12 +141,22 @@ export function useAdminDashboardData() {
     items: itemsQuery.data ?? [],
     users: flaggedUsersQuery.data ?? [],
     tickets: ticketsQuery.data ?? [],
-    isLoading: itemsQuery.isLoading || flaggedUsersQuery.isLoading || ticketsQuery.isLoading,
-    isError: itemsQuery.isError || flaggedUsersQuery.isError || ticketsQuery.isError,
+    totalUsersCount: totalUsersCountQuery.data ?? 0,
+    isLoading:
+      itemsQuery.isLoading ||
+      flaggedUsersQuery.isLoading ||
+      ticketsQuery.isLoading ||
+      totalUsersCountQuery.isLoading,
+    isError:
+      itemsQuery.isError ||
+      flaggedUsersQuery.isError ||
+      ticketsQuery.isError ||
+      totalUsersCountQuery.isError,
     refetchAll: () => {
       itemsQuery.refetch()
       flaggedUsersQuery.refetch()
       ticketsQuery.refetch()
-    }
+      totalUsersCountQuery.refetch()
+    },
   }
 }

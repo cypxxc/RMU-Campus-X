@@ -3,6 +3,7 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   sendEmailVerification,
+  applyActionCode,
   browserLocalPersistence,
   browserSessionPersistence,
   setPersistence,
@@ -11,6 +12,10 @@ import {
   deleteUser,
   type User,
 } from "firebase/auth"
+import type { ActionCodeSettings } from "firebase/auth"
+
+/** ลิงก์ยืนยันอีเมลของ Firebase ใช้ได้ 3 วัน (ค่าเริ่มต้นของ Firebase ไม่สามารถปรับใน SDK ได้) */
+export const EMAIL_VERIFICATION_LINK_EXPIRY_DAYS = 3
 import { doc, setDoc, serverTimestamp } from "firebase/firestore"
 import { getFirebaseAuth, getFirebaseDb } from "./firebase"
 
@@ -18,9 +23,21 @@ import { registrationSchema } from "./schemas"
 
 import { z } from "zod"
 
+function getVerificationContinueUrl(): string {
+  if (typeof window !== "undefined") return `${window.location.origin}/verify-email`
+  return `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/verify-email`
+}
+
+function getEmailVerificationActionCodeSettings(): ActionCodeSettings {
+  return { url: getVerificationContinueUrl(), handleCodeInApp: false }
+}
+
+/** รองรับทั้งอีเมลนักศึกษา (รหัส 12 หลัก) และอาจารย์/บุคลากร (ตัวอักษร) @rmu.ac.th */
+const RMU_EMAIL_REGEX = /^[a-zA-Z0-9._+-]{1,64}@rmu\.ac\.th$/i
+
 export const validateRMUEmail = (email: string): boolean => {
-  const emailSchema = z.string().regex(/^\d{12}@rmu\.ac\.th$/)
-  const result = emailSchema.safeParse(email)
+  const emailSchema = z.string().regex(RMU_EMAIL_REGEX)
+  const result = emailSchema.safeParse(email.trim().toLowerCase())
   return result.success
 }
 
@@ -49,7 +66,7 @@ export const registerUser = async (rawEmail: string, password: string) => {
 
   // 3. Atomic Profile Creation
   try {
-    await sendEmailVerification(userCredential.user)
+    await sendEmailVerification(userCredential.user, getEmailVerificationActionCodeSettings())
 
     // Verify Auth State before Write
     const currentUser = auth.currentUser;
@@ -140,7 +157,13 @@ export const signOut = async () => {
 }
 
 export const resendVerificationEmail = async (user: User) => {
-  await sendEmailVerification(user)
+  await sendEmailVerification(user, getEmailVerificationActionCodeSettings())
+}
+
+/** ใช้เมื่อผู้ใช้กดลิงก์ยืนยันอีเมล (จาก query oobCode) — ยืนยันอีเมลอัตโนมัติ */
+export const applyEmailVerificationCode = async (oobCode: string): Promise<void> => {
+  const auth = getFirebaseAuth()
+  await applyActionCode(auth, oobCode)
 }
 
 export const resetPassword = async (email: string) => {

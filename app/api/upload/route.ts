@@ -11,12 +11,10 @@ export const runtime = 'nodejs'
 // Max file size: 10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
-// Allowed image MIME types with their magic bytes
+// Allowed image MIME types with their magic bytes (เฉพาะ JPG, PNG)
 const IMAGE_SIGNATURES: { mime: string; bytes: number[] }[] = [
   { mime: 'image/jpeg', bytes: [0xFF, 0xD8, 0xFF] },
   { mime: 'image/png', bytes: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
-  { mime: 'image/gif', bytes: [0x47, 0x49, 0x46, 0x38] }, // GIF87a or GIF89a
-  { mime: 'image/webp', bytes: [0x52, 0x49, 0x46, 0x46] }, // RIFF header (WebP starts with RIFF)
 ]
 
 /**
@@ -26,14 +24,7 @@ const IMAGE_SIGNATURES: { mime: string; bytes: number[] }[] = [
 function validateImageMagicBytes(buffer: Buffer): { valid: boolean; detectedMime?: string } {
   for (const sig of IMAGE_SIGNATURES) {
     const matches = sig.bytes.every((byte, index) => buffer[index] === byte)
-    if (matches) {
-      // Special check for WebP: must have "WEBP" at offset 8
-      if (sig.mime === 'image/webp') {
-        const webpMarker = buffer.slice(8, 12).toString('ascii')
-        if (webpMarker !== 'WEBP') continue
-      }
-      return { valid: true, detectedMime: sig.mime }
-    }
+    if (matches) return { valid: true, detectedMime: sig.mime }
   }
   return { valid: false }
 }
@@ -82,7 +73,7 @@ export async function POST(request: NextRequest) {
     if (!validation.valid) {
       console.warn('[Upload API] Invalid magic bytes, claimed type:', file.type)
       return NextResponse.json(
-        { error: 'รูปแบบไฟล์ไม่ถูกต้อง รองรับเฉพาะ JPEG, PNG, GIF, WebP' },
+        { error: 'รูปแบบไฟล์ไม่ถูกต้อง รองรับเฉพาะ JPEG, PNG' },
         { status: 400 }
       )
     }

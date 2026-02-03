@@ -16,8 +16,7 @@ import { MapPin, Calendar, User, Tag, FileText, Image as ImageIcon, X } from "lu
 import type { Item, ItemStatus } from "@/types"
 import { useState } from "react"
 import Image from "next/image"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
+import { formatPostedAt, safeToDate } from "@/lib/utils"
 
 interface ItemDetailPanelProps {
   item: Item | null
@@ -53,7 +52,7 @@ export function ItemDetailPanel({
 
   if (!item) return null
 
-  const postedAt = (item.postedAt as any)?.toDate?.() || new Date()
+  const postedAt = safeToDate(item.postedAt, new Date(0))
 
   const handleStatusChange = () => {
     if (selectedStatus && onStatusChange) {
@@ -63,7 +62,7 @@ export function ItemDetailPanel({
   }
 
   const handleDelete = () => {
-    if (onDelete && confirm("คุณแน่ใจหรือไม่ที่จะลบสิ่งของนี้?")) {
+    if (onDelete && confirm("คุณแน่ใจหรือไม่ที่จะลบโพสนี้?")) {
       onDelete(item.id)
       onOpenChange(false)
     }
@@ -153,7 +152,7 @@ export function ItemDetailPanel({
                 โพสต์เมื่อ
               </Label>
               <p className="text-sm font-medium">
-                {formatDistanceToNow(postedAt, { locale: th, addSuffix: true })}
+                {formatPostedAt(postedAt)}
               </p>
             </div>
           </div>
@@ -194,7 +193,7 @@ export function ItemDetailPanel({
               onClick={handleDelete}
             >
               <X className="h-4 w-4 mr-2" />
-              ลบสิ่งของนี้
+              ลบโพสนี้
             </Button>
           </div>
         </div>

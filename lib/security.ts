@@ -41,12 +41,12 @@ export function sanitizeEmail(email: string): string {
 }
 
 /**
- * Validate RMU email format
+ * Validate RMU email format — รองรับทั้งนักศึกษา (รหัส 12 หลัก) และอาจารย์/บุคลากร (ตัวอักษร)
  */
 export function isValidRMUEmail(email: string): boolean {
   if (!email) return false
   const normalized = email.trim().toLowerCase()
-  return /^\d{12}@rmu\.ac\.th$/.test(normalized)
+  return /^[a-zA-Z0-9._+-]{1,64}@rmu\.ac\.th$/.test(normalized)
 }
 
 /**

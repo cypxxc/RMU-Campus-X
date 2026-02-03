@@ -1,10 +1,8 @@
 import Link from "next/link"
-import { Lock, Eye, Database, Share2, ShieldAlert, FileText, ChevronLeft, Cookie, Server } from "lucide-react"
+import { Lock, Eye, Database, Share2, ShieldAlert, FileText, ChevronLeft, Cookie, Server, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-
 export default function PrivacyPage() {
   const lastUpdated = new Date().toLocaleDateString('th-TH', {
     year: 'numeric',
@@ -46,9 +44,8 @@ export default function PrivacyPage() {
           
           <Separator />
 
-          <CardContent className="p-0">
-            <ScrollArea className="h-[600px] p-6 sm:p-10">
-              <div className="space-y-10 pr-4">
+          <CardContent className="p-6 sm:p-10">
+            <div className="space-y-10">
                 
                 {/* Introduction */}
                 <section className="space-y-4">
@@ -56,6 +53,21 @@ export default function PrivacyPage() {
                     RMU-Campus X ให้ความสำคัญกับความเป็นส่วนตัวของคุณอย่างสูงสุด นโยบายนี้อธิบายถึงวิธีการที่เราเก็บรวบรวม 
                     ใช้ และปกป้องข้อมูลส่วนบุคคลของคุณในขณะที่คุณใช้งานแพลตฟอร์มของเรา
                   </p>
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
+                      <h4 className="text-sm font-semibold text-foreground">หลัก PAPA ในการพัฒนาระบบ</h4>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                      เราใช้กรอบจริยธรรมสารสนเทศ PAPA (Privacy, Accuracy, Property, Accessibility) ในการออกแบบและให้บริการ:
+                    </p>
+                    <ul className="text-xs text-muted-foreground space-y-1 list-none">
+                      <li><span className="font-medium text-foreground">P — Privacy:</span> เก็บ/ใช้/เปิดเผยข้อมูลตามนโยบายนี้ มี consent และสิทธิ์ลบข้อมูล</li>
+                      <li><span className="font-medium text-foreground">A — Accuracy:</span> ตรวจสอบข้อมูล (ยืนยันอีเมล, validation) และมีช่องทางรายงานเนื้อหาไม่เหมาะสม</li>
+                      <li><span className="font-medium text-foreground">P — Property:</span> ข้อมูลที่คุณสร้างเป็นของคุณ ลบบัญชีได้ตลอดเวลา</li>
+                      <li><span className="font-medium text-foreground">A — Accessibility:</span> เข้าถึงระบบได้เฉพาะผู้มีอีเมล @rmu.ac.th ข้อมูลเปิดเผยเฉพาะเมื่อจำเป็น (คู่แลกเปลี่ยน/ตามกฎหมาย)</li>
+                    </ul>
+                  </div>
                 </section>
 
                 {/* Section 1 */}
@@ -161,10 +173,9 @@ export default function PrivacyPage() {
                 </section>
 
                 <div className="pt-8 text-center text-sm text-muted-foreground">
-                  <p>หากมีข้อสงสัยเกี่ยวกับนโยบายความเป็นส่วนตัว ติดต่อเราได้ที่หน้า <Link href="/contact" className="text-primary hover:underline underline-offset-4">ติดต่อเรา</Link></p>
+                  <p>หากมีข้อสงสัยเกี่ยวกับนโยบายความเป็นส่วนตัว ส่งคำร้องขอความช่วยเหลือได้ที่เมนู ช่วยเหลือ</p>
                 </div>
               </div>
-            </ScrollArea>
           </CardContent>
         </Card>
         

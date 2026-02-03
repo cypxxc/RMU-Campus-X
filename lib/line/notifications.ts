@@ -301,6 +301,24 @@ export async function notifyUserWarning(
 }
 
 /**
+ * แจ้งเตือนเจ้าของโพสเมื่อผู้ดูแลแก้ไขโพส
+ */
+export async function notifyItemEditedByAdmin(
+  lineUserId: string,
+  itemTitle: string
+): Promise<LinePushResponse> {
+  const message: LineTextMessage = {
+    type: "text",
+    text: `✏️ แจ้งเตือนจากผู้ดูแลระบบ
+
+โพส "${itemTitle}" ของคุณถูกแก้ไขโดยผู้ดูแล
+
+กรุณาตรวจสอบรายละเอียดบนเว็บแอป`,
+  }
+  return sendPushMessage(lineUserId, [message])
+}
+
+/**
  * แจ้งเตือนผู้ใช้เมื่อสถานะบัญชีเปลี่ยน (ระงับ/ปลดระงับ)
  */
 export async function notifyAccountStatusChange(

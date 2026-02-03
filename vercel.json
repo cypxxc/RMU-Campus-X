@@ -1,10 +1,4 @@
 {
   "buildCommand": "bun run build",
-  "installCommand": "bun install",
-  "crons": [
-    {
-      "path": "/api/admin/cleanup",
-      "schedule": "0 19 * * *"
-    }
-  ]
+  "installCommand": "bun install"
 }

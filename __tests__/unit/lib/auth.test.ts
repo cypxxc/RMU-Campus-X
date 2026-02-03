@@ -7,8 +7,13 @@ import { validateRMUEmail } from '@/lib/auth'
 
 describe('Authentication', () => {
   describe('validateRMUEmail', () => {
-    it('should accept valid RMU email format', () => {
+    it('should accept student email (12 digits)', () => {
       expect(validateRMUEmail('653120100123@rmu.ac.th')).toBe(true)
+    })
+
+    it('should accept lecturer/staff email (letters)', () => {
+      expect(validateRMUEmail('somchai@rmu.ac.th')).toBe(true)
+      expect(validateRMUEmail('name.surname@rmu.ac.th')).toBe(true)
     })
 
     it('should reject non-RMU domain', () => {
@@ -16,19 +21,12 @@ describe('Authentication', () => {
       expect(validateRMUEmail('user@hotmail.com')).toBe(false)
     })
 
-    it('should reject invalid student ID format', () => {
-      expect(validateRMUEmail('abc@rmu.ac.th')).toBe(false)
-      expect(validateRMUEmail('12345@rmu.ac.th')).toBe(false) // Too short
-      expect(validateRMUEmail('1234567890123456@rmu.ac.th')).toBe(false) // Too long
-    })
-
     it('should reject empty string', () => {
       expect(validateRMUEmail('')).toBe(false)
     })
 
-    it('should be case sensitive on domain', () => {
-      // The regex is case-sensitive
-      expect(validateRMUEmail('653120100123@RMU.AC.TH')).toBe(false)
+    it('should accept domain case-insensitively', () => {
+      expect(validateRMUEmail('653120100123@RMU.AC.TH')).toBe(true)
     })
   })
 })

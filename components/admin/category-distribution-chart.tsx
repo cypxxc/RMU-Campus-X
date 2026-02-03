@@ -84,7 +84,7 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
             <div className="text-center">
               <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">ยังไม่มีข้อมูลสิ่งของ</p>
+              <p className="text-sm">ยังไม่มีข้อมูลโพส</p>
             </div>
           </div>
         </CardContent>

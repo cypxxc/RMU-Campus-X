@@ -7,9 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { QueryProvider } from "@/components/query-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { SiteFooter } from "@/components/site-footer"
-import { LazyHelpBot } from "@/components/lazy-help-bot"
 import { ConsentGuard } from "@/components/consent-guard"
-import { WebVitals } from "@/components/web-vitals"
 import "./globals.css"
 
 const geistSans = Geist({ 
@@ -85,8 +83,6 @@ export default function RootLayout({
               <SiteFooter />
               <Toaster />
               <Analytics />
-              <WebVitals />
-              <LazyHelpBot />
             </ThemeProvider>
             </ConsentGuard>
           </AuthProvider>

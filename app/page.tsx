@@ -7,6 +7,7 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { Logo } from "@/components/logo"
 import { LandingHero3D } from "@/components/landing-hero-3d"
+import { LandingStats } from "@/components/landing-stats"
 
 const features = [
   {
@@ -33,12 +34,6 @@ const features = [
     description: "เฉพาะนักศึกษา มรม. เท่านั้น",
     color: "text-purple-500 bg-purple-500/10",
   },
-]
-
-const stats = [
-  { value: "100+", label: "สิ่งของ" },
-  { value: "50+", label: "ผู้ใช้งาน" },
-  { value: "30+", label: "แลกเปลี่ยนสำเร็จ" },
 ]
 
 export default function LandingPage() {
@@ -95,15 +90,8 @@ export default function LandingPage() {
             </Link>
           </div>
           
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mt-16 max-w-md mx-auto">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-2xl sm:text-3xl font-black text-primary">{stat.value}</p>
-                <p className="text-xs text-muted-foreground font-medium">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+          {/* Stats – ข้อมูลจริงจากระบบ อัปเดตอัตโนมัติ */}
+          <LandingStats />
         </BounceWrapper>
       </section>
 

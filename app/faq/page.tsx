@@ -22,7 +22,7 @@ export default function FAQPage() {
     },
     {
       question: "ถ้าเจอสิ่งของผิดกฎหมายหรือผู้ใช้งานที่ไม่เหมาะสมต้องทำอย่างไร?",
-      answer: "สามารถกดปุ่ม 'รายงาน' (Report) ที่หน้าสิ่งของหรือหน้าโปรไฟล์ของผู้ใช้นั้นๆ เพื่อแจ้งให้ Admin ตรวจสอบได้ทันที"
+      answer: "สามารถกดปุ่ม 'รายงาน' ที่หน้าสิ่งของหรือหน้าโปรไฟล์ของผู้ใช้นั้นๆ เพื่อแจ้งให้ทีมงานตรวจสอบได้ทันที"
     },
     {
       question: "ลืมรหัสผ่านทำอย่างไร?",
@@ -40,8 +40,8 @@ export default function FAQPage() {
         <div className="inline-flex items-center justify-center p-3 rounded-full bg-primary/10 text-primary mb-4">
           <HelpCircle className="h-6 w-6" />
         </div>
-        <h1 className="text-3xl font-bold mb-2">คำถามที่พบบ่อย (FAQ)</h1>
-        <p className="text-muted-foreground">รวมคำถามและการช่วยเหลือเบื้องต้น</p>
+        <h1 className="text-3xl font-bold mb-2">FAQ</h1>
+        <p className="text-muted-foreground">คำถามและคำตอบเกี่ยวกับการใช้งาน</p>
       </div>
 
       <Accordion type="single" collapsible className="w-full space-y-2">

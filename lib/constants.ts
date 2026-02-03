@@ -141,7 +141,7 @@ export const LOCATION_OPTIONS = [
   "J. อาคารบูรพา / หอพักนักศึกษา",
   "L. สระว่ายน้ำ",
   "N. โรงแรมสวนวรุณ",
-  "อื่นๆ (ระบุในรายละเอียด)",
+  "อื่นๆ (ภายในมหาวิทยาลัย)",
 ] as const;
 
 export type LocationOption = (typeof LOCATION_OPTIONS)[number];
@@ -254,8 +254,8 @@ export const EXCHANGE_STATUS_COLORS: Record<string, string> = {
 export const IMAGE_UPLOAD_CONFIG = {
   maxImages: 5,
   maxSizeBytes: 5 * 1024 * 1024, // 5MB
-  allowedTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
-  allowedExtensions: ["jpg", "jpeg", "png", "gif", "webp"],
+  allowedTypes: ["image/jpeg", "image/png"],
+  allowedExtensions: ["jpg", "jpeg", "png"],
 } as const;
 
 // ============ Rate Limit Constants ============

@@ -3,8 +3,6 @@ import { ShieldCheck, UserCheck, Ban, MessageSquareWarning, Scale, Gavel, FileTe
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-
 export default function TermsPage() {
   const lastUpdated = new Date().toLocaleDateString('th-TH', { 
     year: 'numeric', 
@@ -46,9 +44,8 @@ export default function TermsPage() {
           
           <Separator />
 
-          <CardContent className="p-0">
-            <ScrollArea className="h-[600px] p-6 sm:p-10">
-              <div className="space-y-10 pr-4">
+          <CardContent className="p-6 sm:p-10">
+            <div className="space-y-10">
                 
                 {/* Section 1 */}
                 <section className="space-y-4">
@@ -141,7 +138,6 @@ export default function TermsPage() {
                   <p>หากมีข้อสงสัยเพิ่มเติม สามารถติดต่อทีมงานผ่านเมนูช่วยเหลือ</p>
                 </div>
               </div>
-            </ScrollArea>
           </CardContent>
         </Card>
         

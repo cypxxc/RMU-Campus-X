@@ -3,8 +3,6 @@ import { BookOpen, Handshake, AlertTriangle, ShieldCheck, Heart, UserPlus, Messa
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-
 export default function GuidelinesPage() {
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 py-12 px-4 sm:px-6">
@@ -40,9 +38,8 @@ export default function GuidelinesPage() {
           
           <Separator />
 
-          <CardContent className="p-0">
-            <ScrollArea className="h-[600px] p-6 sm:p-10">
-              <div className="space-y-10 pr-4">
+          <CardContent className="p-6 sm:p-10">
+            <div className="space-y-10">
                 
                 {/* Introduction */}
                 <section className="space-y-4">
@@ -157,7 +154,6 @@ export default function GuidelinesPage() {
                   <p>ช่วยกันสอดส่องดูแล หากพบเห็นการกระทำผิดกฎระเบียบ <br/> โปรดใช้ปุ่ม <strong className="text-red-500">"รายงานปัญหา"</strong> บนหน้าประกาศนั้นๆ</p>
                 </div>
               </div>
-            </ScrollArea>
           </CardContent>
         </Card>
         

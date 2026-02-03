@@ -72,10 +72,10 @@ export const uploadToCloudinary = async (
  */
 export const validateImageFile = (file: File): { valid: boolean; error?: string } => {
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB max input
-  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png']
   
   if (!ALLOWED_TYPES.includes(file.type)) {
-    return { valid: false, error: 'รองรับเฉพาะไฟล์รูปภาพ (JPEG, PNG, WebP, GIF)' }
+    return { valid: false, error: 'รองรับเฉพาะไฟล์รูปภาพ (JPEG, PNG)' }
   }
   
   if (file.size > MAX_FILE_SIZE) {

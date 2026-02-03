@@ -38,7 +38,7 @@ export default function AdminError({
         <div className="space-y-3">
           <h2 className="text-2xl font-bold text-foreground flex items-center justify-center gap-2">
             <AlertTriangle className="h-6 w-6 text-amber-500" />
-            เกิดข้อผิดพลาดในระบบ Admin
+            เกิดข้อผิดพลาดในหน้าจัดการ
           </h2>
           <p className="text-muted-foreground">
             ไม่สามารถโหลดหน้าจัดการนี้ได้ กรุณาลองใหม่อีกครั้ง
@@ -52,7 +52,7 @@ export default function AdminError({
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-amber-700 dark:text-amber-500 mb-2">
-                  Development Mode - Error Details:
+                  รายละเอียดข้อผิดพลาด (โหมดพัฒนา):
                 </p>
                 <pre className="text-xs font-mono text-foreground/80 overflow-x-auto break-all whitespace-pre-wrap">
                   {error.message}
@@ -60,7 +60,7 @@ export default function AdminError({
                 {error.stack && (
                   <details className="mt-3">
                     <summary className="text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground">
-                      Stack Trace
+                      รายละเอียดเทคนิค
                     </summary>
                     <pre className="text-[10px] font-mono text-muted-foreground mt-2 p-2 bg-muted/50 rounded overflow-x-auto">
                       {error.stack}
@@ -75,7 +75,7 @@ export default function AdminError({
         {!isDev && error.digest && (
           <Card className="p-3 bg-muted/30 border-muted">
             <p className="text-xs text-muted-foreground">
-              Error Reference: <span className="font-mono font-semibold">{error.digest.slice(0, 16)}</span>
+              รหัสอ้างอิง: <span className="font-mono font-semibold">{error.digest.slice(0, 16)}</span>
             </p>
           </Card>
         )}
@@ -98,7 +98,7 @@ export default function AdminError({
             className="gap-2"
           >
             <Home className="h-4 w-4" />
-            กลับ Admin Dashboard
+            กลับหน้าภาพรวม
           </Button>
         </div>
 
@@ -108,9 +108,9 @@ export default function AdminError({
             <span className="font-semibold text-foreground">💡 เคล็ดลับ:</span> หากปัญหายังคงอยู่ ลองตรวจสอบ:
           </p>
           <ul className="text-xs text-muted-foreground mt-2 ml-6 space-y-1 list-disc">
-            <li>สิทธิ์การเข้าถึงข้อมูลใน Firestore</li>
-            <li>การเชื่อมต่อ Firebase</li>
-            <li>Browser Console สำหรับข้อความ error เพิ่มเติม</li>
+            <li>สิทธิ์การเข้าถึงข้อมูลในฐานข้อมูล</li>
+            <li>การเชื่อมต่อระบบ</li>
+            <li>เครื่องมือ Developer (Console) สำหรับข้อความแจ้งเตือนเพิ่มเติม</li>
           </ul>
         </div>
       </div>

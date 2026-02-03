@@ -229,7 +229,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
                     <span className="text-[10px] text-muted-foreground lowercase">เพิ่มรูป</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png"
                       multiple
                       className="hidden"
                       onChange={handleImageUpload}

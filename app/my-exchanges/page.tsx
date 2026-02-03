@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { authFetchJson } from "@/lib/api-client"
@@ -36,32 +36,51 @@ export default function MyExchangesPage() {
   const router = useRouter()
   const { toast } = useToast()
 
+  const loadExchanges = useCallback(async (options?: { silent?: boolean }) => {
+    if (!user) return
+    const silent = options?.silent ?? false
+    if (!silent) setLoading(true)
+    try {
+      const res = await authFetchJson<{ exchanges?: Exchange[] }>("/api/exchanges", { method: "GET" })
+      const list = res.data?.exchanges ?? []
+      setExchanges(list as Exchange[])
+    } catch (error: any) {
+      if (!silent) {
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: error?.message || "ไม่สามารถโหลดการแลกเปลี่ยนได้",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      if (!silent) setLoading(false)
+    }
+  }, [user, toast])
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login")
     } else if (!authLoading && user) {
       loadExchanges()
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router, loadExchanges])
 
-  const loadExchanges = async () => {
-    if (!user) return
-
-    setLoading(true)
-    try {
-      const res = await authFetchJson<{ exchanges?: Exchange[] }>("/api/exchanges", { method: "GET" })
-      const list = res.data?.exchanges ?? []
-      setExchanges(list as Exchange[])
-    } catch (error: any) {
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error?.message || "ไม่สามารถโหลดการแลกเปลี่ยนได้",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+  // อัปเดตอัตโนมัติเมื่อเปิดแท็บอยู่ (ไม่ต้องกดรีเฟรช)
+  useEffect(() => {
+    if (!user || typeof document === "undefined") return
+    const POLL_INTERVAL_MS = 25_000 // 25 วินาที
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") loadExchanges({ silent: true })
+    }, POLL_INTERVAL_MS)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") loadExchanges({ silent: true })
     }
-  }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [user, loadExchanges])
 
   const handleCancelExchange = async (reason: string) => {
     if (!exchangeToCancel || !user) return

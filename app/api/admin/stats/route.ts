@@ -6,6 +6,7 @@
  */
 
 import { NextRequest } from 'next/server'
+import { Timestamp } from 'firebase-admin/firestore'
 import { getAdminDb } from '@/lib/firebase-admin'
 import {
   verifyAdminAccess,
@@ -28,16 +29,20 @@ export async function GET(request: NextRequest) {
     const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate())
 
     // Use Promise.all for parallel count queries (much faster than fetching all docs)
+    const twentyFourHoursAgo = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))
+
     const [
       // User counts
       totalUsersCount,
       activeUsersCount,
       suspendedUsersCount,
       bannedUsersCount,
-      // Item counts  
+      // Item counts
       totalItemsCount,
       activeItemsCount,
+      pendingItemsCount,
       completedItemsCount,
+      newItemsLast24hCount,
       // Report counts
       totalReportsCount,
       pendingReportsCount,
@@ -54,7 +59,9 @@ export async function GET(request: NextRequest) {
       // Items
       db.collection('items').count().get().then(s => s.data().count),
       db.collection('items').where('status', '==', 'available').count().get().then(s => s.data().count),
+      db.collection('items').where('status', '==', 'pending').count().get().then(s => s.data().count),
       db.collection('items').where('status', '==', 'completed').count().get().then(s => s.data().count),
+      db.collection('items').where('postedAt', '>=', twentyFourHoursAgo).count().get().then(s => s.data().count),
       // Reports
       db.collection('reports').count().get().then(s => s.data().count),
       db.collection('reports').where('status', '==', 'new').count().get().then(s => s.data().count),
@@ -130,7 +137,9 @@ export async function GET(request: NextRequest) {
       items: {
         total: totalItemsCount,
         active: activeItemsCount,
+        pending: pendingItemsCount,
         completed: completedItemsCount,
+        newLast24h: newItemsLast24hCount,
         growth: `${itemGrowth}%`,
         trend: parseFloat(itemGrowth) >= 0 ? 'up' : 'down',
       },
