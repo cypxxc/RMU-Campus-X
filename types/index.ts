@@ -103,8 +103,10 @@ export interface ChatMessage {
   senderEmail: string
   message: string
   createdAt: Timestamp
-  imageUrl?: string
-  imageType?: 'image/jpeg' | 'image/png' | 'image/webp'
+  updatedAt?: Timestamp // เมื่อแก้ไขข้อความ
+  imageUrl?: string | null
+  imageType?: 'image/jpeg' | 'image/png' | 'image/webp' | null
+  readAt?: Timestamp | null // อ่านแล้วโดยผู้รับ
 }
 
 export type ReportType = "item_report" | "exchange_report" | "chat_report" | "user_report"

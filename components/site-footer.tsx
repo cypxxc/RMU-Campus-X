@@ -9,8 +9,8 @@ export function SiteFooter() {
 
   return (
     <footer className="bg-muted/30 border-t pt-16 pb-8">
-      <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+      <div className="container mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-10 gap-y-10 lg:gap-x-12 mb-12">
           {/* Brand Column */}
           <div className="space-y-4">
             <Logo size="lg" />
@@ -20,15 +20,10 @@ export function SiteFooter() {
             </p>
           </div>
 
-          {/* Quick Links */}
-          <div>
-            <h3 className="font-bold text-foreground mb-6">เมนูลัด</h3>
+          {/* FAQ */}
+          <div className="space-y-1">
+            <h3 className="font-bold text-foreground mb-5">คำถามที่พบบ่อย</h3>
             <ul className="space-y-3 text-sm">
-              <li>
-                <Link href="/dashboard" className="text-muted-foreground hover:text-primary transition-colors inline-block">
-                  หน้าหลัก
-                </Link>
-              </li>
               <li>
                 <Link href="/faq" className="text-muted-foreground hover:text-primary transition-colors inline-block">
                   FAQ
@@ -38,8 +33,8 @@ export function SiteFooter() {
           </div>
 
           {/* Legal */}
-          <div>
-            <h3 className="font-bold text-foreground mb-6">นโยบายและความปลอดภัย</h3>
+          <div className="space-y-1">
+            <h3 className="font-bold text-foreground mb-5">นโยบายและความปลอดภัย</h3>
             <ul className="space-y-3 text-sm">
               <li>
                 <Link href="/terms" className="text-muted-foreground hover:text-primary transition-colors inline-block">
@@ -60,9 +55,9 @@ export function SiteFooter() {
           </div>
 
           {/* Contact */}
-          <div>
-            <h3 className="font-bold text-foreground mb-6">ติดต่อสอบถาม</h3>
-            <ul className="space-y-4 text-sm">
+          <div className="space-y-1">
+            <h3 className="font-bold text-foreground mb-5">ติดต่อสอบถาม</h3>
+            <ul className="space-y-3 text-sm">
               <li className="flex items-start gap-3">
                 <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <span className="text-muted-foreground">
@@ -81,9 +76,9 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="border-t pt-8">
+        <div className="border-t pt-8 pb-2">
           <p className="text-xs text-muted-foreground text-center">
-            © {currentYear} RMU-Campus X. All rights reserved.
+            © {currentYear} RMU-Campus X - มหาวิทยาลัยราชภัฏมหาสารคาม
           </p>
         </div>
       </div>

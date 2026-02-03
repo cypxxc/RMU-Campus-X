@@ -110,13 +110,38 @@ export const registerUser = async (rawEmail: string, password: string) => {
   }
 }
 
+/** ล้าง auth ที่ Firebase เก็บใน localStorage + IndexedDB (เมื่อไม่ติ๊กจดจำฉัน ให้เหลือแค่ sessionStorage — ปิดแท็บแล้วออกจริง) */
+function clearPersistentAuthStorage() {
+  if (typeof window === "undefined") return
+  try {
+    // 1) localStorage — Firebase ใช้ key ขึ้นต้น firebase:authUser:
+    if (window.localStorage) {
+      const keysToRemove: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith("firebase:authUser:")) keysToRemove.push(key)
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k))
+    }
+    // 2) IndexedDB — Firebase ใช้ firebaseLocalStorageDb สำหรับ LOCAL persistence
+    if (window.indexedDB && indexedDB.deleteDatabase) {
+      indexedDB.deleteDatabase("firebaseLocalStorageDb")
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export const loginUser = async (email: string, password: string, remember: boolean = false) => {
   const auth = getFirebaseAuth()
-  
+
   // Set persistence based on remember me preference
   await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence)
-  
+
   const userCredential = await signInWithEmailAndPassword(auth, email, password)
+
+  // เมื่อไม่ติ๊กจดจำฉัน ล้าง localStorage + IndexedDB ของ Firebase ให้เหลือแค่ sessionStorage (ปิดแท็บแล้วออกจริง)
+  if (!remember) clearPersistentAuthStorage()
 
   // 1. Verify Email
     if (!userCredential.user.emailVerified) {

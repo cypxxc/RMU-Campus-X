@@ -2,7 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowRight, Package, MessageSquare, Shield, Users, Sparkles } from "lucide-react"
+import { ArrowRight, Package, MessageSquare, Shield, Users, Sparkles, Bell } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { Logo } from "@/components/logo"
@@ -12,26 +12,32 @@ import { LandingStats } from "@/components/landing-stats"
 const features = [
   {
     icon: Package,
-    title: "แลกเปลี่ยนสิ่งของ",
-    description: "โพสต์และขอรับสิ่งของจากเพื่อนนักศึกษา",
+    title: "โพสต์และขอรับสิ่งของ",
+    description: "ลงประกาศสิ่งของที่ไม่ใช้แล้ว หรือค้นหาและขอรับจากเพื่อนนักศึกษา",
     color: "text-blue-500 bg-blue-500/10",
   },
   {
     icon: MessageSquare,
-    title: "แชทในระบบ",
-    description: "สื่อสารกับผู้แลกเปลี่ยนได้ทันที",
+    title: "แชทและนัดรับของ",
+    description: "แชทในระบบกับเจ้าของ/ผู้ขอ แล้วนัดรับของในมหาวิทยาลัย",
     color: "text-green-500 bg-green-500/10",
   },
   {
+    icon: Bell,
+    title: "แจ้งเตือนผ่าน LINE",
+    description: "ผูก LINE แล้วรับการแจ้งเตือนเมื่อมีคนสนใจของ ขอรับ แชท หรือเมื่อมีการแก้ไขโดยผู้ดูแล",
+    color: "text-emerald-500 bg-emerald-500/10",
+  },
+  {
     icon: Shield,
-    title: "ปลอดภัยมั่นใจ",
-    description: "ยืนยันตัวตนด้วยอีเมล @rmu.ac.th",
+    title: "ปลอดภัย มั่นใจ",
+    description: "สมัครด้วยอีเมล @rmu.ac.th เท่านั้น รองรับรายงานและแนวทางชุมชน",
     color: "text-amber-500 bg-amber-500/10",
   },
   {
     icon: Users,
-    title: "ชุมชนนักศึกษา",
-    description: "เฉพาะนักศึกษา มรม. เท่านั้น",
+    title: "ชุมชนนักศึกษา มรม.",
+    description: "เฉพาะนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม",
     color: "text-purple-500 bg-purple-500/10",
   },
 ]
@@ -63,7 +69,7 @@ export default function LandingPage() {
         <BounceWrapper variant="bounce-in" className="container mx-auto text-center max-w-3xl">
           <Badge variant="outline" className="mb-6 px-4 py-1.5 text-sm font-medium">
             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            แพลตฟอร์มใหม่สำหรับนักศึกษา มรม.
+            แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา มรม.
           </Badge>
           
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight mb-6">
@@ -72,7 +78,7 @@ export default function LandingPage() {
           </h1>
           
           <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto">
-            แบ่งปันสิ่งของที่ไม่ใช้แล้ว และขอรับสิ่งของที่ต้องการจากเพื่อนนักศึกษา
+            โพสต์สิ่งของที่ไม่ใช้แล้ว ขอรับของจากเพื่อนนักศึกษา แชทและนัดรับของได้ในมหาวิทยาลัย
             มหาวิทยาลัยราชภัฏมหาสารคาม
           </p>
           
@@ -100,10 +106,10 @@ export default function LandingPage() {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-12">
             <h2 className="text-2xl sm:text-3xl font-bold mb-4">ทำไมต้อง RMU-Campus X?</h2>
-            <p className="text-muted-foreground">ฟีเจอร์ที่ออกแบบมาเพื่อนักศึกษาโดยเฉพาะ</p>
+            <p className="text-muted-foreground">ฟีเจอร์ที่ออกแบบมาเพื่อนักศึกษาและบุคลากร ม.ราชภัฏมหาสารคาม</p>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
             {features.map((feature) => {
               const Icon = feature.icon
               return (
@@ -132,9 +138,9 @@ export default function LandingPage() {
           
           <div className="space-y-6">
             {[
-              { step: 1, title: "สมัครด้วยอีเมล @rmu.ac.th", desc: "ยืนยันตัวตนเพื่อความปลอดภัย" },
-              { step: 2, title: "โพสต์หรือขอรับสิ่งของ", desc: "แบ่งปันสิ่งที่ไม่ใช้ หรือขอรับจากเพื่อน" },
-              { step: 3, title: "นัดพบแลกเปลี่ยน", desc: "แชทและนัดรับของในมหาวิทยาลัย" },
+              { step: 1, title: "สมัครด้วยอีเมล @rmu.ac.th", desc: "กรอกอีเมลนักศึกษา/บุคลากร แล้วยืนยันตัวตนผ่านอีเมล" },
+              { step: 2, title: "โพสต์สิ่งของ หรือค้นหาแล้วขอรับ", desc: "ลงประกาศของที่ไม่ใช้ หรือค้นหาและกดขอรับของที่สนใจ" },
+              { step: 3, title: "แชท นัดรับ และยืนยันแลกเปลี่ยน", desc: "แชทกับอีกฝ่าย นัดรับของในมหาวิทยาลัย แล้วกดยืนยันเมื่อรับของแล้ว" },
             ].map((item) => (
               <div key={item.step} className="flex items-start gap-4 p-4 rounded-xl bg-muted/30">
                 <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0">
@@ -154,21 +160,14 @@ export default function LandingPage() {
       <section className="py-20 px-4 bg-primary text-primary-foreground relative z-10">
         <div className="container mx-auto text-center max-w-2xl">
           <h2 className="text-2xl sm:text-3xl font-bold mb-4">พร้อมเริ่มแลกเปลี่ยนแล้วหรือยัง?</h2>
-          <p className="mb-8 opacity-90">เข้าร่วมชุมชนนักศึกษา มรม. วันนี้</p>
+          <p className="mb-8 opacity-90">สมัครด้วยอีเมล @rmu.ac.th ใช้งานฟรี ไม่มีค่าใช้จ่าย</p>
           <Link href="/register">
             <Button size="lg" variant="secondary" className="px-8 h-12 text-base font-bold">
-              สมัครสมาชิกฟรี
+              สมัครสมาชิก
             </Button>
           </Link>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="py-8 px-4 border-t bg-muted/20">
-        <div className="container mx-auto text-center text-sm text-muted-foreground">
-          <p>&copy; 2026 RMU-Campus X - มหาวิทยาลัยราชภัฏมหาสารคาม</p>
-        </div>
-      </footer>
     </div>
   )
 }

@@ -9,6 +9,14 @@
       ]
     },
     {
+      "collectionGroup": "chatMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "exchangeId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "exchanges",
       "queryScope": "COLLECTION",
       "fields": [

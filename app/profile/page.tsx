@@ -178,12 +178,18 @@ export default function ProfilePage() {
 
   const handleUpdateProfile = async (data: { displayName: string; bio: string }) => {
     if (!user) return
+    const newDisplayName = data.displayName.trim()
+    const newBio = data.bio.trim()
     try {
       await updateUserProfile(user.uid, {
-        displayName: data.displayName.trim(),
-        bio: data.bio.trim(),
+        displayName: newDisplayName,
+        bio: newBio,
         photoURL: profileImage || "",
       })
+      // อัปเดต state ทันที (optimistic) เพื่อไม่ให้ฟอร์มรีเซ็ตหรือแสดงค่าเก่าเมื่อ loadProfile() ทำงาน
+      setUserProfile((prev) =>
+        prev ? { ...prev, displayName: newDisplayName, bio: newBio } : prev
+      )
       toast({ title: "อัปเดตโปรไฟล์สำเร็จ" })
       loadProfile()
     } catch (error: any) {

@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react"
 import { use } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { collection, query, where, orderBy, onSnapshot, addDoc, doc, getDoc, serverTimestamp } from "firebase/firestore"
+import { collection, query, where, orderBy, onSnapshot, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, setDoc, writeBatch, limit, endBefore, serverTimestamp, Timestamp } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import { createNotification, getItemById, confirmExchange } from "@/lib/firestore"
 import type { Exchange, ChatMessage, Item } from "@/types"
@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Loader2, CheckCheck, AlertTriangle, ChevronDown, Package, MessageCircle } from "lucide-react"
+import { Send, Loader2, CheckCheck, AlertTriangle, ChevronDown, Package, MessageCircle, MoreVertical, Pencil, Trash2, Check, X } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,11 +51,22 @@ export default function ChatPage({
   const { exchangeId } = use(params)
   const [exchange, setExchange] = useState<Exchange | null>(null)
   const [item, setItem] = useState<Item | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [newestMessages, setNewestMessages] = useState<ChatMessage[]>([])
+  const [olderMessages, setOlderMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
-  
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [hasMoreOlder, setHasMoreOlder] = useState(true)
+  const [otherTyping, setOtherTyping] = useState(false)
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState("")
+
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const oldestMessageRef = useRef<ChatMessage | null>(null)
+
+  const messages = [...olderMessages, ...newestMessages]
+
   // Image Upload State
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null)
@@ -134,17 +145,26 @@ export default function ChatPage({
     }
   }, [exchange?.status, exchange?.id, user])
 
+  const PAGE_SIZE = 50
+  const LOAD_MORE_SIZE = 20
+
   const subscribeToMessages = () => {
     const db = getFirebaseDb()
     const q = query(
       collection(db, "chatMessages"),
       where("exchangeId", "==", exchangeId),
-      orderBy("createdAt", "asc")
+      orderBy("createdAt", "desc"),
+      limit(PAGE_SIZE)
     )
 
     return onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as ChatMessage)
-      setMessages(msgs)
+      const msgs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage)
+      const ascending = [...msgs].reverse()
+      setNewestMessages(ascending)
+      if (ascending.length > 0) {
+        oldestMessageRef.current = ascending[0]
+      }
+      if (msgs.length < PAGE_SIZE) setHasMoreOlder(false)
     }, (error: unknown) => {
       toast({
         title: "เกิดข้อผิดพลาด",
@@ -152,6 +172,118 @@ export default function ChatPage({
         variant: "destructive",
       })
     })
+  }
+
+  useEffect(() => {
+    if (!user || !exchange || newestMessages.length === 0) return
+    const otherId = user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
+    const unread = newestMessages.filter((m) => m.senderId === otherId && !m.readAt)
+    if (unread.length === 0) return
+    const db = getFirebaseDb()
+    const batch = writeBatch(db)
+    const now = Timestamp.now()
+    unread.slice(0, 500).forEach((m) => {
+      batch.update(doc(db, "chatMessages", m.id), { readAt: now })
+    })
+    batch.commit().catch((e) => console.warn("Mark read failed:", e))
+  }, [newestMessages, user?.uid, exchange?.ownerId, exchange?.requesterId, exchange?.id])
+
+  const loadMoreOlder = async () => {
+    if (!user || loadingOlder || !hasMoreOlder) return
+    const currentOldest = olderMessages.length > 0 ? olderMessages[0] : oldestMessageRef.current
+    if (!currentOldest) return
+    setLoadingOlder(true)
+    try {
+      const db = getFirebaseDb()
+      const msgRef = doc(db, "chatMessages", currentOldest.id)
+      const msgSnap = await getDoc(msgRef)
+      if (!msgSnap.exists()) {
+        setHasMoreOlder(false)
+        return
+      }
+      const q = query(
+        collection(db, "chatMessages"),
+        where("exchangeId", "==", exchangeId),
+        orderBy("createdAt", "asc"),
+        endBefore(msgSnap),
+        limit(LOAD_MORE_SIZE)
+      )
+      const snap = await getDocs(q)
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage)
+      setOlderMessages((prev) => [...docs, ...prev])
+      if (docs.length < LOAD_MORE_SIZE) setHasMoreOlder(false)
+    } catch (err) {
+      toast({
+        title: "โหลดข้อความเก่าไม่สำเร็จ",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingOlder(false)
+    }
+  }
+
+  const setTyping = (value: boolean) => {
+    if (!user || !exchangeId) return
+    const db = getFirebaseDb()
+    const key = user.uid === exchange?.ownerId ? "ownerTypingAt" : "requesterTypingAt"
+    setDoc(doc(db, "chatTyping", exchangeId), { [key]: value ? serverTimestamp() : null }, { merge: true }).catch(() => {})
+  }
+
+  useEffect(() => {
+    if (!exchange || !user || !exchangeId) return
+    const db = getFirebaseDb()
+    const otherKey = user.uid === exchange.ownerId ? "requesterTypingAt" : "ownerTypingAt"
+    const unsub = onSnapshot(doc(db, "chatTyping", exchangeId), (snap) => {
+      if (!snap.exists()) {
+        setOtherTyping(false)
+        return
+      }
+      const data = snap.data()
+      const t = data?.[otherKey]
+      const millis = t && typeof (t as { toMillis?: () => number }).toMillis === "function" ? (t as { toMillis: () => number }).toMillis() : 0
+      setOtherTyping(millis > 0 && Date.now() - millis < 5000)
+    })
+    return () => unsub()
+  }, [exchangeId, exchange?.ownerId, user?.uid])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value)
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    setTyping(true)
+    typingTimeoutRef.current = setTimeout(() => setTyping(false), 2000)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      setTyping(false)
+    }
+  }, [exchangeId])
+
+  const handleEditMessage = async (msg: ChatMessage, newText: string) => {
+    if (!user || msg.senderId !== user.uid || !newText.trim()) return
+    try {
+      const db = getFirebaseDb()
+      await updateDoc(doc(db, "chatMessages", msg.id), {
+        message: newText.trim(),
+        updatedAt: serverTimestamp(),
+      })
+      setEditingMessageId(null)
+      setEditDraft("")
+    } catch {
+      toast({ title: "แก้ไขไม่สำเร็จ", variant: "destructive" })
+    }
+  }
+
+  const handleDeleteMessage = async (msg: ChatMessage) => {
+    if (!user || msg.senderId !== user.uid) return
+    try {
+      const db = getFirebaseDb()
+      await deleteDoc(doc(db, "chatMessages", msg.id))
+      setEditingMessageId(null)
+    } catch {
+      toast({ title: "ลบไม่สำเร็จ", variant: "destructive" })
+    }
   }
 
   const scrollToBottom = () => {
@@ -513,67 +645,137 @@ export default function ChatPage({
                   </p>
                 </div>
               ) : (
-                messages.map((msg) => {
-                const isOwnMessage = msg.senderId === user?.uid
-                const msgDate = msg.createdAt?.toDate?.() || new Date()
-
-                return (
-                  <div key={msg.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
-                        isOwnMessage 
-                          ? "bg-primary text-primary-foreground rounded-br-none" 
-                          : "bg-white dark:bg-muted text-foreground border border-border/40 rounded-bl-none"
-                      }`}
-                    >
-                      {msg.imageUrl && (
-                        <div className="mb-2 rounded-lg overflow-hidden relative">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <div className="relative cursor-pointer hover:opacity-90 transition-opacity">
-                                <Image 
-                                  src={msg.imageUrl} 
-                                  alt="Sent image" 
-                                  width={300} 
-                                  height={200}
-                                  className="w-full h-auto object-cover max-h-[250px] rounded-lg bg-black/5"
-                                  unoptimized
-                                />
-                              </div>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-3xl p-0 overflow-hidden bg-transparent border-none shadow-none">
-                              <div className="relative w-full h-[80vh]">
-                                <Image
-                                  src={msg.imageUrl}
-                                  alt="Full view"
-                                  fill
-                                  className="object-contain"
-                                  unoptimized
-                                />
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      )}
-                      
-                      {msg.message && (
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-wrap">{msg.message}</p>
-                      )}
-                      
-                      <p className={`text-[10px] mt-1 ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                        {formatDistanceToNow(msgDate, { addSuffix: true, locale: th })}
-                      </p>
+                <>
+                  {(hasMoreOlder || olderMessages.length > 0) && (
+                    <div className="flex justify-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={loadMoreOlder}
+                        disabled={loadingOlder || !hasMoreOlder}
+                        className="text-muted-foreground"
+                      >
+                        {loadingOlder ? <Loader2 className="h-4 w-4 animate-spin" /> : hasMoreOlder ? "โหลดข้อความเก่า" : "ไม่มีข้อความเก่าเพิ่ม"}
+                      </Button>
                     </div>
-                  </div>
-                )
-              })
+                  )}
+                  {messages.map((msg) => {
+                    const isOwnMessage = msg.senderId === user?.uid
+                    const msgDate = msg.createdAt?.toDate?.() || (typeof msg.createdAt === "object" && (msg.createdAt as { toDate?: () => Date }).toDate?.()) || new Date()
+                    const isEditing = editingMessageId === msg.id
+
+                    return (
+                      <div key={msg.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                        <div className={`flex items-end gap-1 max-w-[75%] ${isOwnMessage ? "flex-row-reverse" : ""}`}>
+                          <div
+                            className={`rounded-2xl px-4 py-2 shadow-sm ${
+                              isOwnMessage
+                                ? "bg-primary text-primary-foreground rounded-br-none"
+                                : "bg-white dark:bg-muted text-foreground border border-border/40 rounded-bl-none"
+                            }`}
+                          >
+                            {msg.imageUrl && (
+                              <div className="mb-2 rounded-lg overflow-hidden relative">
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <div className="relative cursor-pointer hover:opacity-90 transition-opacity">
+                                      <Image
+                                        src={msg.imageUrl}
+                                        alt="Sent image"
+                                        width={300}
+                                        height={200}
+                                        className="w-full h-auto object-cover max-h-[250px] rounded-lg bg-black/5"
+                                        unoptimized
+                                      />
+                                    </div>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-3xl p-0 overflow-hidden bg-transparent border-none shadow-none">
+                                    <div className="relative w-full h-[80vh]">
+                                      <Image src={msg.imageUrl} alt="Full view" fill className="object-contain" unoptimized />
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              </div>
+                            )}
+                            {isEditing ? (
+                              <div className="flex flex-col gap-2">
+                                <Input
+                                  value={editDraft}
+                                  onChange={(e) => setEditDraft(e.target.value)}
+                                  className="bg-background text-foreground min-w-[200px]"
+                                  autoFocus
+                                />
+                                <div className="flex gap-1 justify-end">
+                                  <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => { setEditingMessageId(null); setEditDraft("") }}>
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" size="sm" className="h-8" onClick={() => handleEditMessage(msg, editDraft)}>
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {msg.message && (
+                                  <p className="text-sm leading-relaxed whitespace-pre-wrap text-wrap">{msg.message}</p>
+                                )}
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <p className={`text-[10px] ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                                    {formatDistanceToNow(msgDate, { addSuffix: true, locale: th })}
+                                    {msg.updatedAt && " (แก้ไข)"}
+                                  </p>
+                                  {isOwnMessage && msg.readAt && (
+                                    <span className="text-[10px] text-primary-foreground/70" title="อ่านแล้ว">อ่านแล้ว</span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          {isOwnMessage && !isEditing && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-full opacity-70 hover:opacity-100">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align={isOwnMessage ? "end" : "start"}>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingMessageId(msg.id)
+                                    setEditDraft(msg.message || "")
+                                  }}
+                                >
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  แก้ไข
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => {
+                                    if (confirm("ลบข้อความนี้?")) handleDeleteMessage(msg)
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  ลบ
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </>
+              )}
+              {otherTyping && (
+                <p className="text-xs text-muted-foreground animate-pulse">กำลังพิมพ์...</p>
               )}
               <div ref={messagesEndRef} />
             </div>
 
             <form onSubmit={handleSendMessage} className="border-t p-3 sm:p-4 bg-background">
               <div className="flex gap-2 items-end">
-                <ChatImageUpload 
+                <ChatImageUpload
                   onImageSelected={(file, preview) => {
                     setSelectedImageFile(file)
                     setSelectedImagePreview(preview)
@@ -585,10 +787,9 @@ export default function ChatPage({
                   selectedImage={selectedImagePreview}
                   disabled={sending}
                 />
-                
                 <Input
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={handleInputChange}
                   placeholder="พิมพ์ข้อความ..."
                   disabled={sending}
                   className="min-h-[40px] max-h-[120px] py-2"

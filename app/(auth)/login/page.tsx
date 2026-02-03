@@ -27,11 +27,33 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const REMEMBER_KEY = "rmu-login-remember"
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [show3D, setShow3D] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+
+  // โหลดค่า "จดจำฉัน" จาก localStorage หลัง mount บน client (ครั้งเดียว) — ไม่ใช้ effect ที่เขียน localStorage ตอน mount เพื่อกันเขียน "false" ทับ
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const saved = localStorage.getItem(REMEMBER_KEY)
+      if (saved !== null) setRememberMe(saved === "true")
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  // บันทึกค่าจดจำเมื่อผู้ใช้เปลี่ยนติ๊กเท่านั้น (ไม่เขียนตอนโหลด)
+  const handleRememberChange = (checked: boolean) => {
+    setRememberMe(checked)
+    try {
+      localStorage.setItem(REMEMBER_KEY, String(checked))
+    } catch {
+      // ignore
+    }
+  }
 
   // Lazy load 3D background
   useEffect(() => {
@@ -116,19 +138,25 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent className="pt-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-4"
+              autoComplete={rememberMe ? "on" : "off"}
+            >
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
                   อีเมล
                 </Label>
                 <Input
                   id="email"
+                  name={rememberMe ? "email" : undefined}
                   type="email"
                   placeholder="email@rmu.ac.th"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="h-11"
+                  autoComplete={rememberMe ? "email" : "off"}
                 />
               </div>
 
@@ -147,11 +175,13 @@ export default function LoginPage() {
                 <div className="relative">
                   <Input
                     id="password"
+                    name={rememberMe ? "password" : undefined}
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     className="h-11 pr-10"
+                    autoComplete={rememberMe ? "current-password" : "off"}
                   />
                   <Button
                     type="button"
@@ -173,14 +203,14 @@ export default function LoginPage() {
               </div>
 
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="remember" 
+                <Checkbox
+                  id="remember"
                   checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                  onCheckedChange={(checked) => handleRememberChange(checked === true)}
                 />
                 <label
                   htmlFor="remember"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                 >
                   จดจำฉัน
                 </label>

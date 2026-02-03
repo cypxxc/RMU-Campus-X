@@ -51,7 +51,10 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
       const auth = getAuth()
       const me = auth.currentUser?.uid
       if (me === userId) {
-        const j = await authFetchJson<{ user?: Record<string, unknown> }>("/api/users/me", { method: "GET" })
+        const j = await authFetchJson<{ user?: Record<string, unknown> }>("/api/users/me", {
+          method: "GET",
+          cache: "no-store",
+        })
         const u = j.data?.user
         return u ? { ...u, uid: (u.id as string) || userId } as User : null
       }

@@ -211,17 +211,33 @@ service cloud.firestore {
         );
       }
 
+      // ผู้รับอัปเดตเฉพาะ readAt ได้; ผู้ส่งอัปเดตเฉพาะ message, updatedAt, imageUrl, imageType ได้
+      function allowedMessageUpdateKeys() {
+        let keys = request.resource.data.diff(resource.data).affectedKeys();
+        return (request.auth.uid != resource.data.senderId && keys.hasOnly(['readAt']))
+          || (request.auth.uid == resource.data.senderId && keys.hasOnly(['message', 'updatedAt', 'imageUrl', 'imageType']));
+      }
+
       allow get, list: if canUseApp() && (isMessageParticipant() || isAdmin());
 
-      // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
         && request.resource.data.senderId == request.auth.uid
         && request.resource.data.senderEmail == request.auth.token.email
         && request.resource.data.keys().hasAll(['createdAt'])
         && canSendMessage();
 
-      allow update: if false;
-      allow delete: if isAdmin();
+      allow update: if canUseApp() && isMessageParticipant() && allowedMessageUpdateKeys();
+      allow delete: if isAdmin() || (canUseApp() && resource.data.senderId == request.auth.uid);
+    }
+
+    // กำลังพิมพ์ (typing indicator) ต่อ exchange
+    match /chatTyping/{exchangeId} {
+      function isExchangeParticipant() {
+        let ex = get(/databases/$(database)/documents/exchanges/$(exchangeId));
+        return ex.data.ownerId == request.auth.uid || ex.data.requesterId == request.auth.uid;
+      }
+      allow get, create, update: if canUseApp() && isExchangeParticipant();
+      allow delete: if canUseApp() && isExchangeParticipant();
     }
 
     // ============================================================================

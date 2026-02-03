@@ -595,22 +595,83 @@ describe("Chat Messages Collection", () => {
   });
 
   describe("Update Access", () => {
-    it("❌ denies message editing (immutable)", async () => {
+    it("✅ allows sender to update own message (message, updatedAt)", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
         await setDoc(doc(db, "chatMessages", "msg001"), {
           exchangeId: "exchange001",
           senderId: ELIGIBLE_STUDENT.uid,
+          senderEmail: ELIGIBLE_STUDENT.email,
           message: "Original",
+          createdAt: serverTimestamp(),
         });
       });
 
       const db = getAuth(ELIGIBLE_STUDENT).firestore();
-      await assertFails(
+      await assertSucceeds(
         updateDoc(doc(db, "chatMessages", "msg001"), {
           message: "Edited",
+          updatedAt: serverTimestamp(),
         })
       );
+    });
+
+    it("✅ allows recipient to update only readAt", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, "chatMessages", "msg002"), {
+          exchangeId: "exchange001",
+          senderId: ELIGIBLE_STUDENT.uid,
+          senderEmail: ELIGIBLE_STUDENT.email,
+          message: "Hi",
+          createdAt: serverTimestamp(),
+        });
+      });
+
+      const db = getAuth(OTHER_STUDENT).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, "chatMessages", "msg002"), {
+          readAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it("❌ denies recipient from updating message content", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, "chatMessages", "msg003"), {
+          exchangeId: "exchange001",
+          senderId: ELIGIBLE_STUDENT.uid,
+          senderEmail: ELIGIBLE_STUDENT.email,
+          message: "Hi",
+          createdAt: serverTimestamp(),
+        });
+      });
+
+      const db = getAuth(OTHER_STUDENT).firestore();
+      await assertFails(
+        updateDoc(doc(db, "chatMessages", "msg003"), {
+          message: "Tampered",
+        })
+      );
+    });
+  });
+
+  describe("Delete Access", () => {
+    it("✅ allows sender to delete own message", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, "chatMessages", "msg004"), {
+          exchangeId: "exchange001",
+          senderId: ELIGIBLE_STUDENT.uid,
+          senderEmail: ELIGIBLE_STUDENT.email,
+          message: "To delete",
+          createdAt: serverTimestamp(),
+        });
+      });
+
+      const db = getAuth(ELIGIBLE_STUDENT).firestore();
+      await assertSucceeds(deleteDoc(doc(db, "chatMessages", "msg004")));
     });
   });
 });
