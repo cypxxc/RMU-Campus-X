@@ -185,9 +185,8 @@ export default function AdminReportedUsersPage() {
   }, [toast])
 
   const runCleanupOrphans = useCallback(
-    async (options?: { silent?: boolean }) => {
+    async (_options?: { silent?: boolean }) => {
       if (!user) return 0
-      const silent = options?.silent ?? true
       try {
         const token = await user.getIdToken()
         const baseUrl = typeof window !== "undefined" ? window.location.origin : ""

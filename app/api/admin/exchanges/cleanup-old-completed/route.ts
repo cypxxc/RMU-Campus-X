@@ -15,8 +15,6 @@ import {
   AdminErrorCode,
 } from "@/lib/admin-api"
 
-const BATCH_LIMIT = 500
-
 export async function POST(request: NextRequest) {
   const { authorized, error } = await verifyAdminAccess(request)
   if (!authorized) return error!

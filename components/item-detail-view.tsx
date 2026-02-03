@@ -189,7 +189,6 @@ export function ItemDetailView({
     if (!item?.id || editSaving) return
     setEditSaving(true)
     try {
-      const { authFetchJson } = await import("@/lib/api-client")
       const token = await (async () => {
         const { getAuth } = await import("firebase/auth")
         const auth = getAuth()

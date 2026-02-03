@@ -162,7 +162,7 @@ export default function ChatPage({
       const ascending = [...msgs].reverse()
       setNewestMessages(ascending)
       if (ascending.length > 0) {
-        oldestMessageRef.current = ascending[0]
+        oldestMessageRef.current = ascending[0] ?? null
       }
       if (msgs.length < PAGE_SIZE) setHasMoreOlder(false)
     }, (error: unknown) => {

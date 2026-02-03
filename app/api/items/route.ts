@@ -43,9 +43,9 @@ export const POST = withValidation(
     try {
       const userSnap = await db.collection("users").doc(ctx.userId).get()
       const userData = userSnap.data()
-      postedByName = (userData?.displayName as string) || (ctx.email ? ctx.email.split("@")[0] : null) || null
+      postedByName = (userData?.displayName as string | undefined) ?? (ctx.email ? ctx.email.split("@")[0] : null) ?? null
     } catch {
-      postedByName = ctx.email ? ctx.email.split("@")[0] : null
+      postedByName = ctx.email ? ctx.email.split("@")[0] ?? null : null
     }
 
     const docRef = await db.collection("items").add({

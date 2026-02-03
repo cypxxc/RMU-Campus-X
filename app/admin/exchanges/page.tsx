@@ -47,9 +47,6 @@ import {
   Package,
   Trash2,
   Eye,
-  CheckCircle2,
-  Clock,
-  XCircle,
 } from "lucide-react"
 
 const STATUS_LABELS: Record<string, string> = {

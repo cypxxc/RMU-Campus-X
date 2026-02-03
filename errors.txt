@@ -1,0 +1,4 @@
+﻿.next/types/validator.ts(179,39): error TS2307: Cannot find module '../../app/contact/page.js' or its corresponding type declarations.
+.next/types/validator.ts(314,39): error TS2307: Cannot find module '../../app/api/admin/cleanup/route.js' or its corresponding type declarations.
+.next/types/validator.ts(323,39): error TS2307: Cannot find module '../../app/api/admin/consistency/route.js' or its corresponding type declarations.
+.next/types/validator.ts(638,39): error TS2307: Cannot find module '../../app/api/sentry-example-api/route.js' or its corresponding type declarations.

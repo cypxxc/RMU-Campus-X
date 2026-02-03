@@ -187,7 +187,7 @@ export default function ProfilePage() {
         photoURL: profileImage || "",
       })
       // อัปเดต state ทันที (optimistic) เพื่อไม่ให้ฟอร์มรีเซ็ตหรือแสดงค่าเก่าเมื่อ loadProfile() ทำงาน
-      setUserProfile((prev) =>
+      setUserProfile((prev: typeof userProfile) =>
         prev ? { ...prev, displayName: newDisplayName, bio: newBio } : prev
       )
       toast({ title: "อัปเดตโปรไฟล์สำเร็จ" })

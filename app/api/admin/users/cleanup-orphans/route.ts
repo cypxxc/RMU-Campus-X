@@ -4,7 +4,7 @@
  * ใช้เมื่อลบบัญชีจาก Firebase Console (Auth) แต่ข้อมูลใน Firestore ยังเหลืออยู่
  */
 
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { verifyAdminAccess, successResponse, errorResponse, AdminErrorCode } from "@/lib/admin-api"
 import { deleteOrphanUserDocs } from "@/lib/services/admin/user-cleanup"
 
