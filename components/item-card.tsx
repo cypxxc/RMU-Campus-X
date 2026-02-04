@@ -10,6 +10,7 @@ import { formatPostedAt, safeToDate } from "@/lib/utils"
 import Image from "next/image"
 import Link from "next/link"
 import { FavoriteButton } from "@/components/favorite-button"
+import { CATEGORY_LABELS } from "@/lib/constants"
 
 interface ItemCardProps {
   item: Item
@@ -19,15 +20,6 @@ interface ItemCardProps {
   priority?: boolean
   /** โหมด admin: ซ่อนปุ่มโปรด, แสดงปุ่มลบ */
   variant?: 'default' | 'admin'
-}
-
-const categoryLabels: Record<string, string> = {
-  electronics: "อิเล็กทรอนิกส์",
-  books: "หนังสือ",
-  furniture: "เฟอร์นิเจอร์",
-  clothing: "เสื้อผ้า",
-  sports: "กีฬา",
-  other: "อื่นๆ",
 }
 
 const statusLabels: Record<string, string> = {
@@ -62,7 +54,7 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
 
   return (
     <Card 
-      className="group overflow-hidden card-hover animate-fade-in cursor-pointer hover:border-primary/30 transition-all duration-300"
+      className="group overflow-hidden card-hover cursor-pointer hover:border-primary/30 transition-all duration-200"
       onClick={handleCardClick}
     >
       <CardHeader className="p-0">
@@ -130,12 +122,17 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Package className="h-3.5 w-3.5" />
-            {categoryLabels[item.category]}
+            {CATEGORY_LABELS[item.category]}
           </span>
           {item.location && (
             <span className="flex items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5" />
               {item.location}
+            </span>
+          )}
+          {item.locationDetail?.trim() && (
+            <span className="w-full basis-full text-muted-foreground/90 line-clamp-1" title={item.locationDetail.trim()}>
+              รายละเอียดสถานที่: {item.locationDetail.trim()}
             </span>
           )}
           <span className="flex items-center gap-1.5" title={postedDate.toISOString()}>

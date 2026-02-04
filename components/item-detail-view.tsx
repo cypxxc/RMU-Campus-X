@@ -224,7 +224,7 @@ export function ItemDetailView({
 
   return (
     <div className={`w-full ${isModal ? "" : "container mx-auto px-4 py-6 sm:py-8 max-w-5xl"}`}>
-      <div className={`grid grid-cols-1 ${isModal ? "md:grid-cols-2 gap-6" : "lg:grid-cols-2 gap-6 lg:gap-8"} animate-fade-in`}>
+      <div className={`grid grid-cols-1 ${isModal ? "md:grid-cols-2 gap-6" : "lg:grid-cols-2 gap-6 lg:gap-8"}`}>
         {/* Image Section */}
         <div className="space-y-3">
           {/* Main Image */}
@@ -453,7 +453,7 @@ export function ItemDetailView({
 
       {/* Image Zoom Dialog */}
       <Dialog open={showImageZoom} onOpenChange={setShowImageZoom}>
-        <DialogContent className="max-w-[95vw] w-fit p-0 bg-transparent border-none shadow-none flex items-center justify-center">
+        <DialogContent className="max-w-[95vw] w-fit p-0 bg-transparent border-none shadow-none flex items-center justify-center" showCloseButton={false}>
           <DialogTitle className="sr-only">Image Preview</DialogTitle>
           <div className="relative group">
             {currentImage && (
@@ -580,7 +580,7 @@ export function ItemDetailView({
         onOpenChange={setShowRequestDialog}
         size="md"
         title="ยืนยันการขอรับสิ่งของ"
-        description={<>คุณต้องการขอรับ <span className="font-bold text-foreground">"{item.title}"</span> ใช่หรือไม่?</>}
+        description={<>คุณต้องการขอรับ <span className="font-bold text-foreground">&quot;{item.title}&quot;</span> ใช่หรือไม่?</>}
         icon={<HandHeart className="h-5 w-5" />}
         footer={
           <UnifiedModalActions

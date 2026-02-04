@@ -2,7 +2,7 @@
 
 import { AuthGuard } from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
-import { SiteBreadcrumb } from "@/components/site-breadcrumb"
+import { BreadcrumbBar } from "@/components/breadcrumb-bar"
 
 export default function DashboardLayout({
   children,
@@ -13,11 +13,7 @@ export default function DashboardLayout({
     <AuthGuard>
        <div className="min-h-screen bg-background">
          <Navbar />
-         <div className="border-b">
-           <div className="container mx-auto px-4">
-              <SiteBreadcrumb />
-           </div>
-         </div>
+         <BreadcrumbBar />
          <main className="container mx-auto px-4 py-8">
            {children}
          </main>

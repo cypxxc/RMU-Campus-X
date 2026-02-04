@@ -217,7 +217,7 @@ export async function buildPaginatedQuery(
   const db = getFirebaseDb()
   const { page, limit: pageLimit, sortBy, sortOrder, filters } = options
 
-  let constraints: any[] = [
+  const constraints: any[] = [
     orderBy(sortBy, sortOrder),
     limit(pageLimit),
   ]

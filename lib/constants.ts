@@ -18,7 +18,9 @@ import {
   X,
 } from "lucide-react";
 
-// ============ Category Constants ============
+// ============ Category Constants (หมวดรายการสิ่งของ) ============
+// แหล่งอ้างอิงเดียว: หมวดหมู่สำหรับโพสต์/กรอง/แสดงรายการ กำหนดในไฟล์นี้เท่านั้น
+// ค่า value (electronics, books, ...) ใช้ใน DB/API ไม่เปลี่ยน; แก้เฉพาะ label ได้
 
 export interface CategoryOption {
   value: ItemCategory;
@@ -28,35 +30,20 @@ export interface CategoryOption {
 }
 
 export const CATEGORY_OPTIONS: CategoryOption[] = [
-  {
-    value: "electronics",
-    label: "อิเล็กทรอนิกส์",
-    icon: Smartphone,
-    color: "text-blue-500",
-  },
+  { value: "electronics", label: "อิเล็กทรอนิกส์", icon: Smartphone, color: "text-blue-500" },
   { value: "books", label: "หนังสือ", icon: BookOpen, color: "text-amber-500" },
-  {
-    value: "furniture",
-    label: "เฟอร์นิเจอร์",
-    icon: Sofa,
-    color: "text-purple-500",
-  },
   { value: "clothing", label: "เสื้อผ้า", icon: Shirt, color: "text-pink-500" },
-  { value: "sports", label: "กีฬา", icon: Dumbbell, color: "text-cyan-500" },
-  {
-    value: "other",
-    label: "อื่นๆ",
-    icon: MoreHorizontal,
-    color: "text-orange-500",
-  },
+  { value: "furniture", label: "ของใช้ในชีวิตประจำวัน", icon: Sofa, color: "text-purple-500" },
+  { value: "sports", label: "อุปกรณ์กีฬา", icon: Dumbbell, color: "text-cyan-500" },
+  { value: "other", label: "อื่นๆ", icon: MoreHorizontal, color: "text-orange-500" },
 ];
 
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   electronics: "อิเล็กทรอนิกส์",
   books: "หนังสือ",
-  furniture: "เฟอร์นิเจอร์",
+  furniture: "ของใช้ในชีวิตประจำวัน",
   clothing: "เสื้อผ้า",
-  sports: "กีฬา",
+  sports: "อุปกรณ์กีฬา",
   other: "อื่นๆ",
 };
 

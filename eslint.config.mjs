@@ -2,7 +2,7 @@ import nextCoreWebVitals from "eslint-config-next/core-web-vitals"
 import tseslint from "typescript-eslint"
 
 /** @type {import("eslint").Linter.FlatConfig[]} */
-export default [
+const config = [
   ...nextCoreWebVitals,
   {
     name: "rmu-campus-x/overrides",
@@ -35,4 +35,6 @@ export default [
     },
   },
 ]
+
+export default config
 

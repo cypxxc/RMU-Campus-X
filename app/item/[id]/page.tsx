@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { use } from "react"
-import { useRouter } from "next/navigation"
 import { getItemById } from "@/lib/firestore"
 import type { Item } from "@/types"
 import { Button } from "@/components/ui/button"
-import { Loader2, Package, ArrowLeft } from "lucide-react"
+import { Loader2, Package } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ItemDetailView } from "@/components/item-detail-view"
 import Link from "next/link"
@@ -19,42 +18,40 @@ export default function ItemDetailPage({
   const { id } = use(params)
   const [item, setItem] = useState<Item | null>(null)
   const [loading, setLoading] = useState(true)
-  const router = useRouter()
   const { toast } = useToast()
 
   useEffect(() => {
-    loadItem()
-  }, [id])
-
-  const loadItem = async () => {
+    let cancelled = false
     setLoading(true)
-    try {
-      const result = await getItemById(id)
-      
-      // Handle ApiResponse format
-      if (result.success && result.data) {
-        setItem(result.data)
-      } else {
-        console.error('[ItemDetail] Error:', result.error)
+    getItemById(id)
+      .then((result) => {
+        if (cancelled) return
+        if (result.success && result.data) {
+          setItem(result.data)
+        } else {
+          setItem(null)
+          toast({
+            title: "เกิดข้อผิดพลาด",
+            description: result.error || "ไม่สามารถโหลดข้อมูลสิ่งของได้",
+            variant: "destructive",
+          })
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error("[ItemDetail] Error:", error)
         setItem(null)
         toast({
           title: "เกิดข้อผิดพลาด",
-          description: result.error || "ไม่สามารถโหลดข้อมูลสิ่งของได้",
+          description: "ไม่สามารถโหลดข้อมูลสิ่งของได้",
           variant: "destructive",
         })
-      }
-    } catch (error) {
-      console.error('[ItemDetail] Error:', error)
-      setItem(null)
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถโหลดข้อมูลสิ่งของได้",
-        variant: "destructive",
       })
-    } finally {
-      setLoading(false)
-    }
-  }
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [id])
 
   if (loading) {
     return (
@@ -84,16 +81,6 @@ export default function ItemDetailPage({
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6 sm:py-8 max-w-5xl">
-        {/* Back Button */}
-        <Button 
-          variant="ghost" 
-          onClick={() => router.back()} 
-          className="mb-6 -ml-2 gap-2 text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          กลับ
-        </Button>
-
         <ItemDetailView item={item} />
       </div>
     </div>

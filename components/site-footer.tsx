@@ -15,7 +15,7 @@ export function SiteFooter() {
           <div className="space-y-4">
             <Logo size="lg" />
             <p className="text-muted-foreground text-sm max-w-xs leading-relaxed">
-              แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษามหาวิทยาลัยราชภัฏมหาสารคาม 
+              แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม 
               สร้างสังคมแห่งการแบ่งปันที่ยั่งยืน
             </p>
           </div>

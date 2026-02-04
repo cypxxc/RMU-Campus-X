@@ -1,12 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
-import Image from "next/image"
 import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
 import { 
-  Calendar, 
   Package, 
   Star,
   MessageSquare,
@@ -24,13 +22,18 @@ import { StarRating } from "@/components/star-rating"
 
 import { getUserPublicProfile } from "@/lib/firestore"
 import { ItemCard } from "@/components/item-card"
+import { ItemDetailView } from "@/components/item-detail-view"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useAuth } from "@/components/auth-provider"
 import type { User, Item } from "@/types"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
-import { ProfileBadges } from "@/components/profile/profile-badges"
 
 /** แปลงค่า createdAt ที่อาจเป็น Firestore Timestamp, Date หรือ string เป็น Date */
 function toDate(createdAt: unknown): Date | null {
@@ -60,6 +63,13 @@ export default function PublicProfilePage() {
   const [loadingItems, setLoadingItems] = useState(true)
   const [loadingReviews, setLoadingReviews] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     if (uid) {
@@ -110,12 +120,14 @@ export default function PublicProfilePage() {
     try {
       setLoadingReviews(true)
       const { getUserReviews } = await import("@/lib/db/reviews")
-      const userReviews = await getUserReviews(uid)
+      const userReviews = await getUserReviews(uid, 50)
+      if (!mountedRef.current) return
       setReviews(userReviews)
     } catch (error) {
-       console.error("Error loading reviews:", error)
+      if (!mountedRef.current) return
+      console.error("Error loading reviews:", error)
     } finally {
-      setLoadingReviews(false)
+      if (mountedRef.current) setLoadingReviews(false)
     }
   }
 
@@ -123,71 +135,41 @@ export default function PublicProfilePage() {
     try {
       setLoading(true)
       const data = await getUserPublicProfile(uid)
-      if (!data) {
-        // Handle user not found
-        return
-      }
+      if (!mountedRef.current) return
+      if (!data) return
       setProfile(data)
     } catch (error) {
+      if (!mountedRef.current) return
       console.error("Error loading profile:", error)
     } finally {
-      setLoading(false)
+      if (mountedRef.current) setLoading(false)
     }
   }
 
   const loadUserItems = async () => {
     try {
       setLoadingItems(true)
-      // Fetch items posted by this user
-      // Note: getItems might need adjustment or we filter client side if API allows
-      // Assuming getItems supports basic filtering or we fetch all and filter (not ideal for large sets but ok for MVP)
-      // Ideally update getItems to accept ownerId
-      
-      // For now, let's try fetching and see if we can filter/use existing params
-      // Since existing getItems signature is (category, limit, lastDoc), we define a new way or filtered listing
-      // Actually, looking at previous code, verify getItems implementation or use query directly here if needed
-      // BUT safest is to use what we have or add a helper.
-      
-      // Checking `lib/db/items.ts` would be good. 
-      // Assuming we have a way. If not, I'll use a direct query here for simplicity or add `getItemsByOwner` helper.
-      // Let's assume I need to fetch items. I will use a direct query for now to avoid modifying lib too much unless I see it.
-      
-      // Actually, let's try to match existing patterns. 
-      // I'll skip complex logic and assume I can add a helper or import it.
-      // Wait, I saw `getItems` in `lib/firestore.ts` exports.
-      // Let's check `lib/db/items.ts`... wait I didn't verify if `getItems` supports ownerId.
-      // I'll create a new function `getUserItems` in this file or just fetch here? 
-      // Better to import `{ collection, query, where, getDocs, orderBy }` and do it here or add to lib.
-      // I'll add `getItemsByOwner` to lib/db/items.ts in next step if this fails, but for now let's try to use standard pattern.
-      // I'll lazily add the fetch logic here for now to ensure it works.
-      
-      const { getFirebaseDb } = await import("@/lib/firebase")
-      const { collection, query, where, getDocs } = await import("firebase/firestore")
-      
-      const db = getFirebaseDb()
-      const q = query(
-        collection(db, "items"), 
-        where("postedBy", "==", uid)
-      )
-      
-      const snapshot = await getDocs(q)
-      let userItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Item))
-
-      // Filter and Sort Client-side to avoid Index requirement
-      userItems = userItems
-        .filter(item => ["available", "pending"].includes(item.status))
-        .sort((a, b) => { // Sort descending
-           const timeA = a.postedAt && typeof a.postedAt.toMillis === 'function' ? a.postedAt.toMillis() : 0
-           const timeB = b.postedAt && typeof b.postedAt.toMillis === 'function' ? b.postedAt.toMillis() : 0
-           return timeB - timeA
-        })
-
-      setItems(userItems)
-
+      const { getItems } = await import("@/lib/firestore")
+      const result = await getItems({ postedBy: uid, pageSize: 100 })
+      if (!mountedRef.current) return
+      if (result.success && result.data) {
+        let userItems = result.data.items
+        userItems = userItems
+          .filter((item: Item) => ["available", "pending"].includes(item.status))
+          .sort((a: Item, b: Item) => {
+            const timeA = (a.postedAt as { toMillis?: () => number })?.toMillis?.() ?? (typeof a.postedAt === "string" ? new Date(a.postedAt).getTime() : 0)
+            const timeB = (b.postedAt as { toMillis?: () => number })?.toMillis?.() ?? (typeof b.postedAt === "string" ? new Date(b.postedAt).getTime() : 0)
+            return timeB - timeA
+          })
+        setItems(userItems)
+      } else {
+        setItems([])
+      }
     } catch (error) {
+      if (!mountedRef.current) return
       console.error("Error loading items:", error)
     } finally {
-      setLoadingItems(false)
+      if (mountedRef.current) setLoadingItems(false)
     }
   }
 
@@ -207,7 +189,6 @@ export default function PublicProfilePage() {
         </div>
         <h1 className="text-2xl font-bold mb-2">ไม่พบผู้ใช้งาน</h1>
         <p className="text-muted-foreground mb-6">ผู้ใช้งานนี้อาจถูกลบหรือไม่มีอยู่ในระบบ</p>
-        <Button onClick={() => router.push("/dashboard")}>กลับสู่หน้าหลัก</Button>
       </div>
     )
   }
@@ -215,8 +196,7 @@ export default function PublicProfilePage() {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Profile Header */}
-      <BounceWrapper variant="bounce-up">
-        <div className="relative mb-8 group">
+      <div className="relative mb-8 group">
           {/* Minimal Gradient Background with Glass Effect */}
           <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-primary/5 to-transparent rounded-3xl -z-10" />
           
@@ -224,15 +204,12 @@ export default function PublicProfilePage() {
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
               {/* Profile Image with Ring Animation */}
               <div className="relative shrink-0">
-                <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full ring-4 ring-background shadow-xl overflow-hidden bg-muted group-hover:scale-105 transition-transform duration-500">
-                  <Image
-                    src={profile.photoURL || "/placeholder-user.jpg"}
-                    alt={profile.displayName || "User"}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 640px) 112px, 128px"
-                  />
-                </div>
+                <Avatar className="h-28 w-28 sm:h-32 sm:w-32 rounded-full ring-4 ring-background shadow-xl">
+                  <AvatarImage src={profile.photoURL || undefined} alt={profile.displayName || "ผู้ใช้งาน"} className="object-cover" />
+                  <AvatarFallback className="text-3xl bg-primary/5 text-primary">
+                    {profile.displayName?.[0] || "?"}
+                  </AvatarFallback>
+                </Avatar>
                 {profile.status === 'ACTIVE' && (
                   <div className="absolute bottom-1 right-1 h-8 w-8 bg-background rounded-full flex items-center justify-center shadow-sm" title="ยืนยันตัวตนแล้ว">
                      <ShieldCheck className="h-5 w-5 text-blue-500 fill-blue-500/20" />
@@ -244,34 +221,14 @@ export default function PublicProfilePage() {
               <div className="flex-1 text-center sm:text-left space-y-3 pt-2">
                 <div>
                   <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground/90">
-                    {profile.displayName}
+                    {profile.displayName || "ผู้ใช้งาน"}
                   </h1>
-                  <div className="flex items-center justify-center sm:justify-start gap-3 mt-2 text-muted-foreground text-sm font-medium">
-                    <span className="flex items-center gap-1 bg-muted/50 px-2.5 py-1 rounded-full">
-                       <Calendar className="h-3.5 w-3.5" />
-                       สมาชิก {toDate(profile.createdAt) ? formatDistanceToNow(toDate(profile.createdAt)!, { addSuffix: true, locale: th }) : '-'}
-                    </span>
-                    {profile.rating && profile.rating.count > 0 && (
-                      <span className="flex items-center gap-1 bg-yellow-500/10 text-yellow-600 px-2.5 py-1 rounded-full">
-                         <Star className="h-3.5 w-3.5 fill-current" />
-                         {profile.rating.average.toFixed(1)} ({profile.rating.count})
-                      </span>
-                    )}
-                  </div>
                 </div>
 
-                {/* Public badges (safe fields only) */}
-                <div className="pt-1">
-                  <ProfileBadges
-                    isActive={profile.status === "ACTIVE"}
-                    hasAvatar={!!profile.photoURL}
-                  />
-                </div>
-                
                 {/* Bio / Introduction Section */}
                 <div className="pt-3 max-w-lg mx-auto sm:mx-0">
                   {isEditingBio ? (
-                    <div className="flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex flex-col gap-2">
                       <Label htmlFor="bio" className="sr-only">แนะนำตัว</Label>
                       <Textarea
                         id="bio"
@@ -303,7 +260,7 @@ export default function PublicProfilePage() {
                              setBioInput(profile.bio || "")
                              setIsEditingBio(true)
                            }}
-                           className="absolute -right-8 -top-1 h-6 w-6 opacity-0 group-hover/bio:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                           className="absolute -right-8 -top-1 h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover/bio:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                            title="แก้ไขคำแนะนำตัว"
                         >
                            <Edit2 className="h-3.5 w-3.5" />
@@ -317,7 +274,7 @@ export default function PublicProfilePage() {
                 <div className="flex items-center justify-center sm:justify-start gap-6 pt-4">
                    <div className="text-center sm:text-left">
                       <p className="text-2xl font-bold text-foreground">{items.length}</p>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">ลงประกาศ</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">โพส</p>
                    </div>
                    <div className="w-px h-8 bg-border" />
                    <div className="text-center sm:text-left">
@@ -330,14 +287,11 @@ export default function PublicProfilePage() {
             </div>
           </div>
         </div>
-      </BounceWrapper>
-
-      {/* Tabs Content */}
       <Tabs defaultValue="items" className="space-y-6">
         <TabsList className="bg-muted/50 p-1">
           <TabsTrigger value="items" className="gap-2">
             <Package className="h-4 w-4" />
-            รายการสิ่งของ ({items.length})
+            รายการโพส ({items.length})
           </TabsTrigger>
           <TabsTrigger value="reviews" className="gap-2">
             <Star className="h-4 w-4" />
@@ -361,19 +315,16 @@ export default function PublicProfilePage() {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-4">
-                           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted">
-                             <Image 
-                               src={review.reviewerAvatar || "/placeholder-user.jpg"} 
-                               alt={review.reviewerName}
-                               fill
-                               className="object-cover"
-                               sizes="40px"
-                             />
-                           </div>
+                           <Avatar className="h-10 w-10 shrink-0">
+                             <AvatarImage src={review.reviewerAvatar || undefined} alt={review.reviewerName} className="object-cover" />
+                             <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                               {review.reviewerName?.[0] || "?"}
+                             </AvatarFallback>
+                           </Avatar>
                            <div className="space-y-1">
                               <h4 className="font-semibold text-sm">{review.reviewerName}</h4>
                               <StarRating rating={review.rating} readOnly size={14} />
-                              <p className="text-sm text-muted-foreground mt-1">{review.comment}</p>
+                              <p className="text-sm text-muted-foreground mt-1">{review.comment ?? "—"}</p>
                               <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded inline-block mt-2">
                                 แลกเปลี่ยน: {review.itemTitle}
                               </div>
@@ -407,9 +358,30 @@ export default function PublicProfilePage() {
                 {items
                   .slice((currentPage - 1) * 12, currentPage * 12)
                   .map((item) => (
-                    <ItemCard key={item.id} item={item} />
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      showRequestButton={!!currentUser}
+                      onViewDetails={(item) => setSelectedItem(item)}
+                    />
                 ))}
               </div>
+
+              {/* Modal รายละเอียดสิ่งของ — เปิดเมื่อคลิกที่การ์ด */}
+              <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+                <DialogContent className="max-w-4xl overflow-hidden border-none shadow-2xl p-0">
+                  <DialogTitle className="sr-only">รายละเอียดสิ่งของ</DialogTitle>
+                  <div className="p-4 sm:p-6 md:p-8">
+                    {selectedItem && (
+                      <ItemDetailView
+                        item={selectedItem}
+                        isModal={true}
+                        onClose={() => setSelectedItem(null)}
+                      />
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {items.length > 12 && (
                 <div className="flex items-center justify-center gap-2 mt-8">
@@ -438,26 +410,12 @@ export default function PublicProfilePage() {
           ) : (
             <div className="text-center py-16 bg-muted/20 rounded-xl border border-dashed">
               <Package className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-              <h3 className="font-medium">ไม่มีรายการสิ่งของ</h3>
-              <p className="text-sm text-muted-foreground">ผู้ใช้นี้ยังไม่มีรายการสิ่งของที่กำลังลงประกาศ</p>
+              <h3 className="font-medium">ไม่มีรายการโพส</h3>
+              <p className="text-sm text-muted-foreground">ผู้ใช้นี้ยังไม่มีรายการโพสที่กำลังลงประกาศ</p>
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle>ประวัติการแลกเปลี่ยน</CardTitle>
-              <CardDescription>การแลกเปลี่ยนที่สำเร็จแล้วของผู้ใช้นี้</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                 {/* Pending implementation of public history */}
-                 อยู่ระหว่างการพัฒนา
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   )

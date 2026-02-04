@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
-import type { User, UserStatus } from "@/types"
+import { useAuth } from "@/components/auth-provider"
+import { authFetchJson } from "@/lib/api-client"
+import type { UserStatus } from "@/types"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertTriangle, Ban, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -12,8 +12,10 @@ import Link from "next/link"
 /**
  * Component แสดง Banner แจ้งเตือนสถานะบัญชี
  * แสดงเมื่อบัญชีถูก WARNING, SUSPENDED หรือ BANNED
+ * โหลดสถานะผ่าน API เพื่อไม่ใช้ Firestore บน client (เลี่ยง "Unexpected state")
  */
 export function AccountStatusBanner() {
+  const { user } = useAuth()
   const [userStatus, setUserStatus] = useState<UserStatus | null>(null)
   const [suspendedUntil, setSuspendedUntil] = useState<Date | null>(null)
   const [bannedReason, setBannedReason] = useState<string>("")
@@ -21,30 +23,28 @@ export function AccountStatusBanner() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false)
+      return
+    }
     const checkStatus = async () => {
       try {
-        const auth = getFirebaseAuth()
-        const user = auth.currentUser
-
-        if (!user) {
-          setLoading(false)
-          return
-        }
-
-        const db = getFirebaseDb()
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-
-        if (userDoc.exists()) {
-          const userData = userDoc.data() as User
-          const status = userData.status || "ACTIVE"
-          
+        const res = await authFetchJson<{ data?: { user?: Record<string, unknown> } }>("/api/users/me", { method: "GET" })
+        const userData = res?.data?.user
+        if (userData) {
+          const status = (userData.status as UserStatus) || "ACTIVE"
           setUserStatus(status)
-          setWarningCount(userData.warningCount || 0)
-          setBannedReason(userData.bannedReason || "")
+          setWarningCount(Number(userData.warningCount) || 0)
+          setBannedReason(String(userData.bannedReason || ""))
 
           if (status === "SUSPENDED" && userData.suspendedUntil) {
-            if (typeof userData.suspendedUntil === "object" && "toDate" in userData.suspendedUntil) {
-              setSuspendedUntil(userData.suspendedUntil.toDate())
+            const su = userData.suspendedUntil
+            if (typeof su === "string") {
+              setSuspendedUntil(new Date(su))
+            } else if (typeof su === "object" && su !== null && "toDate" in su && typeof (su as { toDate: () => Date }).toDate === "function") {
+              setSuspendedUntil((su as { toDate: () => Date }).toDate())
+            } else if (typeof su === "object" && su !== null && "_seconds" in su && typeof (su as { _seconds: number })._seconds === "number") {
+              setSuspendedUntil(new Date((su as { _seconds: number })._seconds * 1000))
             }
           }
         }
@@ -54,18 +54,17 @@ export function AccountStatusBanner() {
         setLoading(false)
       }
     }
-
     checkStatus()
-  }, [])
+  }, [user])
 
-  if (loading || !userStatus || userStatus === "ACTIVE") {
-    return null
-  }
+  if (loading || !userStatus) return null
+  // ACTIVE และไม่มีคำเตือนสะสม = ไม่แสดงแบนเนอร์
+  if (userStatus === "ACTIVE" && (warningCount || 0) === 0) return null
 
   // BANNED - แสดง Banner แดง
   if (userStatus === "BANNED") {
     return (
-      <Alert variant="destructive" className="mb-6 border-2 animate-fade-in">
+      <Alert variant="destructive" className="mb-6 border-2">
         <Ban className="h-5 w-5" />
         <AlertTitle className="text-lg font-bold">บัญชีถูกระงับถาวร</AlertTitle>
         <AlertDescription className="mt-2 space-y-2">
@@ -90,7 +89,7 @@ export function AccountStatusBanner() {
       : 0
 
     return (
-      <Alert className="mb-6 border-2 border-orange-500 bg-orange-50 dark:bg-orange-950/20 animate-fade-in">
+      <Alert className="mb-6 border-2 border-orange-500 bg-orange-50 dark:bg-orange-950/20">
         <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
         <AlertTitle className="text-lg font-bold text-orange-900 dark:text-orange-100">
           บัญชีถูกระงับชั่วคราว
@@ -123,10 +122,10 @@ export function AccountStatusBanner() {
     )
   }
 
-  // WARNING - แสดง Banner เหลือง
-  if (userStatus === "WARNING") {
+  // คำเตือนสะสม (status ยัง ACTIVE หรือ WARNING) - แสดง Banner เหลือง
+  if ((userStatus === "ACTIVE" && (warningCount || 0) > 0) || userStatus === "WARNING") {
     return (
-      <Alert className="mb-6 border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 animate-fade-in">
+      <Alert className="mb-6 border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20">
         <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
         <AlertTitle className="text-lg font-bold text-yellow-900 dark:text-yellow-100">
           คำเตือน: บัญชีของคุณได้รับการเตือน

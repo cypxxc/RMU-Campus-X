@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getAdminDb } from "@/lib/firebase-admin"
+import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 import { FieldValue, Timestamp } from "firebase-admin/firestore"
 import { sendLinkSuccessMessage } from "@/lib/line"
 
@@ -15,6 +15,15 @@ interface LinkRequestBody {
 
 export async function POST(request: NextRequest) {
   try {
+    const token = extractBearerToken(request.headers.get("Authorization"))
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
     const body: LinkRequestBody = await request.json()
     const { userId, linkCode } = body
 
@@ -22,6 +31,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Missing userId or linkCode" },
         { status: 400 }
+      )
+    }
+
+    if (decoded.uid !== userId) {
+      return NextResponse.json(
+        { error: "สามารถเชื่อมได้เฉพาะบัญชีของท่านเท่านั้น" },
+        { status: 403 }
       )
     }
 

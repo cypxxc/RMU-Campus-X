@@ -14,7 +14,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Eye, EyeOff } from "lucide-react"
 import { Logo } from "@/components/logo"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import dynamic from "next/dynamic"
 
 // Dynamic import for Three.js - loads only when needed
@@ -121,7 +120,7 @@ export default function LoginPage() {
       {/* 3D Background - lazy loaded */}
       {show3D && <ThreeBackground />}
       
-      <BounceWrapper variant="bounce-in" className="w-full max-w-md relative z-10">
+      <div className="w-full max-w-md relative z-10">
         <Card className="shadow-soft border-border/60">
           <CardHeader className="text-center space-y-4 pb-2">
             {/* Logo */}
@@ -246,7 +245,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-xs text-muted-foreground">
           มหาวิทยาลัยราชภัฏมหาสารคาม
         </p>
-      </BounceWrapper>
+      </div>
     </div>
   )
 }

@@ -38,7 +38,7 @@ export function PasswordChangeForm({ onCheckPassword, onSubmit }: PasswordChange
       })
       setNewPassword("")
       setConfirmNewPassword("")
-    } catch (err: any) {
+    } catch {
       // Error handling is partly done by parent, but if parent throws, we catch here to stop loading
     } finally {
       setChangingPassword(false)

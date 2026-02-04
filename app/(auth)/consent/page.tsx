@@ -11,7 +11,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, ShieldCheck, FileText } from "lucide-react"
 import { Logo } from "@/components/logo"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import dynamic from "next/dynamic"
 
 const ThreeBackground = dynamic(
@@ -89,7 +88,7 @@ export default function ConsentPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-b from-primary/5 via-background to-background p-4 relative overflow-hidden">
       {show3D && <ThreeBackground />}
-      <BounceWrapper variant="bounce-in" className="w-full max-w-lg relative z-10">
+      <div className="w-full max-w-lg relative z-10">
         <Card className="shadow-soft border-border/60">
           <CardHeader className="text-center space-y-4 pb-2">
             <div className="flex justify-center">
@@ -116,7 +115,7 @@ export default function ConsentPage() {
                   />
                   <span className="text-sm leading-relaxed">
                     ข้าพเจ้ายอมรับ{" "}
-                    <Link href="/terms" target="_blank" className="font-medium text-primary hover:underline">
+                    <Link href="/terms?standalone=1" target="_blank" className="font-medium text-primary hover:underline">
                       ข้อกำหนดและเงื่อนไขการใช้งาน
                     </Link>{" "}
                     ของ RMU-Campus X
@@ -130,7 +129,7 @@ export default function ConsentPage() {
                   />
                   <span className="text-sm leading-relaxed">
                     ข้าพเจ้ายอมรับ{" "}
-                    <Link href="/privacy" target="_blank" className="font-medium text-primary hover:underline">
+                    <Link href="/privacy?standalone=1" target="_blank" className="font-medium text-primary hover:underline">
                       นโยบายความเป็นส่วนตัว
                     </Link>{" "}
                     และการเก็บรวบรวมข้อมูลตามที่ระบุ
@@ -141,9 +140,9 @@ export default function ConsentPage() {
                 <FileText className="h-4 w-4 shrink-0" />
                 <span>
                   อ่านฉบับเต็มได้ที่ หน้า{" "}
-                  <Link href="/terms" className="text-primary hover:underline">ข้อกำหนดการใช้งาน</Link>
+                  <Link href="/terms?standalone=1" target="_blank" className="text-primary hover:underline">ข้อกำหนดการใช้งาน</Link>
                   {" "}และ{" "}
-                  <Link href="/privacy" className="text-primary hover:underline">นโยบายความเป็นส่วนตัว</Link>
+                  <Link href="/privacy?standalone=1" target="_blank" className="text-primary hover:underline">นโยบายความเป็นส่วนตัว</Link>
                 </span>
               </div>
               <Button
@@ -163,7 +162,7 @@ export default function ConsentPage() {
         <p className="mt-6 text-center text-xs text-muted-foreground">
           มหาวิทยาลัยราชภัฏมหาสารคาม
         </p>
-      </BounceWrapper>
+      </div>
     </div>
   )
 }

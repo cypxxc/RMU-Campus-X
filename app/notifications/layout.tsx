@@ -1,6 +1,7 @@
 import type React from "react"
 import { Navbar } from "@/components/navbar"
 import { AuthGuard } from "@/components/auth-guard"
+import { BreadcrumbBar } from "@/components/breadcrumb-bar"
 
 export default function NotificationsLayout({
   children,
@@ -11,6 +12,7 @@ export default function NotificationsLayout({
     <AuthGuard>
       <div className="min-h-screen bg-background">
         <Navbar />
+        <BreadcrumbBar />
         {children}
       </div>
     </AuthGuard>

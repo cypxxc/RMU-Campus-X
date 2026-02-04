@@ -49,61 +49,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (user) {
             try {
-              const { getFirebaseDb } = await import("@/lib/firebase")
-              const { doc, getDoc, getDocFromServer, setDoc, serverTimestamp } = await import("firebase/firestore")
-              const db = getFirebaseDb()
-              const userRef = doc(db, "users", user.uid)
-
-              const adminDoc = await getDoc(doc(db, "admins", user.uid))
-              setIsAdmin(adminDoc.exists())
-
-              // อ่าน user doc: ลอง server ก่อน ถ้า fail (network/permission) ใช้ cache — ป้องกันรีเฟรชแล้วกลับไป /consent
-              let userDocSnap
-              try {
-                userDocSnap = await getDocFromServer(userRef)
-              } catch {
-                userDocSnap = await getDoc(userRef)
-              }
-
-              if (!userDocSnap.exists()) {
-                await setDoc(userRef, {
-                  uid: user.uid,
-                  email: user.email,
-                  displayName: user.displayName || user.email?.split("@")[0] || "",
-                  photoURL: user.photoURL || "",
-                  status: "ACTIVE",
-                  warningCount: 0,
-                  restrictions: {
-                    canPost: true,
-                    canExchange: true,
-                    canChat: true,
-                  },
-                  createdAt: serverTimestamp(),
-                  updatedAt: serverTimestamp(),
-                })
-                setTermsAccepted(false)
-              } else {
-                const userData = userDocSnap.data()
-                const accepted = userData?.termsAccepted === true
-                setTermsAccepted(accepted)
-                if (accepted && typeof sessionStorage !== "undefined") sessionStorage.setItem(TERMS_ACCEPTED_KEY, "1")
-                if (userData?.status === "SUSPENDED") {
-                  const { checkAndAutoUnsuspend } = await import("@/lib/firestore")
-                  await checkAndAutoUnsuspend(user.uid, userData)
+              // โหลดโปรไฟล์ผ่าน API แทน Firestore เพื่อเลี่ยง Firestore SDK "Unexpected state" บน client
+              const token = await user.getIdToken()
+              const res = await fetch("/api/users/me", {
+                headers: { Authorization: `Bearer ${token}` },
+              })
+              if (res.ok) {
+                const json = await res.json()
+                const u = json?.data?.user
+                if (u) {
+                  setIsAdmin(Boolean(u.isAdmin))
+                  const accepted = u.termsAccepted === true
+                  setTermsAccepted(accepted)
+                  if (accepted && typeof sessionStorage !== "undefined") sessionStorage.setItem(TERMS_ACCEPTED_KEY, "1")
+                  // Auto-unsuspend ทำฝั่ง server ใน GET /api/users/me แล้ว
+                } else {
+                  setIsAdmin(false)
+                  setTermsAccepted(false)
                 }
+              } else {
+                setIsAdmin(false)
+                const fallback = typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1"
+                setTermsAccepted(fallback)
               }
             } catch (error) {
               console.error("Auth init error:", error)
               setIsAdmin(false)
-              try {
-                const { getFirebaseDb } = await import("@/lib/firebase")
-                const { doc, getDoc } = await import("firebase/firestore")
-                const db = getFirebaseDb()
-                const snap = await getDoc(doc(db, "users", user.uid))
-                if (snap.exists()) setTermsAccepted(snap.data()?.termsAccepted === true)
-                else if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1") setTermsAccepted(true)
-              } catch {
-                if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1") setTermsAccepted(true)
+              if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1") {
+                setTermsAccepted(true)
               }
             }
           } else {
@@ -141,12 +114,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUserProfile = async () => {
     if (!user) return
     try {
-      const { getFirebaseDb } = await import("@/lib/firebase")
-      const { doc, getDocFromServer } = await import("firebase/firestore")
-      const db = getFirebaseDb()
-      const userDocSnap = await getDocFromServer(doc(db, "users", user.uid))
-      if (userDocSnap.exists()) {
-        setTermsAccepted(userDocSnap.data()?.termsAccepted === true)
+      const token = await user.getIdToken()
+      const res = await fetch("/api/users/me", { headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) {
+        const json = await res.json()
+        const u = json?.data?.user
+        if (u) {
+          setTermsAccepted(u.termsAccepted === true)
+          setIsAdmin(Boolean(u.isAdmin))
+        }
       }
     } catch (error) {
       console.error("Refresh user profile error:", error)

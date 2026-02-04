@@ -2,8 +2,7 @@
 
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, RefreshCw, Home } from "lucide-react"
-import Link from "next/link"
+import { AlertCircle, RefreshCw } from "lucide-react"
 
 import { SystemLogger } from "@/lib/services/logger"
 // ...
@@ -50,12 +49,6 @@ export default function GlobalError({
               <Button onClick={reset} className="gap-2">
                 <RefreshCw className="h-4 w-4" />
                 ลองใหม่อีกครั้ง
-              </Button>
-              <Button variant="outline" asChild className="gap-2">
-                <Link href="/dashboard">
-                  <Home className="h-4 w-4" />
-                  กลับหน้าหลัก
-                </Link>
               </Button>
             </div>
           </div>

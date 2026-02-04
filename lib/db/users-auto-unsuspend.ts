@@ -36,9 +36,11 @@ export const checkAndAutoUnsuspend = async (
 
     const now = new Date()
     if (now >= suspendedUntil) {
-      // Suspension has expired - auto unsuspend
+      // Suspension has expired - auto unsuspend (ต้องล้าง restrictions + suspendedUntil เหมือน admin ปลดล็อค)
       await updateDoc(userRef, {
         status: "ACTIVE",
+        restrictions: { canPost: true, canExchange: true, canChat: true },
+        suspendedUntil: null,
         updatedAt: serverTimestamp(),
       })
 

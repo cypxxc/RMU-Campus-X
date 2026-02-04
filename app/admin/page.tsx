@@ -1,54 +1,18 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { collection, getDocs, query, where } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
 import { useAuth } from "@/components/auth-provider"
-import { Loader2, LayoutDashboard, ArrowLeft } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { Button } from "@/components/ui/button"
 import { DashboardOverview } from "@/components/admin/dashboard-overview"
 import { useAdminDashboardData } from "@/hooks/use-admin-dashboard"
 
 export default function AdminDashboardPage() {
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [checkingAdmin, setCheckingAdmin] = useState(true)
-  
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, isAdmin } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-  
-  // ✅ NEW: React Query replaces real-time listeners
   const { items, tickets, totalUsersCount, isLoading } = useAdminDashboardData()
-
-  const checkAdmin = useCallback(async () => {
-    if (!user) return
-
-    try {
-      const db = getFirebaseDb()
-      const adminsRef = collection(db, "admins")
-      const q = query(adminsRef, where("email", "==", user.email))
-      const snapshot = await getDocs(q)
-
-      if (snapshot.empty) {
-        toast({
-          title: "ไม่มีสิทธิ์เข้าถึง",
-          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
-          variant: "destructive",
-        })
-        router.push("/dashboard")
-        return
-      }
-
-      setIsAdmin(true)
-    } catch (error) {
-      console.error("[AdminDashboard] Error checking admin:", error)
-      router.push("/dashboard")
-    } finally {
-      setCheckingAdmin(false)
-    }
-  }, [router, toast, user])
 
   useEffect(() => {
     if (authLoading) return
@@ -56,13 +20,17 @@ export default function AdminDashboardPage() {
       router.push("/login")
       return
     }
-    checkAdmin()
-  }, [authLoading, checkAdmin, router, user])
+    if (!isAdmin) {
+      toast({
+        title: "ไม่มีสิทธิ์เข้าถึง",
+        description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+        variant: "destructive",
+      })
+      router.push("/dashboard")
+    }
+  }, [authLoading, user, isAdmin, router, toast])
 
-  // ✅ Real-time listeners removed - now using React Query with polling
-  // See hooks/use-admin-dashboard.ts for optimized implementation
-
-  if (checkingAdmin || (isAdmin && isLoading)) {
+  if (authLoading || (isAdmin && isLoading)) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -116,9 +84,6 @@ export default function AdminDashboardPage() {
         {/* Header – รูปแบบเดียวกับหน้าจัดการอื่นๆ */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")} aria-label="กลับ">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <LayoutDashboard className="h-8 w-8 text-primary" />

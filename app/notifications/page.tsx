@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from "@/lib/firestore"
 import type { AppNotification } from "@/types"
-import { Bell, MessageCircle, AlertTriangle, Package, Info, Loader2, ArrowLeft, CheckCheck, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { Bell, MessageCircle, AlertTriangle, Package, Info, Loader2, CheckCheck, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -13,7 +13,6 @@ import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
 import { useToast } from "@/hooks/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 const PAGE_SIZE = 10
 
@@ -31,6 +30,12 @@ export default function NotificationsPage() {
   const paginationLastIds = useRef<Map<number, string | null>>(new Map([[1, null]]))
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const fetchNotifications = useCallback(async (page: number = 1) => {
     if (!user) return
@@ -41,21 +46,21 @@ export default function NotificationsPage() {
         pageSize: PAGE_SIZE,
         lastId,
       })
-      
+      if (!mountedRef.current) return
       setNotifications(result.notifications)
       setTotalCount(result.totalCount)
-      
       if (result.lastId != null && result.hasMore) {
         paginationLastIds.current.set(page + 1, result.lastId)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (!mountedRef.current) return
       toast({
         title: "เกิดข้อผิดพลาด",
-        description: error.message || "ไม่สามารถดึงข้อมูลการแจ้งเตือนได้",
+        description: error instanceof Error ? error.message : "ไม่สามารถดึงข้อมูลการแจ้งเตือนได้",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      if (mountedRef.current) setLoading(false)
     }
   }, [user, toast])
 
@@ -103,16 +108,24 @@ export default function NotificationsPage() {
     }
   }
 
-  const handleDeleteNotification = async (e: React.MouseEvent, id: string) => {
+  const handleDeleteNotification = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    try {
-      await deleteNotification(id)
-      setNotifications(prev => prev.filter(n => n.id !== id))
-      setTotalCount(prev => prev - 1)
-      toast({ title: "ลบการแจ้งเตือนแล้ว" })
-    } catch (error) {
-      toast({ title: "เกิดข้อผิดพลาดในการลบ", variant: "destructive" })
-    }
+    const removed = notifications.find((n) => n.id === id)
+    if (!removed) return
+
+    // Optimistic: ลบออกจาก UI ทันที
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+    setTotalCount((prev) => Math.max(0, prev - 1))
+
+    deleteNotification(id).catch(() => {
+      setNotifications((prev) => [...prev, removed].sort((a, b) => {
+        const tA = (a.createdAt as { toDate?: () => Date })?.toDate?.()?.getTime() ?? 0
+        const tB = (b.createdAt as { toDate?: () => Date })?.toDate?.()?.getTime() ?? 0
+        return tB - tA
+      }))
+      setTotalCount((prev) => prev + 1)
+      toast({ title: "ลบไม่สำเร็จ", description: "กรุณาลองใหม่อีกครั้ง", variant: "destructive" })
+    })
   }
 
   const getIcon = (type: string) => {
@@ -155,14 +168,6 @@ export default function NotificationsPage() {
       <div className="container mx-auto px-4 py-6 sm:py-8 max-w-3xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => router.back()}
-            className="shrink-0"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold">การแจ้งเตือน</h1>
             <p className="text-muted-foreground text-sm">
@@ -206,13 +211,9 @@ export default function NotificationsPage() {
               </div>
             ) : filteredNotifications.length > 0 ? (
               <>
-                {filteredNotifications.map((n, index) => (
-                  <BounceWrapper 
-                    key={n.id}
-                    variant="bounce-up"
-                    delay={index * 0.03}
-                  >
-                    <Card 
+                {filteredNotifications.map((n) => (
+                    <Card
+                      key={n.id}
                       className={`cursor-pointer transition-all hover:shadow-md border-border/60 ${
                         !n.isRead ? "border-l-4 border-l-primary" : ""
                       }`}
@@ -260,7 +261,6 @@ export default function NotificationsPage() {
                       </div>
                     </CardContent>
                   </Card>
-                  </BounceWrapper>
                 ))}
 
                 {/* Pagination Controls */}

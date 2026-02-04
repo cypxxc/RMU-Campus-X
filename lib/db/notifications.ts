@@ -7,20 +7,23 @@ import { getFirebaseDb } from "@/lib/firebase"
 import type { AppNotification } from "@/types"
 import { authFetchJson } from "@/lib/api-client"
 
-// สร้าง notification – ถ้าเป็นของตัวเองใช้ Firestore โดยตรง, ถ้า cross-user ใช้ API
+// สร้าง notification – บน client ใช้ API เท่านั้น (ไม่ใช้ Firestore)
 export const createNotification = async (notificationData: Omit<AppNotification, "id" | "createdAt" | "isRead">) => {
+  if (typeof window !== "undefined") {
+    const res = await authFetchJson<{ data?: { notificationId?: string } }>("/api/notifications", {
+      method: "POST",
+      body: notificationData,
+    })
+    return res?.data?.notificationId ?? "notified"
+  }
   let isSelfNotification = false
   try {
     const { getAuth } = await import("firebase/auth")
-    const auth = getAuth()
-    const currentUserId = auth.currentUser?.uid
-    if (currentUserId && currentUserId === notificationData.userId) {
-      isSelfNotification = true
-    }
+    const currentUserId = getAuth().currentUser?.uid
+    if (currentUserId && currentUserId === notificationData.userId) isSelfNotification = true
   } catch {
     isSelfNotification = false
   }
-
   if (isSelfNotification) {
     const db = getFirebaseDb()
     const docRef = await addDoc(collection(db, "notifications"), {
@@ -30,12 +33,9 @@ export const createNotification = async (notificationData: Omit<AppNotification,
     })
     return docRef.id
   }
-
   const { getAuth } = await import("firebase/auth")
-  const auth = getAuth()
-  const token = await auth.currentUser?.getIdToken()
+  const token = await getAuth().currentUser?.getIdToken()
   if (!token) throw new Error("Authentication required for notifications")
-
   const response = await fetch("/api/notifications", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

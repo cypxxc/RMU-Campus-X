@@ -32,7 +32,9 @@ export interface UserRating {
   totalReviews: number
 }
 
-// Create a review
+const isClient = typeof window !== "undefined"
+
+// Create a review – บน client ใช้ POST /api/reviews
 export const createReview = async (
   exchangeId: string,
   reviewerId: string,
@@ -43,21 +45,32 @@ export const createReview = async (
   reviewerName: string,
   reviewerAvatar?: string
 ) => {
+  if (isClient) {
+    const { authFetchJson } = await import("@/lib/api-client")
+    const res = await authFetchJson<{ data?: { reviewId?: string }; error?: string }>("/api/reviews", {
+      method: "POST",
+      body: {
+        exchangeId,
+        targetUserId,
+        rating,
+        comment: comment || "",
+        itemTitle,
+        reviewerName,
+        reviewerAvatar: reviewerAvatar || null,
+      },
+    })
+    const id = res?.data?.reviewId
+    if (!id && res?.error) throw new Error(res.error)
+    return id ?? ""
+  }
   const db = getFirebaseDb()
-  
-  // 1. Check if review already exists for this exchange by this user
-  // This prevents double reviewing (though UI should prevent it too)
   const q = query(
     collection(db, "reviews"),
     where("exchangeId", "==", exchangeId),
     where("reviewerId", "==", reviewerId)
   )
   const existingSnap = await getDocs(q)
-  if (!existingSnap.empty) {
-    throw new Error("You have already reviewed this exchange.")
-  }
-
-  // 2. Create the review
+  if (!existingSnap.empty) throw new Error("You have already reviewed this exchange.")
   const reviewRef = await addDoc(collection(db, "reviews"), {
     exchangeId,
     reviewerId,
@@ -67,12 +80,9 @@ export const createReview = async (
     itemTitle,
     reviewerName,
     reviewerAvatar: reviewerAvatar || null,
-    createdAt: serverTimestamp()
+    createdAt: serverTimestamp(),
   })
-
-  // 3. Update User's Aggregated Rating
   await updateUserRating(targetUserId)
-  
   return reviewRef.id
 }
 

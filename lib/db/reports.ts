@@ -17,39 +17,37 @@ import { apiCall, TIMEOUT_CONFIG, type ApiResponse } from "@/lib/api-wrapper"
 import { createNotification } from "./notifications"
 import { createAdminLog } from "./logs"
 
-// Reports
+// Reports – บน client ใช้ POST /api/reports
 export const createReport = async (reportData: Omit<Report, "id" | "createdAt" | "updatedAt" | "status">) => {
+  if (typeof window !== "undefined") {
+    const { authFetchJson } = await import("@/lib/api-client")
+    const res = await authFetchJson<{ data?: { reportId?: string }; error?: string }>("/api/reports", {
+      method: "POST",
+      body: {
+        reportType: reportData.reportType,
+        reason: reportData.reason,
+        description: reportData.reason || "ไม่มีรายละเอียด",
+        targetId: reportData.targetId,
+        targetType: reportData.targetType,
+        targetTitle: (reportData as any).targetTitle,
+        itemId: (reportData as any).itemId,
+        itemTitle: (reportData as any).itemTitle,
+        exchangeId: (reportData as any).exchangeId,
+      },
+    })
+    const id = res?.data?.reportId
+    if (!id && res?.error) throw new Error(res.error)
+    return id ?? ""
+  }
   const db = getFirebaseDb()
-  
-  console.log("[createReport] Starting report creation...")
-  console.log("[createReport] Report data:", {
-    reportType: reportData.reportType,
-    reporterId: reportData.reporterId,
-    reporterEmail: reportData.reporterEmail,
-    targetId: reportData.targetId,
-    reason: reportData.reason,
-  })
-
   const dataToSave = {
     ...reportData,
     status: "new" as const,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }
-
-  console.log("[createReport] Data to save:", dataToSave)
-
-  try {
-    const docRef = await addDoc(collection(db, "reports"), dataToSave)
-    console.log("[createReport] Report created successfully:", docRef.id)
-    return docRef.id
-  } catch (error: any) {
-    console.error("[createReport] Error creating report:", error)
-    console.error("[createReport] Error code:", error.code)
-    console.error("[createReport] Error message:", error.message)
-    console.error("[createReport] Full error:", JSON.stringify(error, null, 2))
-    throw error
-  }
+  const docRef = await addDoc(collection(db, "reports"), dataToSave)
+  return docRef.id
 }
 
 export const updateReportStatus = async (
@@ -103,15 +101,21 @@ export const updateReportStatus = async (
 }
 
 export const getReportsByStatus = async (status?: ReportStatus) => {
-  const db = getFirebaseDb()
-  let q
-
-  if (status) {
-    q = query(collection(db, "reports"), where("status", "==", status), orderBy("createdAt", "desc"))
-  } else {
-    q = query(collection(db, "reports"), orderBy("createdAt", "desc"))
+  if (typeof window !== "undefined") {
+    try {
+      const { authFetchJson } = await import("@/lib/api-client")
+      const params = new URLSearchParams()
+      if (status) params.set("status", status)
+      const res = await authFetchJson<{ data?: { reports?: Report[] } }>(`/api/admin/reports?${params.toString()}`, { method: "GET" })
+      return res?.data?.reports ?? []
+    } catch {
+      return []
+    }
   }
-
+  const db = getFirebaseDb()
+  const q = status
+    ? query(collection(db, "reports"), where("status", "==", status), orderBy("createdAt", "desc"))
+    : query(collection(db, "reports"), orderBy("createdAt", "desc"))
   const snapshot = await getDocs(q)
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Report)
 }
@@ -215,12 +219,17 @@ export const getReportStatistics = async (): Promise<ApiResponse<{
 }
 
 export const getReports = async (maxResults: number = 200) => {
+  if (typeof window !== "undefined") {
+    try {
+      const { authFetchJson } = await import("@/lib/api-client")
+      const res = await authFetchJson<{ data?: { reports?: Report[] } }>(`/api/admin/reports?limit=${maxResults}`, { method: "GET" })
+      return res?.data?.reports ?? []
+    } catch {
+      return []
+    }
+  }
   const db = getFirebaseDb()
-  const q = query(
-    collection(db, "reports"), 
-    orderBy("createdAt", "desc"),
-    limit(maxResults)
-  )
+  const q = query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(maxResults))
   const snapshot = await getDocs(q)
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Report)
 }

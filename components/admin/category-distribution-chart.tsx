@@ -5,27 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
 import { Package } from "lucide-react"
 import type { Item } from "@/types"
+import { CATEGORY_LABELS } from "@/lib/constants"
 
 interface CategoryDistributionChartProps {
   items: Item[]
 }
 
-const COLORS = {
-  electronics: '#3b82f6', // blue
-  books: '#10b981', // green
-  furniture: '#f59e0b', // amber
-  clothing: '#ec4899', // pink
-  sports: '#8b5cf6', // purple
-  other: '#6b7280', // gray
-}
-
-const categoryLabels: Record<string, string> = {
-  electronics: "อิเล็กทรอนิกส์",
-  books: "หนังสือ",
-  furniture: "เฟอร์นิเจอร์",
-  clothing: "เสื้อผ้า",
-  sports: "กีฬา",
-  other: "อื่นๆ",
+const COLORS: Record<string, string> = {
+  electronics: '#3b82f6',
+  books: '#10b981',
+  furniture: '#f59e0b',
+  clothing: '#ec4899',
+  sports: '#8b5cf6',
+  other: '#6b7280',
 }
 
 function CategoryTooltip({
@@ -63,7 +55,7 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
     })
     
     return Object.entries(categoryCounts).map(([category, count]) => ({
-      name: categoryLabels[category] || category,
+      name: CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] || category,
       value: count,
       category,
     }))

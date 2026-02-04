@@ -8,8 +8,6 @@ import { Loader2, Heart, AlertCircle } from "lucide-react"
 import type { Item } from "@/types"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
-
 export default function FavoritesPage() {
   const { user, loading: authLoading } = useAuth()
   const [items, setItems] = useState<Item[]>([])
@@ -21,19 +19,21 @@ export default function FavoritesPage() {
       setLoading(false)
       return
     }
-
+    let cancelled = false
     const loadFavorites = async () => {
       try {
         const favoriteItems = await getFavoriteItems(user.uid)
+        if (cancelled) return
         setItems(favoriteItems)
       } catch (error) {
+        if (cancelled) return
         console.error("Error loading favorites:", error)
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
-
     loadFavorites()
+    return () => { cancelled = true }
   }, [user, authLoading])
 
   if (authLoading || loading) {
@@ -63,17 +63,15 @@ export default function FavoritesPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <BounceWrapper variant="bounce-in">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="p-3 bg-red-50 text-red-500 rounded-2xl">
-            <Heart className="h-8 w-8 fill-current" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold">รายการโปรด</h1>
-            <p className="text-muted-foreground">รายการที่คุณบันทึกไว้ ({items.length})</p>
-          </div>
+      <div className="flex items-center gap-3 mb-8">
+        <div className="p-3 bg-red-50 text-red-500 rounded-2xl dark:bg-red-950/30 dark:text-red-400">
+          <Heart className="h-8 w-8 fill-current" />
         </div>
-      </BounceWrapper>
+        <div>
+          <h1 className="text-3xl font-bold">รายการโปรด</h1>
+          <p className="text-muted-foreground">รายการที่คุณบันทึกไว้ ({items.length})</p>
+        </div>
+      </div>
 
       {items.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 content-auto">

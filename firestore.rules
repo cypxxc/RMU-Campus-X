@@ -366,6 +366,14 @@ service cloud.firestore {
       allow get, list, create, update, delete: if isAdmin();
     }
 
+    // Server-only: LINE webhook/link (Admin SDK)
+    match /pendingLineLinks/{id} {
+      allow read, write: if false;
+    }
+    match /lineChatSessions/{lineUserId} {
+      allow read, write: if false;
+    }
+
     // ============================================================================
     // 🚫 DEFAULT DENY
     // ============================================================================

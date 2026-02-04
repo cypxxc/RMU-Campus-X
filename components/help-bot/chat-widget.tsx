@@ -105,7 +105,7 @@ export function HelpBotWidget() {
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="w-[400px] sm:w-[450px] h-[600px] shadow-2xl border-none flex flex-col animate-in slide-in-from-bottom-10 fade-in duration-300 overflow-hidden ring-1 ring-border/50">
+        <Card className="w-[400px] sm:w-[450px] h-[600px] shadow-2xl border-none flex flex-col overflow-hidden ring-1 ring-border/50">
           {/* Header */}
           <CardHeader className="p-4 bg-linear-to-r from-blue-600 to-cyan-500 text-white shrink-0">
             <div className="flex items-center justify-between">
@@ -119,7 +119,7 @@ export function HelpBotWidget() {
                   </CardTitle>
                   <p className="text-xs text-blue-100 flex items-center gap-1">
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                     </span>
                     Online 24/7

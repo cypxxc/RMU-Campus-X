@@ -2,7 +2,7 @@ import type React from "react"
 import { Navbar } from "@/components/navbar"
 import { BreadcrumbBar } from "@/components/breadcrumb-bar"
 
-export default function ItemLayout({
+export default function GuidelinesLayout({
   children,
 }: {
   children: React.ReactNode

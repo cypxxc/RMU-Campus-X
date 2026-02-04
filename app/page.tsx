@@ -4,7 +4,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Package, MessageSquare, Shield, Users, Sparkles, Bell } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { Logo } from "@/components/logo"
 import { LandingHero3D } from "@/components/landing-hero-3d"
 import { LandingStats } from "@/components/landing-stats"
@@ -31,7 +30,7 @@ const features = [
   {
     icon: Shield,
     title: "ปลอดภัย มั่นใจ",
-    description: "สมัครด้วยอีเมล @rmu.ac.th เท่านั้น รองรับรายงานและแนวทางชุมชน",
+    description: "สมัครด้วยอีเมล @rmu.ac.th เท่านั้น",
     color: "text-amber-500 bg-amber-500/10",
   },
   {
@@ -66,7 +65,7 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 relative z-10">
-        <BounceWrapper variant="bounce-in" className="container mx-auto text-center max-w-3xl">
+        <div className="container mx-auto text-center max-w-3xl">
           <Badge variant="outline" className="mb-6 px-4 py-1.5 text-sm font-medium">
             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
             แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา มรม.
@@ -98,7 +97,7 @@ export default function LandingPage() {
           
           {/* Stats – ข้อมูลจริงจากระบบ อัปเดตอัตโนมัติ */}
           <LandingStats />
-        </BounceWrapper>
+        </div>
       </section>
 
       {/* Features Section */}

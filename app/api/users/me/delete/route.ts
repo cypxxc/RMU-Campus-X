@@ -43,7 +43,7 @@ export async function DELETE(request: NextRequest) {
           try {
             const matches = data.photoURL.match(/\/v\d+\/([^/]+)\./)
             if (matches?.[1]) cloudinaryPublicIds.push(matches[1])
-          } catch (e) {}
+          } catch {}
       }
     }
 

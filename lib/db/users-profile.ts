@@ -18,7 +18,10 @@ export const updateUserProfile = async (
   }
   const db = getFirebaseDb()
   const userRef = doc(db, "users", userId)
-  const { email: _email, ...safe } = data as Partial<{ displayName: string, photoURL: string, email: string, bio: string }>
+  const dataObj = data as Partial<{ displayName: string; photoURL: string; email: string; bio: string }>
+  const safe = Object.fromEntries(
+    Object.entries(dataObj).filter(([k]) => k !== "email")
+  ) as Omit<typeof dataObj, "email">
   const cleanData = Object.fromEntries(
     Object.entries(safe).filter(([_, value]) => value !== undefined)
   )
