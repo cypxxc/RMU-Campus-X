@@ -41,16 +41,21 @@ export async function GET(request: NextRequest) {
     const uid = decoded.uid
     const db = getAdminDb()
 
-    const [requesterSnap, ownerSnap] = await Promise.all([
+    const [requesterSnap, ownerSnap, hiddenSnap] = await Promise.all([
       db.collection("exchanges").where("requesterId", "==", uid).orderBy("createdAt", "desc").get(),
       db.collection("exchanges").where("ownerId", "==", uid).orderBy("createdAt", "desc").get(),
+      db.collection("exchangeHides").where("userId", "==", uid).get(),
     ])
+
+    const hiddenExchangeIds = new Set(hiddenSnap.docs.map((d) => (d.data() as { exchangeId: string }).exchangeId))
 
     const byId = new Map<string, Record<string, unknown>>()
     requesterSnap.docs.forEach((d) => byId.set(d.id, serializeExchange(d)))
     ownerSnap.docs.forEach((d) => byId.set(d.id, serializeExchange(d)))
 
-    const list = Array.from(byId.values()).sort((a, b) => {
+    const list = Array.from(byId.values())
+      .filter((ex) => !hiddenExchangeIds.has((ex.id as string) ?? ""))
+      .sort((a, b) => {
       const ta = typeof a.createdAt === "string" ? new Date(a.createdAt).getTime() : 0
       const tb = typeof b.createdAt === "string" ? new Date(b.createdAt).getTime() : 0
       return tb - ta

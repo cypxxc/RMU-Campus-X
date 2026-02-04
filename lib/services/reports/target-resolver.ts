@@ -29,7 +29,7 @@ export async function resolveReportTarget(
         reportedUserEmail = asString(item.postedByEmail)
         if (!resolvedTitle) resolvedTitle = asString(item.title)
       }
-    } else if (reportType === "exchange_report" || reportType === "chat_report") {
+    } else if (reportType === "exchange_report") {
       const exchange = await deps.getExchangeById(targetId)
       if (exchange) {
         const ownerId = asString(exchange.ownerId)

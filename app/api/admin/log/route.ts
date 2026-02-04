@@ -21,6 +21,26 @@ interface AdminLogBody {
   metadata?: Record<string, any>
 }
 
+/** Strip undefined values so Firestore accepts the document */
+function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) continue
+    if (
+      v !== null &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      !(v instanceof Date) &&
+      typeof (v as { toDate?: () => unknown }).toDate !== "function"
+    ) {
+      result[k] = stripUndefined(v as Record<string, unknown>)
+    } else {
+      result[k] = v
+    }
+  }
+  return result
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 1. Verify Authentication
@@ -57,9 +77,10 @@ export async function POST(request: NextRequest) {
     const userDoc = await db.collection("users").doc(decodedToken.uid).get()
     const adminEmail = userDoc.exists ? userDoc.data()?.email : decodedToken.email || "unknown"
 
-    // 5. Create Log Entry
+    // 5. Create Log Entry (strip undefined so Firestore accepts beforeState/afterState)
+    const sanitized = stripUndefined(body as Record<string, unknown>)
     const logRef = await db.collection("adminLogs").add({
-      ...body,
+      ...sanitized,
       adminId: decodedToken.uid,
       adminEmail: adminEmail,
       createdAt: FieldValue.serverTimestamp()

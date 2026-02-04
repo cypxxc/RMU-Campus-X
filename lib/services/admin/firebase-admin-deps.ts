@@ -14,6 +14,26 @@ import type {
   WarningRecordInput,
 } from "@/lib/services/admin/types"
 
+/** Recursively remove undefined values so Firestore accepts the document */
+function stripUndefinedForFirestore(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) continue
+    if (
+      v !== null &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      !(v instanceof Date) &&
+      typeof (v as { toDate?: () => unknown }).toDate !== "function"
+    ) {
+      result[k] = stripUndefinedForFirestore(v as Record<string, unknown>)
+    } else {
+      result[k] = v
+    }
+  }
+  return result
+}
+
 // Helper to convert Firestore data to UserData
 function toUserData(
   id: string,
@@ -69,8 +89,9 @@ export function createUserStatusDeps(): UserStatusUpdateDeps {
     },
 
     async createAuditLog(log: AuditLogInput): Promise<void> {
+      const sanitized = stripUndefinedForFirestore(log as Record<string, unknown>)
       await db.collection("adminLogs").add({
-        ...log,
+        ...sanitized,
         createdAt: FieldValue.serverTimestamp(),
       })
     },
@@ -116,8 +137,9 @@ export function createWarningIssueDeps(): WarningIssueDeps {
     },
 
     async createAuditLog(log: AuditLogInput): Promise<void> {
+      const sanitized = stripUndefinedForFirestore(log as Record<string, unknown>)
       await db.collection("adminLogs").add({
-        ...log,
+        ...sanitized,
         createdAt: FieldValue.serverTimestamp(),
       })
     },

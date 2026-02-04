@@ -54,15 +54,6 @@ const REPORT_REASONS = {
     { code: "exchange_inappropriate", label: "สื่อสารไม่เหมาะสม" },
     { code: "other", label: "อื่นๆ (ต้องกรอกรายละเอียด)" },
   ],
-  chat_report: [
-    { code: "chat_abusive", label: "ใช้คำหยาบหรือคุกคาม" },
-    { code: "chat_sexual", label: "คุกคามทางเพศ" },
-    { code: "chat_threat", label: "ข่มขู่" },
-    { code: "chat_spam", label: "ส่งสแปมหรือลิงก์อันตราย" },
-    { code: "chat_phishing", label: "หลอกขอข้อมูลส่วนตัว" },
-    { code: "chat_inappropriate", label: "เนื้อหาไม่เหมาะสม" },
-    { code: "other", label: "อื่นๆ (ต้องกรอกรายละเอียด)" },
-  ],
   user_report: [
     { code: "user_impersonation", label: "แอบอ้างบุคคลอื่น" },
     { code: "user_fake_info", label: "ให้ข้อมูลเท็จ" },
@@ -77,7 +68,6 @@ const REPORT_REASONS = {
 const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   item_report: "รายงานสิ่งของ",
   exchange_report: "รายงานการแลกเปลี่ยน",
-  chat_report: "รายงานแชท",
   user_report: "รายงานผู้ใช้",
 }
 
@@ -103,8 +93,7 @@ function ReportContent() {
   // Determine report type from URL params
   useEffect(() => {
     if (exchangeId) setReportType("exchange_report")
-    else if (chatId) setReportType("chat_report")
-    else if (userId) setReportType("user_report")
+    else if (userId || chatId) setReportType("user_report")
     else setReportType("item_report")
   }, [itemId, exchangeId, chatId, userId])
 
@@ -238,7 +227,6 @@ function ReportContent() {
                 <SelectContent>
                   <SelectItem value="item_report">รายงานสิ่งของ</SelectItem>
                   <SelectItem value="exchange_report">รายงานการแลกเปลี่ยน</SelectItem>
-                  <SelectItem value="chat_report">รายงานแชท</SelectItem>
                   <SelectItem value="user_report">รายงานผู้ใช้</SelectItem>
                 </SelectContent>
               </Select>

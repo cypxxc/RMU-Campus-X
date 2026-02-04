@@ -4,8 +4,6 @@ import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, RefreshCw } from "lucide-react"
 
-import { SystemLogger } from "@/lib/services/logger"
-// ...
 export default function GlobalError({
   error,
   reset,
@@ -14,8 +12,8 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log error using SystemLogger
-    SystemLogger.logError(error, 'GlobalError', 'CRITICAL')
+    // Client-safe logging only (SystemLogger pulls in firebase-admin via firestore-sink → breaks browser bundle)
+    console.error("[GlobalError]", error?.message, error?.digest, error)
   }, [error])
 
   return (

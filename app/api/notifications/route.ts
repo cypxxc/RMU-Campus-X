@@ -42,21 +42,39 @@ export async function GET(request: NextRequest) {
     }
 
     const snapshot = await q.get()
-    const notifications = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+    const notifications = snapshot.docs.map((d) => {
+      const data = d.data()
+      return { id: d.id, ...data }
+    })
     const hasMore = notifications.length > pageSize
     const page = notifications.slice(0, pageSize)
 
-    const countSnap = await db.collection("notifications").where("userId", "==", decoded.uid).count().get()
-    const totalCount = countSnap.data().count
+    let totalCount: number | undefined
+    try {
+      const countSnap = await db
+        .collection("notifications")
+        .where("userId", "==", decoded.uid)
+        .count()
+        .get()
+      totalCount = countSnap.data().count
+    } catch (_) {
+      totalCount = undefined
+    }
 
     return successResponse({
       notifications: page,
       lastId: page.length ? page[page.length - 1]?.id ?? null : null,
       hasMore,
-      totalCount,
+      ...(totalCount !== undefined && { totalCount }),
     })
-  } catch (e) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Internal server error"
     console.error("[Notifications API] GET Error:", e)
+    if (message.includes("index") || message.includes("FAILED_PRECONDITION")) {
+      return ApiErrors.internalError(
+        "Notifications query requires a Firestore index. Run: firebase deploy --only firestore:indexes"
+      )
+    }
     return ApiErrors.internalError("Internal server error")
   }
 }

@@ -253,7 +253,7 @@ service cloud.firestore {
         && request.resource.data.reporterEmail == request.auth.token.email
         && request.resource.data.status == 'new'
         && request.resource.data.keys().hasAll(['createdAt'])
-        && request.resource.data.reportType in ['item_report', 'exchange_report', 'chat_report', 'user_report'];
+        && request.resource.data.reportType in ['item_report', 'exchange_report', 'user_report'];
 
       allow update, delete: if isAdmin();
     }

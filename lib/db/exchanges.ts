@@ -254,7 +254,7 @@ export const confirmExchange = async (
 
       // 4. Send notifications (outside transaction to avoid complex logic inside)
       if (result.status === "completed") {
-        // Notify Owner
+        // ทั้งสองฝ่ายยืนยันแล้ว — แจ้งทั้งคู่
         await createNotification({
           userId: result.exchange.ownerId,
           title: "การแลกเปลี่ยนเสร็จสิ้น",
@@ -262,12 +262,25 @@ export const confirmExchange = async (
           type: "exchange",
           relatedId: exchangeId,
         });
-
-        // Notify Requester
         await createNotification({
           userId: result.exchange.requesterId,
           title: "การแลกเปลี่ยนเสร็จสิ้น",
           message: `การแลกเปลี่ยน "${result.exchange.itemTitle}" สำเร็จเรียบร้อยแล้ว!`,
+          type: "exchange",
+          relatedId: exchangeId,
+        });
+      } else {
+        // ฝั่งใดฝั่งหนึ่งยืนยันแล้ว — แจ้งอีกฝ่ายให้ยืนยัน
+        const otherUserId = role === "owner" ? result.exchange.requesterId : result.exchange.ownerId;
+        const title = "อีกฝ่ายยืนยันแล้ว";
+        const message =
+          role === "owner"
+            ? `เจ้าของสิ่งของ "${result.exchange.itemTitle}" ยืนยันแล้ว กรุณายืนยันเพื่อให้การแลกเปลี่ยนเสร็จสมบูรณ์`
+            : `ผู้ขอรับ "${result.exchange.itemTitle}" ยืนยันแล้ว กรุณายืนยันเพื่อให้การแลกเปลี่ยนเสร็จสมบูรณ์`;
+        await createNotification({
+          userId: otherUserId,
+          title,
+          message,
           type: "exchange",
           relatedId: exchangeId,
         });
@@ -298,44 +311,30 @@ export const cancelExchange = async (
   );
 };
 
-import { writeBatch } from "firebase/firestore";
+/** ซ่อนแชทจากรายการของฉัน — อีกฝ่ายยังเห็นแชทได้ */
+export const hideExchange = async (exchangeId: string) => {
+  if (isClient) {
+    return apiCall(
+      async () => {
+        await authFetchJson(`/api/exchanges/${exchangeId}/hide`, { method: "POST" });
+      },
+      "hideExchange",
+      TIMEOUT_CONFIG.STANDARD
+    );
+  }
+  throw new Error("hideExchange is only supported on the client via API");
+};
 
+/** ลบ exchange และข้อความแชทจริง (หายทั้งสองฝ่าย) — ใช้เมื่อต้องการลบถาวร */
 export const deleteExchange = async (exchangeId: string) => {
-  return apiCall(
-    async () => {
-      const db = getFirebaseDb();
-      console.log("[deleteExchange] Starting atomic deletion:", exchangeId);
-
-      // 1. Get all chat messages
-      const messagesQuery = query(
-        collection(db, "chatMessages"),
-        where("exchangeId", "==", exchangeId)
-      );
-      const messagesSnapshot = await getDocs(messagesQuery);
-
-      // 2. Create Batch
-      const batch = writeBatch(db);
-
-      // 3. Add Message Deletes to Batch
-      messagesSnapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
-
-      // 4. Add Exchange Delete to Batch
-      const exchangeRef = doc(db, "exchanges", exchangeId);
-      batch.delete(exchangeRef);
-
-      // 5. Commit Batch
-      console.log(
-        `[deleteExchange] Committing batch for ${
-          messagesSnapshot.size + 1
-        } operations...`
-      );
-      await batch.commit();
-
-      console.log("[deleteExchange] Atomic deletion successful");
-    },
-    "deleteExchange",
-    TIMEOUT_CONFIG.STANDARD
-  );
+  if (isClient) {
+    return apiCall(
+      async () => {
+        await authFetchJson(`/api/exchanges/${exchangeId}`, { method: "DELETE" });
+      },
+      "deleteExchange",
+      TIMEOUT_CONFIG.STANDARD
+    );
+  }
+  throw new Error("deleteExchange is only supported on the client via API");
 };

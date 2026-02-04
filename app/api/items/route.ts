@@ -73,7 +73,7 @@ const listQuerySchema = z.object({
   categories: z.string().optional().transform((s) => (s ? s.split(",").filter(Boolean) : undefined)),
   status: itemStatusSchema.optional(),
   search: z.string().optional(),
-  pageSize: z.coerce.number().min(1).max(50).default(20),
+  pageSize: z.coerce.number().min(1).max(100).default(20),
   lastId: z.string().optional(),
   postedBy: z.string().optional(),
 })
@@ -92,15 +92,18 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
+    const rawPostedBy = searchParams.get("postedBy")?.trim() || undefined
     const parsed = listQuerySchema.safeParse({
       categories: searchParams.get("categories") ?? undefined,
       status: searchParams.get("status") ?? undefined,
       search: searchParams.get("search") ?? undefined,
       pageSize: searchParams.get("pageSize") ?? 20,
       lastId: searchParams.get("lastId") ?? undefined,
-      postedBy: searchParams.get("postedBy") ?? undefined,
+      postedBy: rawPostedBy,
     })
     const query = parsed.success ? parsed.data : { pageSize: 20 }
+    // สำคัญ: ถ้า client ส่ง postedBy มา ต้องใช้เสมอ — อย่าทิ้งเมื่อ parse ล้มเหลว (ไม่งั้นจะได้รายการของทุกคน)
+    if (rawPostedBy && !query.postedBy) (query as { postedBy?: string }).postedBy = rawPostedBy
 
     const db = getAdminDb()
     let q = db.collection("items").orderBy("postedAt", "desc").limit(Math.min(query.pageSize * (query.search ? 3 : 1), 100))

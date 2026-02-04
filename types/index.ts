@@ -110,7 +110,7 @@ export interface ChatMessage {
   readAt?: Timestamp | null // อ่านแล้วโดยผู้รับ
 }
 
-export type ReportType = "item_report" | "exchange_report" | "chat_report" | "user_report"
+export type ReportType = "item_report" | "exchange_report" | "user_report"
 
 export type ReportStatus =
   | "new" // รายงานใหม่

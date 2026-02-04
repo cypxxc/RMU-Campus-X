@@ -6,25 +6,21 @@ import { useToast } from "@/hooks/use-toast"
 import { useImageUpload } from "@/hooks/use-image-upload"
 import Image from "next/image"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Info, X, Plus, AlertTriangle } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Loader2, X, ImagePlus, AlertTriangle } from "lucide-react"
 import { REPORT_REASONS, REPORT_TYPE_LABELS } from "@/lib/constants"
 
-type ReportType = "item_report" | "exchange_report" | "chat_report" | "user_report"
+type ReportType = "item_report" | "exchange_report" | "user_report"
 
 interface ReportModalProps {
   open: boolean
@@ -39,9 +35,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
   const { toast } = useToast()
   const [reasonCode, setReasonCode] = useState("")
   const [description, setDescription] = useState("")
-  const [confirmed, setConfirmed] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   // Use the shared image upload hook
   const { 
@@ -59,7 +53,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
   const reasons = REPORT_REASONS[reportType] || []
   const selectedReason = reasons.find((r) => r.code === reasonCode)
   const isOtherReason = reasonCode === "other"
-  const isFormValid = reasonCode && confirmed && (!isOtherReason || description.trim())
+  const isFormValid = reasonCode && (!isOtherReason || description.trim())
 
   const handleConfirmSubmit = async () => {
     if (!user) return
@@ -88,12 +82,9 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
         description: "ขอบคุณสำหรับการรายงาน ทีมงานจะตรวจสอบโดยเร็วที่สุด",
       })
 
-      // Reset form
       setReasonCode("")
       setDescription("")
       clearImages()
-      setConfirmed(false)
-      setShowConfirmDialog(false)
       onOpenChange(false)
     } catch (error: any) {
       console.error("[Report] Error creating report:", error)
@@ -107,195 +98,154 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
     }
   }
 
-  const handleSubmitClick = () => {
-    if (!isFormValid) return
-    setShowConfirmDialog(true)
+  const handleSubmit = () => {
+    if (!isFormValid || loading) return
+    handleConfirmSubmit()
   }
 
   return (
-    <>
-      <UnifiedModal
-        open={open}
-        onOpenChange={onOpenChange}
-        size="lg"
-        title={REPORT_TYPE_LABELS[reportType] || "รายงาน"}
-        description="กรุณาระบุเหตุผลในการรายงาน ข้อมูลของคุณจะถูกเก็บเป็นความลับ"
-        icon={<AlertTriangle className="h-5 w-5" />}
-        footer={
-          <UnifiedModalActions
-            onCancel={() => onOpenChange(false)}
-            submitText="ส่งรายงาน"
-            submitDisabled={!isFormValid || loading}
-            loading={loading}
-            submitButton={
-              <Button 
-                type="button"
-                onClick={handleSubmitClick}
-                disabled={!isFormValid || loading}
-                className="flex-1 font-bold h-11 shadow-md"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    กำลังส่ง...
-                  </>
-                ) : (
-                  "ส่งรายงาน"
-                )}
-              </Button>
-            }
-          />
-        }
-      >
-          <div className="space-y-6">
-            {/* Info Box */}
-            <div className="bg-info/10 border border-info/20 rounded-lg p-4 flex gap-3">
-              <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
-              <div className="text-sm text-foreground">
-                <p className="font-medium mb-1">ข้อมูลสำคัญ</p>
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  <li>รายงานจะถูกส่งไปยังทีมงานเพื่อตรวจสอบ</li>
-                  <li>การรายงานเท็จอาจถูกดำเนินการ</li>
-                  <li>ผลการตรวจสอบจะแจ้งผ่านอีเมล</li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Reason Selection */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">
-                เหตุผลในการรายงาน <span className="text-destructive">*</span>
-              </Label>
-              <p className="text-sm text-muted-foreground">เลือกเหตุผลที่ตรงกับปัญหาที่พบมากที่สุด</p>
-              <RadioGroup value={reasonCode} onValueChange={setReasonCode}>
-                <div className="space-y-2">
-                  {reasons.map((reason) => (
-                    <div key={reason.code} className="flex items-center space-x-2">
-                      <RadioGroupItem value={reason.code} id={reason.code} />
-                      <Label htmlFor={reason.code} className="font-normal cursor-pointer">
-                        {reason.label}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </RadioGroup>
-            </div>
-
-            {/* Description */}
-            <div className="space-y-3">
-              <Label htmlFor="description" className="text-base font-semibold">
-                รายละเอียดเพิ่มเติม {isOtherReason && <span className="text-destructive">*</span>}
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                {isOtherReason
-                  ? "กรุณาอธิบายปัญหาที่พบโดยละเอียด"
-                  : "ข้อมูลเพิ่มเติมที่จะช่วยให้เราเข้าใจปัญหาได้ดีขึ้น (ไม่บังคับ)"}
-              </p>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value.slice(0, 500))}
-                placeholder="อธิบายรายละเอียดเพิ่มเติม..."
-                className="min-h-[100px] resize-none"
-                maxLength={500}
-              />
-              <p className="text-xs text-muted-foreground text-right">
-                {description.length}/500 ตัวอักษร
-              </p>
-            </div>
-
-            {/* Evidence Images */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">รูปภาพหลักฐาน (ไม่บังคับ)</Label>
-              <p className="text-sm text-muted-foreground">แนบรูปภาพเพื่อประกอบการตรวจสอบ (สูงสุด 5 รูป)</p>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                {images.map((image, index) => (
-                  <div key={index} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
-                    <Image src={image} alt={`Evidence ${index + 1}`} fill className="object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-md hover:bg-destructive/90 transition-colors"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-                
-                {canAddMore && (
-                  <label className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                    <Plus className="h-6 w-6 text-muted-foreground mb-1" />
-                    <span className="text-[10px] text-muted-foreground lowercase">เพิ่มรูป</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png"
-                      multiple
-                      className="hidden"
-                      onChange={handleImageUpload}
-                      disabled={loading || isUploading}
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
-
-            {/* Confirmation Checkbox */}
-            <div className="flex items-start space-x-2 bg-warning/10 border border-warning/20 rounded-lg p-4">
-              <Checkbox id="confirm" checked={confirmed} onCheckedChange={(checked) => setConfirmed(checked === true)} />
-              <Label htmlFor="confirm" className="text-sm font-normal cursor-pointer leading-relaxed">
-                ข้าพเจ้ายืนยันว่าข้อมูลที่ให้ไว้เป็นความจริง และเข้าใจว่าการรายงานเท็จอาจมีผลทางกฎหมาย
-              </Label>
-            </div>
-
-          </div>
-        </UnifiedModal>
-
-      {/* Confirmation Dialog */}
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>ยืนยันการส่งรายงาน</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2">
-                <div>คุณกำลังจะส่งรายงาน:</div>
-                <div className="bg-muted p-3 rounded-md space-y-1 text-sm">
-                  <div>
-                    <span className="font-medium">ประเภท:</span> {REPORT_TYPE_LABELS[reportType]}
-                  </div>
-                  <div>
-                    <span className="font-medium">เหตุผล:</span> {selectedReason?.label}
-                  </div>
-                  {description && (
-                    <div>
-                      <span className="font-medium">รายละเอียด:</span> {description}
-                    </div>
-                  )}
-                  {images.length > 0 && (
-                    <div>
-                      <span className="font-medium">รูปภาพหลักฐาน:</span> {images.length} รูป
-                    </div>
-                  )}
-                </div>
-                <div className="text-muted-foreground">ต้องการดำเนินการต่อหรือไม่?</div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmSubmit} disabled={loading}>
+    <UnifiedModal
+      open={open}
+      onOpenChange={onOpenChange}
+      size="sm"
+      title={REPORT_TYPE_LABELS[reportType] || "รายงาน"}
+      description="ข้อมูลของคุณจะถูกเก็บเป็นความลับ"
+      icon={<AlertTriangle className="h-5 w-5" />}
+      footer={
+        <UnifiedModalActions
+          onCancel={() => onOpenChange(false)}
+          submitText="ส่งรายงาน"
+          submitDisabled={!isFormValid || loading}
+          loading={loading}
+          submitButton={
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!isFormValid || loading}
+              className="flex-1 font-bold h-11 shadow-md"
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   กำลังส่ง...
                 </>
               ) : (
-                "ยืนยันการส่ง"
+                "ส่งรายงาน"
               )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+            </Button>
+          }
+        />
+      }
+    >
+      <div className="space-y-5">
+        {/* เหตุผล - ใช้ Select แทน radio ลดความรก */}
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">
+            เหตุผลในการรายงาน <span className="text-destructive">*</span>
+          </Label>
+          <Select value={reasonCode} onValueChange={setReasonCode}>
+            <SelectTrigger className="w-full h-10">
+              <SelectValue placeholder="เลือกเหตุผลที่ตรงกับปัญหาที่พบ" />
+            </SelectTrigger>
+            <SelectContent>
+              {reasons.map((reason) => (
+                <SelectItem key={reason.code} value={reason.code}>
+                  {reason.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* รายละเอียดเพิ่มเติม */}
+        <div className="space-y-1.5">
+          <Label htmlFor="description" className="text-sm font-medium text-muted-foreground">
+            รายละเอียดเพิ่มเติม {isOtherReason && <span className="text-destructive">*</span>}
+          </Label>
+          <Textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value.slice(0, 500))}
+            placeholder={isOtherReason ? "อธิบายปัญหาที่พบ..." : "ไม่บังคับ"}
+            className="min-h-[72px] resize-none text-sm"
+            maxLength={500}
+          />
+          <p className="text-xs text-muted-foreground text-right tabular-nums">{description.length}/500</p>
+        </div>
+
+        {/* รูปหลักฐาน - รูปแบบเดียวกับตอนโพส */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            รูปภาพ <span className="text-muted-foreground font-normal">({images.length}/5)</span>
+          </Label>
+          <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">ข้อกำหนดรูปภาพ:</span> สูงสุด 5 รูป • รูปแบบ JPEG, PNG เท่านั้น • ขนาดไม่เกิน <strong>10 MB</strong> ต่อรูป
+          </div>
+
+          {images.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {images.map((img, index) => (
+                <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-muted border border-border group">
+                  <Image src={img} alt="" fill className="object-cover" unoptimized />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => removeImage(index)}
+                    disabled={loading}
+                    aria-label={`ลบรูปภาพที่ ${index + 1}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              {canAddMore && (
+                <label
+                  htmlFor="report-modal-image"
+                  className="aspect-square border-2 border-dashed border-border rounded-lg cursor-pointer bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-1"
+                >
+                  <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-[10px] text-muted-foreground">เพิ่มรูป</span>
+                  <Input
+                    id="report-modal-image"
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    multiple
+                    className="hidden"
+                    onChange={handleImageUpload}
+                    disabled={loading || isUploading}
+                  />
+                </label>
+              )}
+            </div>
+          )}
+
+          {images.length === 0 && (
+            <label
+              htmlFor="report-modal-image-empty"
+              className="flex flex-col items-center justify-center w-full aspect-video border-2 border-dashed border-border rounded-lg cursor-pointer bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all group"
+            >
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center mb-2 group-hover:bg-primary/10 transition-colors">
+                <ImagePlus className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              </div>
+              <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                คลิกเพื่ออัปโหลดรูปภาพ
+              </span>
+              <span className="text-xs text-muted-foreground mt-0.5">สูงสุด 5 รูป, ไม่เกิน 10 MB ต่อรูป (JPEG, PNG เท่านั้น)</span>
+              <Input
+                id="report-modal-image-empty"
+                type="file"
+                accept="image/jpeg,image/png"
+                multiple
+                className="hidden"
+                onChange={handleImageUpload}
+                disabled={loading || isUploading}
+              />
+            </label>
+          )}
+        </div>
+      </div>
+    </UnifiedModal>
   )
 }

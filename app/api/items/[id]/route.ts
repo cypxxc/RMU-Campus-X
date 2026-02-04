@@ -39,7 +39,9 @@ export async function GET(
 
     const db = getAdminDb()
     const snap = await db.collection("items").doc(itemId).get()
-    if (!snap.exists) return NextResponse.json({ error: "Item not found" }, { status: 404 })
+    if (!snap.exists) {
+      return NextResponse.json({ success: true, item: null })
+    }
 
     return NextResponse.json({
       success: true,

@@ -107,18 +107,19 @@ export function createUserError(
 }
 
 /**
- * Log error สำหรับ development (ซ่อน stack ใน production)
- */
-import { SystemLogger } from './services/logger'
-
-/**
- * Log error สำหรับ development และ Production
+ * Log error สำหรับ development และ production
+ * บน client ใช้แค่ console เพื่อไม่ให้โหลด firebase-admin (via logger → firestore-sink)
+ * บน server ใช้ dynamic import SystemLogger เพื่อเขียน log ลง Firestore
  */
 export function logError(context: string, error: unknown): void {
-  // Use SystemLogger to handle logging logic (console + firestore + alerts)
-  SystemLogger.logError(error, context, 'ERROR').catch(err => {
-    // Fallback if logger fails
-    console.error(`[${context}] Original Error:`, error)
-    console.error(`[${context}] Logger Error:`, err)
+  if (typeof window !== "undefined") {
+    console.error(`[${context}]`, error)
+    return
+  }
+  import("@/lib/services/logger").then(({ SystemLogger }) => {
+    SystemLogger.logError(error, context, "ERROR").catch((err) => {
+      console.error(`[${context}] Original Error:`, error)
+      console.error(`[${context}] Logger Error:`, err)
+    })
   })
 }

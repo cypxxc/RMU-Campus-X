@@ -4,8 +4,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { collection, query, where, getDocs, limit, startAfter, orderBy } from 'firebase/firestore'
-import { getFirebaseDb } from './firebase'
 import { SystemLogger } from './services/logger'
 // import { isAdmin } from './admin-auth' // Removed, using server-side check
 
@@ -202,7 +200,7 @@ export function parseFilterParams(request: NextRequest) {
 }
 
 /**
- * Build Firestore query with pagination
+ * Build Firestore query with pagination (uses Admin SDK – for API routes only)
  */
 export async function buildPaginatedQuery(
   collectionName: string,
@@ -211,52 +209,42 @@ export async function buildPaginatedQuery(
     limit: number
     sortBy: string
     sortOrder: 'asc' | 'desc'
-    filters?: any
+    filters?: Record<string, unknown>
   }
 ) {
-  const db = getFirebaseDb()
+  const db = getAdminDb()
   const { page, limit: pageLimit, sortBy, sortOrder, filters } = options
 
-  const constraints: any[] = [
-    orderBy(sortBy, sortOrder),
-    limit(pageLimit),
-  ]
+  let ref = db.collection(collectionName) as FirebaseFirestore.Query
 
-  // Add filters
   if (filters) {
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== null && value !== undefined && value !== '') {
-        constraints.unshift(where(key, '==', value))
+        ref = ref.where(key, '==', value)
       }
     })
   }
 
-  // Add pagination
+  ref = ref.orderBy(sortBy, sortOrder)
+
   if (page > 1) {
-    // Get last document from previous page
-    const prevQuery = query(
-      collection(db, collectionName),
-      ...constraints.slice(0, -1),
-      limit((page - 1) * pageLimit)
-    )
-    const prevSnapshot = await getDocs(prevQuery)
+    const prevLimit = (page - 1) * pageLimit
+    const prevSnapshot = await ref.limit(prevLimit).get()
     const lastDoc = prevSnapshot.docs[prevSnapshot.docs.length - 1]
-    
     if (lastDoc) {
-      constraints.push(startAfter(lastDoc))
+      ref = ref.startAfter(lastDoc)
     }
   }
 
-  const q = query(collection(db, collectionName), ...constraints)
-  const snapshot = await getDocs(q)
+  const snapshot = await ref.limit(pageLimit).get()
 
-  // Get total count for pagination
-  const countQuery = query(
-    collection(db, collectionName),
-    ...constraints.slice(0, -2) // Remove limit and startAfter
-  )
-  const countSnapshot = await getDocs(countQuery)
-  const total = countSnapshot.size
+  let total: number
+  try {
+    const countSnap = await db.collection(collectionName).count().get()
+    total = countSnap.data().count ?? snapshot.size
+  } catch {
+    total = snapshot.size
+  }
 
   return {
     docs: snapshot.docs,

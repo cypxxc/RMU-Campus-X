@@ -184,6 +184,66 @@ export async function PATCH(
   }
 }
 
+const DELETABLE_STATUSES: ExchangeStatus[] = ["cancelled", "completed", "rejected"]
+
+/** DELETE exchange และข้อความแชท – เฉพาะผู้เกี่ยวข้อง เมื่อสถานะยกเลิก/เสร็จ/ปฏิเสธ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const token = getAuthToken(request) ?? extractBearerToken(request.headers.get("Authorization"))
+    if (!token) return ApiErrors.unauthorized("Authentication required")
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) return ApiErrors.invalidToken("Invalid or expired token")
+    const userId = decoded.uid
+
+    const { id: exchangeId } = await params
+    if (!exchangeId) {
+      return NextResponse.json(
+        { success: false, error: "Missing exchange ID", code: "MISSING_FIELDS" },
+        { status: 400 }
+      )
+    }
+
+    const db = getAdminDb()
+    const exchangeRef = db.collection("exchanges").doc(exchangeId)
+    const exchangeDoc = await exchangeRef.get()
+
+    if (!exchangeDoc.exists) return ApiErrors.notFound("Exchange not found")
+
+    const exchangeData = exchangeDoc.data() as Exchange
+    if (!isParticipant(exchangeData, userId)) {
+      return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้นที่สามารถลบได้")
+    }
+    if (!DELETABLE_STATUSES.includes(exchangeData.status)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ลบได้เฉพาะรายการที่ยกเลิก / เสร็จสิ้น / ปฏิเสธแล้ว",
+          code: "INVALID_STATUS",
+        },
+        { status: 400 }
+      )
+    }
+
+    const messagesSnap = await db
+      .collection("chatMessages")
+      .where("exchangeId", "==", exchangeId)
+      .get()
+
+    const batch = db.batch()
+    messagesSnap.docs.forEach((d) => batch.delete(d.ref))
+    batch.delete(exchangeRef)
+    await batch.commit()
+
+    return NextResponse.json({ success: true, message: "ลบเรียบร้อยแล้ว" })
+  } catch (error) {
+    console.error("[Exchange DELETE] Error:", error)
+    return ApiErrors.internalError("Internal server error")
+  }
+}
+
 /** GET exchange details – ต้องล็อกอินและเป็น owner หรือ requester เท่านั้น */
 export async function GET(
   request: NextRequest,
@@ -220,12 +280,18 @@ export async function GET(
       return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้นที่สามารถดูรายละเอียดได้")
     }
 
+    const ts = (x: unknown) =>
+      x && typeof (x as { toDate?: () => Date }).toDate === "function"
+        ? (x as { toDate: () => Date }).toDate().toISOString()
+        : x
+    const out: Record<string, unknown> = { ...exchangeData, id: exchangeDoc.id }
+    if (exchangeData.createdAt) out.createdAt = ts(exchangeData.createdAt)
+    if (exchangeData.updatedAt) out.updatedAt = ts(exchangeData.updatedAt)
+    if (exchangeData.cancelledAt) out.cancelledAt = ts((exchangeData as { cancelledAt?: unknown }).cancelledAt)
+
     return NextResponse.json({
       success: true,
-      exchange: {
-        ...exchangeData,
-        id: exchangeDoc.id,
-      },
+      data: { exchange: out },
     })
   } catch (error) {
     console.error("[Exchange Status] GET Error:", error)

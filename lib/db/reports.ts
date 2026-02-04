@@ -133,7 +133,6 @@ export const getReportStatistics = async (): Promise<ApiResponse<{
   byType: {
     item_report: number
     exchange_report: number
-    chat_report: number
     user_report: number
   }
 }>> => {
@@ -155,7 +154,6 @@ export const getReportStatistics = async (): Promise<ApiResponse<{
         byType: {
           item_report: 0,
           exchange_report: 0,
-          chat_report: 0,
           user_report: 0,
         },
       }
@@ -189,7 +187,6 @@ export const getReportStatistics = async (): Promise<ApiResponse<{
       const typeQueries = [
         { type: 'item_report' as ReportType, field: 'item_report' as const },
         { type: 'exchange_report' as ReportType, field: 'exchange_report' as const },
-        { type: 'chat_report' as ReportType, field: 'chat_report' as const },
         { type: 'user_report' as ReportType, field: 'user_report' as const },
       ]
 

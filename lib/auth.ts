@@ -58,10 +58,13 @@ export const registerUser = async (rawEmail: string, password: string) => {
   try {
     // 2. Create Auth User
     userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    console.log("[Register] User Created:", userCredential.user.uid, userCredential.user.email);
-  } catch (authError: any) {
-    console.error("[Register] Auth Error:", authError)
-    throw authError // Let the caller handle auth errors (e.g. email in use)
+  } catch (authError: unknown) {
+    // Expected errors (e.g. email-already-in-use) are handled by the register page; avoid noisy console
+    const code = (authError as { code?: string })?.code
+    if (code !== "auth/email-already-in-use" && code !== "auth/invalid-email" && code !== "auth/weak-password") {
+      console.error("[Register] Auth Error:", authError)
+    }
+    throw authError
   }
 
   // 3. Atomic Profile Creation

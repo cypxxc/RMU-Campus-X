@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { createExchange, updateItem, createNotification, getUserProfile } from "@/lib/firestore"
+import { createExchange, getUserProfile } from "@/lib/firestore"
 import type { Item, User, ItemStatus, ItemCategory } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -123,37 +123,7 @@ export function ItemDetailView({
       }
       const exchangeId = response.data
 
-      await updateItem(item.id, { status: "pending" })
-      
-      await createNotification({
-        userId: item.postedBy,
-        title: "มีผู้ขอรับสิ่งของของคุณ",
-        message: `คุณมีผู้ขอรับสิ่งของ: ${item.title}`,
-        type: "exchange",
-        relatedId: exchangeId,
-        senderId: user.uid,
-      })
-
-      // ส่ง LINE notification แยกทาง API (ไม่ต้อง auth)
-      try {
-        const token = await user.getIdToken()
-        await fetch("/api/line/notify-exchange", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            exchangeId,
-            itemTitle: item.title,
-            requesterName: user.displayName || user.email?.split("@")[0] || "ผู้ใช้",
-            ownerId: item.postedBy, // kept for backward compatibility
-          }),
-        })
-      } catch (lineError) {
-        console.error("LINE notification error:", lineError)
-        // ไม่ต้อง fail ถ้า LINE ส่งไม่ได้
-      }
+      // สถานะสิ่งของ + การแจ้งเตือนในแอป + LINE ส่งจาก POST /api/exchanges แล้ว
 
       toast({
         title: "ส่งคำขอสำเร็จ",

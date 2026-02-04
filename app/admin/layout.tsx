@@ -3,7 +3,7 @@
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTriangle, History, RefreshCw, Bot } from "lucide-react"
+import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTriangle, History, RefreshCw } from "lucide-react"
 import { useState } from "react"
 
 import { AuthGuard } from "@/components/auth-guard"
@@ -25,7 +25,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/support", label: "จัดการคำร้อง", icon: MessageSquare },
     { href: "/admin/reports", label: "รายงานความไม่เหมาะสม", icon: AlertTriangle },
     { href: "/admin/logs", label: "ประวัติกิจกรรม", icon: History },
-    { href: "/admin/line-test", label: "ทดสอบ LINE Bot", icon: Bot },
   ]
  
   const NavLink = ({ item, onClick }: { item: typeof navItems[0], onClick?: () => void }) => {
@@ -68,12 +67,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavLink key={item.href} item={item} />
                 ))}
              </nav>
-             
-             <div className="mt-auto p-4 rounded-2xl bg-muted/30 border border-muted-foreground/10 hover:bg-muted/50 transition-colors duration-300">
-                <p className="text-[10px] text-center text-muted-foreground font-medium uppercase tracking-widest">
-                   University Management v2.0
-                </p>
-             </div>
           </aside>
  
           {/* Mobile Admin Toggle (Visible only on md:hidden) */}

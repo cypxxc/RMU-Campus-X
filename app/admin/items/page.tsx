@@ -27,7 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Package, Search, Trash2, Clock, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Loader2, Package, Search, Trash2, Clock, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react"
 import { ItemCard } from "@/components/item-card"
 import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
 import { ItemDetailView } from "@/components/item-detail-view"
@@ -487,29 +487,32 @@ export default function AdminItemsPage() {
 
       {/* Delete Confirmation */}
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => !open && setDeleteDialog({ open: false, itemId: null })}>
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
-                <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+        <AlertDialogContent className="max-w-md p-6 sm:p-8">
+          <AlertDialogHeader className="gap-4 text-left">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                <Trash2 className="h-6 w-6 text-destructive" />
               </div>
-              <div>
-                <AlertDialogTitle>ยืนยันการลบ</AlertDialogTitle>
-                <AlertDialogDescription className="mt-1">
+              <div className="space-y-1.5 pt-0.5">
+                <AlertDialogTitle className="text-xl">ยืนยันการลบ</AlertDialogTitle>
+                <AlertDialogDescription className="text-base text-muted-foreground">
                   คุณต้องการลบโพสนี้หรือไม่?
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
-          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400">
-            ⚠️ การกระทำนี้ไม่สามารถยกเลิกได้ โพสจะถูกลบออกจากระบบอย่างถาวร
+          <div className="flex gap-3 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/20 px-4 py-3.5">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
+              การกระทำนี้ไม่สามารถยกเลิกได้ โพสจะถูกลบออกจากระบบอย่างถาวร
+            </p>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteItem} 
+          <AlertDialogFooter className="mt-6 gap-3 sm:gap-3">
+            <AlertDialogCancel className="order-2 sm:order-1">ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteItem}
               disabled={processing}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="order-1 sm:order-2 bg-destructive text-destructive-foreground hover:bg-destructive/90 focus:ring-destructive"
             >
               {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               ลบโพส

@@ -84,10 +84,23 @@ export function UnifiedModal({
   bodyClassName,
   footerClassName,
 }: UnifiedModalProps) {
+  // Move focus out of the dialog before close so aria-hidden is never applied
+  // to an ancestor of the focused element (avoids "Blocked aria-hidden" a11y warning).
+  const handleOpenChange = React.useCallback(
+    (next: boolean) => {
+      if (!next) {
+        const el = document.activeElement as HTMLElement | null
+        if (typeof el?.blur === "function") el.blur()
+      }
+      onOpenChange(next)
+    },
+    [onOpenChange]
+  )
+
   return (
     <DialogPrimitive.Root
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
     >
       <DialogPrimitive.Portal>
         {/* Overlay */}
@@ -97,6 +110,7 @@ export function UnifiedModal({
 
         {/* Modal Content */}
         <DialogPrimitive.Content
+          aria-describedby={undefined}
           className={cn(
             // Base positioning & appearance
             "fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%]",
@@ -112,6 +126,10 @@ export function UnifiedModal({
           onEscapeKeyDown={(e) => !closeOnEscape && e.preventDefault()}
           onPointerDownOutside={(e) => !closeOnOverlayClick && e.preventDefault()}
           onInteractOutside={(e) => !closeOnOverlayClick && e.preventDefault()}
+          onCloseAutoFocus={(e) => {
+            // Keep focus on body; avoid refocusing into removed/hidden content
+            e.preventDefault()
+          }}
         >
           {/* Header - Fixed */}
           <div
@@ -234,6 +252,7 @@ interface UnifiedModalActionsProps {
   loading?: boolean
 
   // Variants
+  cancelVariant?: "ghost" | "outline"
   submitVariant?: "default" | "destructive" | "outline"
 
   // Custom content
@@ -248,6 +267,7 @@ export function UnifiedModalActions({
   submitText = "ยืนยัน",
   submitDisabled = false,
   loading = false,
+  cancelVariant = "outline",
   submitVariant = "default",
   cancelButton,
   submitButton,
@@ -258,11 +278,11 @@ export function UnifiedModalActions({
 
   return (
     <div className="flex flex-col-reverse sm:flex-row gap-3">
-      {/* Cancel Button */}
+      {/* Cancel Button - outline by default for visibility in dark mode */}
       {cancelButton || (onCancel && (
         <Button
           type="button"
-          variant="ghost"
+          variant={cancelVariant}
           onClick={onCancel}
           disabled={loading}
           className="flex-1 font-bold h-11"
