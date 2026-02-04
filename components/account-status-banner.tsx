@@ -29,7 +29,7 @@ export function AccountStatusBanner() {
     }
     const checkStatus = async () => {
       try {
-        const res = await authFetchJson<{ data?: { user?: Record<string, unknown> } }>("/api/users/me", { method: "GET" })
+        const res = await authFetchJson<{ user?: Record<string, unknown> }>("/api/users/me", { method: "GET" })
         const userData = res?.data?.user
         if (userData) {
           const status = (userData.status as UserStatus) || "ACTIVE"

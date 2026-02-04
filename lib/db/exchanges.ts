@@ -27,7 +27,7 @@ export const createExchange = async (
   if (isClient) {
     return apiCall(
       async () => {
-        const res = await authFetchJson<{ data?: { exchangeId?: string } }>("/api/exchanges", {
+        const res = await authFetchJson<{ exchangeId?: string }>("/api/exchanges", {
           method: "POST",
           body: {
             itemId: exchangeData.itemId,
@@ -90,7 +90,7 @@ export const getExchangesByUser = async (
   if (isClient) {
     return apiCall(
       async () => {
-        const res = await authFetchJson<{ data?: { exchanges?: Exchange[] } }>("/api/exchanges", { method: "GET" });
+        const res = await authFetchJson<{ exchanges?: Exchange[] }>("/api/exchanges", { method: "GET" });
         const list = res?.data?.exchanges ?? [];
         return {
           exchanges: list,
@@ -133,9 +133,11 @@ export const getExchangeById = async (
       async () => {
         try {
           const res = await authFetchJson<{ exchange?: Exchange & { id?: string } }>(`/api/exchanges/${id}`, { method: "GET" });
-          const ex = (res as { exchange?: Exchange & { id?: string } })?.exchange;
+          const raw = res as unknown as { exchange?: Exchange & { id?: string } };
+          const ex = raw?.exchange;
           if (!ex) return null;
-          return { id: ex.id ?? id, ...ex } as Exchange;
+          const { id: _exId, ...rest } = ex;
+          return { ...rest, id: _exId ?? id } as Exchange;
         } catch {
           return null;
         }

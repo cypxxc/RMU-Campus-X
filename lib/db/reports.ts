@@ -21,7 +21,7 @@ import { createAdminLog } from "./logs"
 export const createReport = async (reportData: Omit<Report, "id" | "createdAt" | "updatedAt" | "status">) => {
   if (typeof window !== "undefined") {
     const { authFetchJson } = await import("@/lib/api-client")
-    const res = await authFetchJson<{ data?: { reportId?: string }; error?: string }>("/api/reports", {
+    const res = await authFetchJson<{ reportId?: string }>("/api/reports", {
       method: "POST",
       body: {
         reportType: reportData.reportType,
@@ -106,7 +106,7 @@ export const getReportsByStatus = async (status?: ReportStatus) => {
       const { authFetchJson } = await import("@/lib/api-client")
       const params = new URLSearchParams()
       if (status) params.set("status", status)
-      const res = await authFetchJson<{ data?: { reports?: Report[] } }>(`/api/admin/reports?${params.toString()}`, { method: "GET" })
+      const res = await authFetchJson<{ reports?: Report[] }>(`/api/admin/reports?${params.toString()}`, { method: "GET" })
       return res?.data?.reports ?? []
     } catch {
       return []
@@ -222,7 +222,7 @@ export const getReports = async (maxResults: number = 200) => {
   if (typeof window !== "undefined") {
     try {
       const { authFetchJson } = await import("@/lib/api-client")
-      const res = await authFetchJson<{ data?: { reports?: Report[] } }>(`/api/admin/reports?limit=${maxResults}`, { method: "GET" })
+      const res = await authFetchJson<{ reports?: Report[] }>(`/api/admin/reports?limit=${maxResults}`, { method: "GET" })
       return res?.data?.reports ?? []
     } catch {
       return []

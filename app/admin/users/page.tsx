@@ -92,7 +92,7 @@ export default function AdminReportedUsersPage() {
       const allReports = await getReports()
       setReports(allReports)
 
-      const usersRes = await authFetchJson<{ data?: { users?: User[] } }>("/api/admin/users?limit=500", { method: "GET" })
+      const usersRes = await authFetchJson<{ users?: User[] }>("/api/admin/users?limit=500", { method: "GET" })
       const usersList = usersRes?.data?.users ?? []
       const firestoreUsersMap = new Map<string, User>()
       usersList.forEach((u: any) => {
@@ -104,7 +104,7 @@ export default function AdminReportedUsersPage() {
       const userStatsMap = new Map<string, { received: number; filed: number; lastDate?: Date; email?: string }>()
       
       // Process stats and collect emails for ghosts
-      allReports.forEach(report => {
+      allReports.forEach((report: Report) => {
         const reportDate = (report.createdAt as any)?.toDate?.() || new Date()
 
         // 1. Reported User (User being reported)

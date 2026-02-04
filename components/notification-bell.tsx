@@ -32,7 +32,6 @@ function toCreatedAtMs(n: AppNotification): number {
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const shownToasts = useRef<Map<string, number>>(new Map())
   const lastProcessedTime = useRef<number>(0)
   const prevNotificationIds = useRef<Set<string>>(new Set())
@@ -104,7 +103,6 @@ export function NotificationBell() {
         setNotifications(all)
         setUnreadCount(all.filter((n) => !n.isRead).length)
         prevNotificationIds.current = new Set(all.map((n) => n.id))
-        setIsInitialLoad(false)
         lastProcessedTime.current = Date.now()
       } catch (err) {
         console.error("[NotificationBell] Fetch error:", err)

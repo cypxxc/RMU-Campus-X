@@ -72,7 +72,7 @@ type ChatSession = {
 function timestampToMs(t?: Timestamp): number | null {
   if (!t) return null
   if (typeof (t as { toDate?: () => Date }).toDate === "function") return (t as Timestamp).toDate().getTime()
-  if (typeof (t as { _seconds?: number })._seconds === "number") return (t as { _seconds: number })._seconds * 1000
+  if (typeof (t as unknown as { _seconds?: number })._seconds === "number") return (t as unknown as { _seconds: number })._seconds * 1000
   if (typeof (t as { seconds?: number }).seconds === "number") return (t as { seconds: number }).seconds * 1000
   return null
 }
@@ -151,7 +151,7 @@ async function getActiveExchangesForUser(userId: string): Promise<Array<{ id: st
   const userSnaps = await Promise.all(otherIds.map((id) => db.collection("users").doc(id).get()))
   return slice.map((ex, i) => {
     const userDoc = userSnaps[i]
-    const name = userDoc?.exists ? ((userDoc.data()?.displayName as string) || (userDoc.data()?.email as string) || "ผู้ใช้").split("@")[0] : "ผู้ใช้"
+    const name: string = userDoc?.exists ? ((userDoc.data()?.displayName as string) || (userDoc.data()?.email as string) || "ผู้ใช้").split("@")[0] ?? "ผู้ใช้" : "ผู้ใช้"
     return { id: ex.id, itemTitle: ex.itemTitle, otherDisplayName: name }
   })
 }
@@ -171,7 +171,7 @@ async function getExchangeOtherParty(exchangeId: string, currentUserId: string):
   const lineUserId = u.lineUserId as string | undefined
   if (!lineUserId) return null
   const displayName = (u.displayName as string) || (u.email as string) || "ผู้ใช้"
-  return { lineUserId, displayName: displayName.split("@")[0], itemTitle }
+  return { lineUserId: lineUserId as string, displayName: displayName.split("@")[0] ?? "ผู้ใช้", itemTitle }
 }
 
 export async function POST(request: NextRequest) {

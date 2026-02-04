@@ -47,7 +47,7 @@ export const createReview = async (
 ) => {
   if (isClient) {
     const { authFetchJson } = await import("@/lib/api-client")
-    const res = await authFetchJson<{ data?: { reviewId?: string }; error?: string }>("/api/reviews", {
+    const res = await authFetchJson<{ reviewId?: string }>("/api/reviews", {
       method: "POST",
       body: {
         exchangeId,

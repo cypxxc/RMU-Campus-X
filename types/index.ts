@@ -86,6 +86,7 @@ export interface Exchange {
   ownerEmail: string
   requesterId: string
   requesterEmail: string
+  requesterName?: string
   status: ExchangeStatus
   ownerConfirmed: boolean
   requesterConfirmed: boolean

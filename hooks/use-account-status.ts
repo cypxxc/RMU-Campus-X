@@ -37,7 +37,7 @@ async function fetchMeProfile(): Promise<{
   suspendedUntil?: Date
 } | null> {
   try {
-    const res = await authFetchJson<{ data?: { user?: Record<string, unknown> } }>("/api/users/me", { method: "GET" })
+    const res = await authFetchJson<{ user?: Record<string, unknown> }>("/api/users/me", { method: "GET" })
     const u = res?.data?.user
     if (!u) return null
     const status = (u.status as UserStatus) || "ACTIVE"

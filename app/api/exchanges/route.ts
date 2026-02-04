@@ -16,8 +16,6 @@ import { FieldValue } from "firebase-admin/firestore"
 import { sanitizeText } from "@/lib/security"
 import { ApiErrors, getAuthToken } from "@/lib/api-response"
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
-
 function serializeExchange(doc: { id: string; data: () => Record<string, unknown> | undefined }): Record<string, unknown> {
   const data = doc.data()
   if (!data) return { id: doc.id }
@@ -225,7 +223,7 @@ async function sendLineNotification(
   itemTitle: string,
   requesterName: string | undefined,
   requesterEmail: string,
-  exchangeId: string
+  _exchangeId: string
 ): Promise<void> {
   const db = getAdminDb()
   const ownerDoc = await db.collection("users").doc(ownerId).get()

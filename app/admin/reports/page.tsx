@@ -113,7 +113,7 @@ export default function AdminReportsPage() {
       const reportsData = await getReports()
       
       // Fetch details for each report target
-      const reportsWithDetails = await Promise.all(reportsData.map(async (report) => {
+      const reportsWithDetails = await Promise.all(reportsData.map(async (report: ReportWithDetails) => {
         try {
           const db = getFirebaseDb()
           let targetData = null

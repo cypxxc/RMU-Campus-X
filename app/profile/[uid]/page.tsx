@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
 import { 
@@ -52,7 +52,6 @@ function toDate(createdAt: unknown): Date | null {
 
 export default function PublicProfilePage() {
   const params = useParams()
-  const router = useRouter()
   const { user: currentUser } = useAuth()
   const uid = params?.uid as string
 

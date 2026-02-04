@@ -10,7 +10,7 @@ import { authFetchJson } from "@/lib/api-client"
 // สร้าง notification – บน client ใช้ API เท่านั้น (ไม่ใช้ Firestore)
 export const createNotification = async (notificationData: Omit<AppNotification, "id" | "createdAt" | "isRead">) => {
   if (typeof window !== "undefined") {
-    const res = await authFetchJson<{ data?: { notificationId?: string } }>("/api/notifications", {
+    const res = await authFetchJson<{ notificationId?: string }>("/api/notifications", {
       method: "POST",
       body: notificationData,
     })

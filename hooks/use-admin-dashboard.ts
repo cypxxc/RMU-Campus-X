@@ -25,7 +25,7 @@ export function useAdminDashboardData() {
   const statsQuery = useQuery({
     queryKey: ['admin', 'stats'],
     queryFn: async () => {
-      const res = await authFetchJson<{ data?: AdminStats }>('/api/admin/stats', { method: 'GET' })
+      const res = await authFetchJson<AdminStats>('/api/admin/stats', { method: 'GET' })
       if (!res?.data) throw new Error('Failed to fetch stats')
       return res.data
     },
@@ -37,7 +37,7 @@ export function useAdminDashboardData() {
   const itemsQuery = useQuery({
     queryKey: ['admin', 'items'],
     queryFn: async () => {
-      const res = await authFetchJson<{ data?: { items?: Item[] } }>(
+      const res = await authFetchJson<{ items?: Item[] }>(
         '/api/admin/items?limit=200&sortBy=postedAt&sortOrder=desc',
         { method: 'GET' }
       )
@@ -51,7 +51,7 @@ export function useAdminDashboardData() {
   const reportsQuery = useQuery({
     queryKey: ['admin', 'reports'],
     queryFn: async () => {
-      const res = await authFetchJson<{ data?: { reports?: any[] } }>(
+      const res = await authFetchJson<{ reports?: any[] }>(
         '/api/admin/reports?limit=200',
         { method: 'GET' }
       )
@@ -65,7 +65,7 @@ export function useAdminDashboardData() {
   const usersQuery = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: async () => {
-      const res = await authFetchJson<{ data?: { users?: User[] } }>(
+      const res = await authFetchJson<{ users?: User[] }>(
         '/api/admin/users?limit=500',
         { method: 'GET' }
       )
@@ -79,7 +79,7 @@ export function useAdminDashboardData() {
   const ticketsQuery = useQuery({
     queryKey: ['admin', 'support-tickets'],
     queryFn: async () => {
-      const res = await authFetchJson<{ data?: { tickets?: SupportTicket[] } }>(
+      const res = await authFetchJson<{ tickets?: SupportTicket[] }>(
         '/api/admin/support?limit=100',
         { method: 'GET' }
       )

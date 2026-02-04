@@ -77,7 +77,8 @@ export async function POST(request: NextRequest) {
       console.log("[LINE Notify Exchange] Owner has no LINE linked")
       return NextResponse.json({ sent: false, reason: "no LINE linked" })
     }
-    
+    const ownerLineUserId: string = lineUserId
+
     if (!notificationsEnabled || !exchangeRequestEnabled) {
       return NextResponse.json({ sent: false, reason: "notifications disabled" })
     }
@@ -97,12 +98,12 @@ export async function POST(request: NextRequest) {
     }
 
     await notifyExchangeRequest(
-      lineUserId,
-      itemTitle,
-      requesterName,
+      ownerLineUserId,
+      itemTitle ?? "",
+      requesterName ?? "",
       exchangeId,
       BASE_URL,
-      itemImage
+      itemImage ?? undefined
     )
 
     console.log("[LINE Notify Exchange] Sent successfully!")
