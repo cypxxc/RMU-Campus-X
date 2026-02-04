@@ -21,6 +21,9 @@ export function FavoriteButton({ item, variant = "icon", className }: FavoriteBu
   const [isFavorite, setIsFavorite] = useState(false)
   const [toggling, setToggling] = useState(false)
 
+  const isOwnItem = user && item?.postedBy && String(item.postedBy) === user.uid
+  if (isOwnItem) return null
+
   useEffect(() => {
     if (user && item) {
       checkIsFavorite(user.uid, item.id).then(setIsFavorite)

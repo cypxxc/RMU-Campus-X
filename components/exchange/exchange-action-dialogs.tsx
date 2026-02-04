@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { XCircle, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
 import { Exchange } from "@/types"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 
@@ -20,7 +20,7 @@ export function CancelExchangeDialog({
   open, 
   onOpenChange, 
   onConfirm, 
-  isRequester 
+  isRequester: _isRequester, 
 }: CancelExchangeDialogProps) {
   const [reason, setReason] = useState("")
   const [processing, setProcessing] = useState(false)
@@ -35,8 +35,7 @@ export function CancelExchangeDialog({
 
   const requiresReason = () => {
     if (!exchange) return false
-    if (!isRequester) return true // Owner always needs reason
-    return ["accepted", "in_progress"].includes(exchange.status)
+    return true // ทุกกรณีต้องระบุเหตุผล เพื่อให้เจ้าของสิ่งของทราบ
   }
 
   const handleConfirm = async () => {
@@ -52,20 +51,22 @@ export function CancelExchangeDialog({
   }
 
   const isRequired = requiresReason()
+  const itemLabel = exchange?.itemTitle?.trim()
+    ? (exchange.itemTitle.length > 36 ? exchange.itemTitle.slice(0, 36) + "…" : exchange.itemTitle)
+    : "รายการนี้"
 
   return (
     <UnifiedModal
       open={open}
       onOpenChange={onOpenChange}
-      size="md"
+      size="sm"
       title="ยืนยันการยกเลิก"
-      description={`คุณต้องการยกเลิกการแลกเปลี่ยน "${exchange?.itemTitle}" ใช่หรือไม่?`}
-      icon={<XCircle className="h-5 w-5" />}
-      headerClassName="border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20"
+      description={`ยกเลิกการแลกเปลี่ยน "${itemLabel}" ใช่หรือไม่?`}
       footer={
         <UnifiedModalActions
           onCancel={() => onOpenChange(false)}
           onSubmit={handleConfirm}
+          cancelVariant="outline"
           submitText={processing ? "กำลังพิจารณา..." : "ยืนยันยกเลิก"}
           submitVariant="destructive"
           submitDisabled={processing || (isRequired && !reason.trim())}
@@ -88,11 +89,6 @@ export function CancelExchangeDialog({
           />
           <p className="text-[11px] text-muted-foreground text-right">{reason.length}/300</p>
         </div>
-      )}
-      {!isRequired && (
-        <p className="text-sm text-muted-foreground">
-          คุณสามารถยกเลิกการแลกเปลี่ยนนี้ได้เนื่องจากยังอยู่ในสถานะรอดำเนินการ
-        </p>
       )}
     </UnifiedModal>
   )
@@ -118,15 +114,15 @@ export function DeleteExchangeDialog({
       open={open}
       onOpenChange={onOpenChange}
       size="sm"
-      title="ยืนยันการลบแชท"
-      description={`คุณต้องการลบแชทการแลกเปลี่ยน "${exchange?.itemTitle}" ใช่หรือไม่?`}
+      title="ซ่อนแชทจากรายการ"
+      description={`แชทจะหายจากรายการของคุณ แต่อีกฝ่ายยังเห็นประวัติแชทได้ ยืนยันซ่อน "${exchange?.itemTitle}" ใช่หรือไม่?`}
       icon={<Trash2 className="h-5 w-5" />}
       headerClassName="border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20"
       footer={
         <UnifiedModalActions
           onCancel={() => onOpenChange(false)}
           onSubmit={onConfirm}
-          submitText={deleting ? "กำลังลบ..." : "ยืนยันลบ"}
+          submitText={deleting ? "กำลังซ่อน..." : "ยืนยันซ่อน"}
           submitVariant="destructive"
           submitDisabled={deleting}
           loading={deleting}

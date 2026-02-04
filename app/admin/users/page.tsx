@@ -29,7 +29,7 @@ import {
   Search
 } from "lucide-react"
 import { UserDetailModal } from "@/components/admin/admin-modals"
-import { ActionDialog } from "@/components/admin/action-dialog"
+import { ActionDialog, type SuspendDuration } from "@/components/admin/action-dialog"
 import { Input } from "@/components/ui/input"
 
 interface UserWithReports extends User {
@@ -266,7 +266,7 @@ export default function AdminReportedUsersPage() {
     }
   }
 
-  const handleAction = async (reason: string, suspendDays?: number) => {
+  const handleAction = async (reason: string, suspendDuration?: SuspendDuration) => {
     if (!selectedUser || !user || !actionDialog.type) return
 
     try {
@@ -284,15 +284,26 @@ export default function AdminReportedUsersPage() {
         )
         toast({ title: "ออกคำเตือนสำเร็จ" })
       } else if (type === 'suspend') {
+        const d = suspendDuration ?? { value: 7, unit: "day" as const }
+        const suspendDays = d.unit === "day" ? d.value : undefined
+        const suspendMinutes =
+          d.unit === "minute" ? d.value : d.unit === "hour" ? d.value * 60 : undefined
         await updateUserStatus(
           selectedUser.uid,
           'SUSPENDED',
           user.uid,
           user.email || "",
           reason || "ระงับการใช้งานชั่วคราว",
-          suspendDays || 7
+          suspendDays,
+          suspendMinutes
         )
-        toast({ title: "ระงับผู้ใช้สำเร็จ", description: `ระงับ ${suspendDays} วัน` })
+        const desc =
+          d.unit === "day"
+            ? `ระงับ ${d.value} วัน`
+            : d.unit === "hour"
+              ? `ระงับ ${d.value} ชั่วโมง`
+              : `ระงับ ${d.value} นาที`
+        toast({ title: "ระงับผู้ใช้สำเร็จ", description: desc })
       } else if (type === 'ban') {
         await updateUserStatus(
           selectedUser.uid,

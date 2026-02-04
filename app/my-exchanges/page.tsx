@@ -4,13 +4,13 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { authFetchJson } from "@/lib/api-client"
-import { cancelExchange, deleteExchange, createNotification } from "@/lib/firestore"
+import { cancelExchange, hideExchange, createNotification, respondToExchange } from "@/lib/firestore"
 import type { Exchange } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, MessageCircle, X, Trash2, AlertTriangle, RefreshCw } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
+import { Loader2, MessageCircle, X, Trash2, AlertTriangle, RefreshCw, CheckCheck, XCircle } from "lucide-react"
+import { format, isToday, isYesterday } from "date-fns"
 import { th } from "date-fns/locale"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
@@ -21,6 +21,7 @@ export default function MyExchangesPage() {
   const [exchanges, setExchanges] = useState<Exchange[]>([])
   const [loading, setLoading] = useState(true)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [respondingId, setRespondingId] = useState<string | null>(null)
   const [exchangeToCancel, setExchangeToCancel] = useState<Exchange | null>(null)
   
   // cancelReason moved to CancelExchangeDialog to prevent page re-renders
@@ -101,10 +102,11 @@ export default function MyExchangesPage() {
       // Notify the other party
       const recipientId = user.uid === exchangeToCancel.ownerId ? exchangeToCancel.requesterId : exchangeToCancel.ownerId
       
+      const reasonText = reason.trim() ? `. เหตุผล: ${reason.trim()}` : ""
       await createNotification({
         userId: recipientId,
         title: "การแลกเปลี่ยนถูกยกเลิก",
-        message: `การแลกเปลี่ยน "${exchangeToCancel.itemTitle}" ถูกยกเลิกโดยอีกฝ่าย`,
+        message: `การแลกเปลี่ยน "${exchangeToCancel.itemTitle}" ถูกยกเลิกโดยอีกฝ่าย${reasonText}`,
         type: "exchange",
         relatedId: exchangeToCancel.id,
         senderId: user.uid,
@@ -158,6 +160,34 @@ export default function MyExchangesPage() {
     }
   }
 
+  // เจ้าของโพสเท่านั้น ตอบรับ/ปฏิเสธได้ เมื่อสถานะรอการตอบรับ
+  const canRespond = (exchange: Exchange, isRequester: boolean) => {
+    return !isRequester && exchange.status === "pending"
+  }
+
+  const handleRespond = async (exchangeId: string, action: "accept" | "reject") => {
+    if (!user) return
+    setRespondingId(exchangeId)
+    try {
+      await respondToExchange(exchangeId, action, user.uid)
+      toast({
+        title: action === "accept" ? "ตอบรับแล้ว" : "ปฏิเสธแล้ว",
+        description: action === "accept"
+          ? "การแลกเปลี่ยนได้รับการตอบรับ แล้วสามารถเปิดแชทเพื่อนัดหมายได้"
+          : "คำขอถูกปฏิเสธแล้ว",
+      })
+      await loadExchanges()
+    } catch (error: unknown) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: error instanceof Error ? error.message : "ไม่สามารถดำเนินการได้",
+        variant: "destructive",
+      })
+    } finally {
+      setRespondingId(null)
+    }
+  }
+
   // Check if exchange can be deleted
   const canDelete = (exchange: Exchange) => {
     return ["cancelled", "completed", "rejected"].includes(exchange.status)
@@ -168,11 +198,11 @@ export default function MyExchangesPage() {
 
     setDeleting(true)
     try {
-      await deleteExchange(exchangeToDelete.id)
+      await hideExchange(exchangeToDelete.id)
 
       toast({
-        title: "ลบสำเร็จ",
-        description: "ลบแชทการแลกเปลี่ยนแล้ว",
+        title: "ซ่อนจากรายการแล้ว",
+        description: "แชทจะหายจากรายการของคุณ แต่อีกฝ่ายยังเห็นได้",
       })
 
       await loadExchanges()
@@ -280,18 +310,55 @@ export default function MyExchangesPage() {
                     <CardContent className="pt-0">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(createdDate, { addSuffix: true, locale: th })}
+                          {isToday(createdDate)
+                            ? format(createdDate, "HH:mm", { locale: th })
+                            : isYesterday(createdDate)
+                              ? `เมื่อวาน ${format(createdDate, "HH:mm", { locale: th })}`
+                              : createdDate.getFullYear() === new Date().getFullYear()
+                                ? format(createdDate, "d MMM HH:mm", { locale: th })
+                                : format(createdDate, "d MMM yyyy HH:mm", { locale: th })}
                         </div>
                         
                         {/* Actions */}
                         <div className="flex flex-wrap gap-2">
-                          {/* Chat Button */}
-                          <Button asChild size="sm" className="gap-1.5">
-                            <Link href={`/chat/${exchange.id}`}>
-                              <MessageCircle className="h-4 w-4" />
-                              <span className="hidden sm:inline">เปิดแชท</span>
-                            </Link>
-                          </Button>
+                          {/* เจ้าของโพส: ตอบรับ / ปฏิเสธ เมื่อสถานะรอการตอบรับ */}
+                          {canRespond(exchange, isRequester) && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                                disabled={respondingId === exchange.id}
+                                onClick={() => handleRespond(exchange.id, "accept")}
+                              >
+                                {respondingId === exchange.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <CheckCheck className="h-4 w-4" />
+                                )}
+                                <span className="hidden sm:inline">ตอบรับ</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-destructive border-destructive/50 hover:bg-destructive/10"
+                                disabled={respondingId === exchange.id}
+                                onClick={() => handleRespond(exchange.id, "reject")}
+                              >
+                                <XCircle className="h-4 w-4" />
+                                <span className="hidden sm:inline">ปฏิเสธ</span>
+                              </Button>
+                            </>
+                          )}
+
+                          {/* Chat Button - ไม่แสดงเมื่อยกเลิกหรือปฏิเสธแล้ว */}
+                          {exchange.status !== "cancelled" && exchange.status !== "rejected" && (
+                            <Button asChild size="sm" className="gap-1.5">
+                              <Link href={`/chat/${exchange.id}`}>
+                                <MessageCircle className="h-4 w-4" />
+                                <span className="hidden sm:inline">เปิดแชท</span>
+                              </Link>
+                            </Button>
+                          )}
 
                           {/* Cancel Button */}
                           {canCancel(exchange, isRequester) && (

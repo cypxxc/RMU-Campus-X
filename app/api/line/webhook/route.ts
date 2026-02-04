@@ -58,7 +58,7 @@ async function firestoreUpdate(documentPath: string, fields: Record<string, unkn
 
 // ============ LINE Chat Relay (แชทระหว่างผู้โพส-ผู้รับผ่านบอท) ============
 const CHAT_SESSION_TIMEOUT_MS = 30 * 60 * 1000   // 30 นาที
-const LIST_CHOICE_TIMEOUT_MS = 2 * 60 * 1000    // 2 นาที (เลือกรายการ)
+const LIST_CHOICE_TIMEOUT_MS = 15 * 60 * 1000   // 15 นาที (เลือกรายการแชท)
 
 const LINE_CHAT_SESSIONS = "lineChatSessions"
 
@@ -434,10 +434,11 @@ async function handleTextMessage(event: LineEvent) {
     }
 
     const session = await getChatSession(lineUserId)
-    const num = /^[1-9]$/.exec(text)
-    if (session?.exchangeIds && session.exchangeIds.length > 0 && num) {
-      const idx = parseInt(text, 10) - 1
-      if (idx < session.exchangeIds.length) {
+    // รองรับ "1", "2", "1-1", "10" ฯลฯ — ดึงเลขตัวแรกมาใช้เป็นลำดับ
+    const numMatch = text.match(/^(\d+)/)
+    if (session?.exchangeIds && session.exchangeIds.length > 0 && numMatch) {
+      const idx = parseInt(numMatch[1], 10) - 1
+      if (idx >= 0 && idx < session.exchangeIds.length) {
         const exchangeId = session.exchangeIds[idx]!
         const userId = await getUserIdByLineUserId(lineUserId)
         if (!userId) {
@@ -468,8 +469,14 @@ async function handleTextMessage(event: LineEvent) {
         ])
         return
       }
+      // เลขที่เลือกเกินช่วง — แจ้งให้เลือกใหม่
+      await sendReplyMessage(event.replyToken, [
+        { type: "text", text: `⚠️ กรุณาเลือกเลข 1-${session.exchangeIds.length} เท่านั้น\n\nพิมพ์ "แชท" เพื่อดูรายการใหม่` },
+      ])
+      return
     }
 
+    // ส่งข้อความในห้องแชท (บันทึกลง Firestore ด้วย — ให้โผล่ในห้องแชทบนเว็บแอป)
     if (session?.exchangeId) {
       const userId = await getUserIdByLineUserId(lineUserId)
       if (!userId) {
@@ -485,15 +492,29 @@ async function handleTextMessage(event: LineEvent) {
       }
       const db = getAdminDb()
       const senderDoc = await db.collection("users").doc(userId).get()
-      const senderName = senderDoc.exists ? ((senderDoc.data()?.displayName as string) || (senderDoc.data()?.email as string) || "ผู้ใช้").split("@")[0] : "ผู้ใช้"
+      const senderData = senderDoc.exists ? senderDoc.data() : null
+      const senderEmail = (senderData?.email as string) ?? ""
+      const senderName = (senderData?.displayName as string) || (senderData?.email as string) || "ผู้ใช้"
+      const senderNameShort = senderName.split("@")[0] ?? "ผู้ใช้"
+
+      // บันทึกลง chatMessages — ข้อความจาก LINE จะโผล่ในห้องแชทบนเว็บแอปเหมือนส่งจากเว็บ
+      await db.collection("chatMessages").add({
+        exchangeId: session.exchangeId,
+        senderId: userId,
+        senderEmail,
+        message: text,
+        createdAt: FieldValue.serverTimestamp(),
+      })
+
+      // แจ้งอีกฝ่ายผ่าน LINE (ถ้าเชื่อม LINE อยู่)
       await sendPushMessage(other.lineUserId, [
         {
           type: "text",
-          text: `💬 จาก ${senderName} (รายการ: ${other.itemTitle})\n\n${text}`,
+          text: `💬 จาก ${senderNameShort} (รายการ: ${other.itemTitle})\n\n${text}`,
         },
       ])
       await setChatSession(lineUserId, { exchangeId: session.exchangeId })
-      await sendReplyMessage(event.replyToken, [{ type: "text", text: "✓ ส่งแล้ว" }])
+      await sendReplyMessage(event.replyToken, [{ type: "text", text: "✓ ส่งแล้ว (แสดงในแชทบนเว็บด้วย)" }])
       return
     }
 

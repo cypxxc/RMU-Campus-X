@@ -1,6 +1,7 @@
 /**
  * GET /api/users/[id] – โปรไฟล์สาธารณะ (ไม่ต้อง auth)
  * คืนเฉพาะ displayName, photoURL, bio, uid, rating, status
+ * เมื่อ id === 'me' จะ forward ไป GET /api/users/me (ต้องมี Authorization)
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -8,12 +9,18 @@ import { getAdminDb } from "@/lib/firebase-admin"
 import { ApiErrors } from "@/lib/api-response"
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: userId } = await params
     if (!userId) return NextResponse.json({ error: "Missing user ID" }, { status: 400 })
+
+    // เมื่อเรียก /api/users/me บางครั้ง Next อาจ match มาที่ [id] ด้วย id=me → forward ไป handler ของ me
+    if (userId === "me") {
+      const { GET: getMe } = await import("../me/route")
+      return getMe(request)
+    }
 
     const db = getAdminDb()
     const snap = await db.collection("users").doc(userId).get()

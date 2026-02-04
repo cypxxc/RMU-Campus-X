@@ -6,16 +6,17 @@ import { useEffect, useState, useRef } from "react"
 import { use } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { collection, query, where, orderBy, onSnapshot, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, setDoc, writeBatch, limit, endBefore, serverTimestamp, Timestamp } from "firebase/firestore"
+import { doc, setDoc, onSnapshot, serverTimestamp, collection, query, where, orderBy, limit } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
-import { createNotification, getItemById, confirmExchange } from "@/lib/firestore"
+import { createNotification, getItemById, confirmExchange, getUserProfile, respondToExchange } from "@/lib/firestore"
+import { authFetchJson } from "@/lib/api-client"
 import type { Exchange, ChatMessage, Item } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Loader2, CheckCheck, AlertTriangle, ChevronDown, Package, MessageCircle, MoreVertical, Pencil, Trash2, Check, X } from "lucide-react"
+import { Send, Loader2, CheckCheck, AlertTriangle, Package, MessageCircle, MoreVertical, Pencil, Trash2, Check, X, XCircle } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +34,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { formatDistanceToNow } from "date-fns"
+import Link from "next/link"
+import { format, isToday, isYesterday } from "date-fns"
 import { th } from "date-fns/locale"
 import { ReportModal } from "@/components/report-modal"
 import { ChatImageUpload } from "@/components/chat/chat-image-upload"
@@ -61,21 +63,31 @@ export default function ChatPage({
   const [otherTyping, setOtherTyping] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState("")
+  const [responding, setResponding] = useState(false)
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const oldestMessageRef = useRef<ChatMessage | null>(null)
   const mountedRef = useRef(true)
 
-  const messages = [...olderMessages, ...newestMessages]
+  // ลบข้อความซ้ำ (อาจเกิดจาก optimistic update กับ real-time listener) — เก็บตาม id แรกที่เจอ
+  const messages = (() => {
+    const combined = [...olderMessages, ...newestMessages]
+    const seen = new Set<string>()
+    return combined.filter((m) => {
+      if (seen.has(m.id)) return false
+      seen.add(m.id)
+      return true
+    })
+  })()
 
   // Image Upload State
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null)
   
   const [showReportModal, setShowReportModal] = useState(false)
-  const [reportType, setReportType] = useState<"chat_report" | "user_report">("chat_report")
   const [reportTargetId, setReportTargetId] = useState<string | null>(null)
-  
+  const [otherUserDisplayName, setOtherUserDisplayName] = useState<string | null>(null)
+
   // Review State
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [hasReviewed, setHasReviewed] = useState(false)
@@ -98,9 +110,53 @@ export default function ChatPage({
       return
     }
     loadExchange()
-    const unsubscribe = subscribeToMessages()
-    return () => unsubscribe()
   }, [exchangeId, user, authLoading])
+
+  // Real-time ข้อความแชท (แบบ Facebook) — ใช้ Firestore onSnapshot แทน polling
+  const MESSAGE_PAGE_SIZE = 50
+  useEffect(() => {
+    if (!user || !exchangeId) return
+    const db = getFirebaseDb()
+    const q = query(
+      collection(db, "chatMessages"),
+      where("exchangeId", "==", exchangeId),
+      orderBy("createdAt", "desc"),
+      limit(MESSAGE_PAGE_SIZE)
+    )
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        if (!mountedRef.current) return
+        const list: ChatMessage[] = snapshot.docs.map((d) => {
+          const data = d.data()
+          const toIso = (v: unknown) =>
+            v && typeof (v as { toDate?: () => Date }).toDate === "function"
+              ? (v as { toDate: () => Date }).toDate().toISOString()
+              : undefined
+          return {
+            id: d.id,
+            exchangeId: data.exchangeId,
+            senderId: data.senderId,
+            senderEmail: data.senderEmail ?? "",
+            message: data.message ?? "",
+            createdAt: (toIso(data.createdAt) ?? new Date().toISOString()) as unknown as ChatMessage["createdAt"],
+            imageUrl: data.imageUrl ?? null,
+            imageType: data.imageType ?? null,
+            readAt: data.readAt != null ? (toIso(data.readAt) as unknown as ChatMessage["readAt"]) : undefined,
+            updatedAt: data.updatedAt != null ? toIso(data.updatedAt) : undefined,
+          } as ChatMessage
+        })
+        const ordered = [...list].reverse()
+        setNewestMessages(ordered)
+        if (ordered.length > 0) oldestMessageRef.current = ordered[0] ?? null
+        setHasMoreOlder(snapshot.docs.length >= MESSAGE_PAGE_SIZE)
+      },
+      (err) => {
+        if (mountedRef.current) toast({ title: "โหลดข้อความไม่สำเร็จ", variant: "destructive" })
+      }
+    )
+    return () => unsub()
+  }, [exchangeId, user])
 
   useEffect(() => {
     scrollToBottom()
@@ -108,22 +164,22 @@ export default function ChatPage({
 
   const loadExchange = async () => {
     try {
-      const db = getFirebaseDb()
-      const docRef = doc(db, "exchanges", exchangeId)
-      const docSnap = await getDoc(docRef)
+      const res = await authFetchJson<{ exchange?: Record<string, unknown> }>(
+        `/api/exchanges/${exchangeId}`,
+        { method: "GET" }
+      )
       if (!mountedRef.current) return
-
-      if (docSnap.exists()) {
-        const exchangeData = { id: docSnap.id, ...docSnap.data() } as Exchange
-        setExchange(exchangeData)
-        const itemRes = await getItemById(exchangeData.itemId)
-        if (!mountedRef.current) return
-        if (itemRes.success && itemRes.data) setItem(itemRes.data)
+      const exchangeData = res.data?.exchange as Exchange | undefined
+      if (exchangeData) {
+        setExchange({ ...exchangeData, id: exchangeData.id ?? exchangeId } as Exchange)
+        const itemId = exchangeData.itemId as string
+        if (itemId) {
+          const itemRes = await getItemById(itemId)
+          if (!mountedRef.current) return
+          if (itemRes.success && itemRes.data) setItem(itemRes.data)
+        }
       } else {
-        toast({
-          title: "ไม่พบการแลกเปลี่ยน",
-          variant: "destructive",
-        })
+        toast({ title: "ไม่พบการแลกเปลี่ยน", variant: "destructive" })
         router.push("/dashboard")
       }
     } catch (error: unknown) {
@@ -146,48 +202,30 @@ export default function ChatPage({
     }
   }, [exchange?.status, exchange?.id, user])
 
-  const PAGE_SIZE = 50
-  const LOAD_MORE_SIZE = 20
-
-  const subscribeToMessages = () => {
-    const db = getFirebaseDb()
-    const q = query(
-      collection(db, "chatMessages"),
-      where("exchangeId", "==", exchangeId),
-      orderBy("createdAt", "desc"),
-      limit(PAGE_SIZE)
-    )
-
-    return onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage)
-      const ascending = [...msgs].reverse()
-      setNewestMessages(ascending)
-      if (ascending.length > 0) {
-        oldestMessageRef.current = ascending[0] ?? null
-      }
-      if (msgs.length < PAGE_SIZE) setHasMoreOlder(false)
-    }, (error: unknown) => {
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error instanceof Error ? error.message : "ไม่สามารถโหลดข้อความได้",
-        variant: "destructive",
-      })
+  // โหลดชื่อที่อีกฝั่งตั้งในโปรไฟล์ (displayName) สำหรับแสดงในหัวแชท
+  useEffect(() => {
+    if (!exchange) return
+    const otherId = user?.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
+    if (!otherId) return
+    setOtherUserDisplayName(null)
+    getUserProfile(otherId).then((profile) => {
+      if (mountedRef.current && profile?.displayName) setOtherUserDisplayName(profile.displayName)
     })
-  }
+  }, [exchange?.ownerId, exchange?.requesterId, user?.uid])
+
+  const LOAD_MORE_SIZE = 20
 
   useEffect(() => {
     if (!user || !exchange || newestMessages.length === 0) return
     const otherId = user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
     const unread = newestMessages.filter((m) => m.senderId === otherId && !m.readAt)
     if (unread.length === 0) return
-    const db = getFirebaseDb()
-    const batch = writeBatch(db)
-    const now = Timestamp.now()
-    unread.slice(0, 500).forEach((m) => {
-      batch.update(doc(db, "chatMessages", m.id), { readAt: now })
-    })
-    batch.commit().catch((e) => console.warn("Mark read failed:", e))
-  }, [newestMessages, user?.uid, exchange?.ownerId, exchange?.requesterId, exchange?.id])
+    const messageIds = unread.slice(0, 500).map((m) => m.id)
+    authFetchJson(`/api/chat/${exchangeId}/messages/read`, {
+      method: "POST",
+      body: { messageIds },
+    }).catch((e) => console.warn("Mark read failed:", e))
+  }, [newestMessages, user?.uid, exchange?.ownerId, exchange?.requesterId, exchange?.id, exchangeId])
 
   const loadMoreOlder = async () => {
     if (!user || loadingOlder || !hasMoreOlder) return
@@ -195,29 +233,16 @@ export default function ChatPage({
     if (!currentOldest) return
     setLoadingOlder(true)
     try {
-      const db = getFirebaseDb()
-      const msgRef = doc(db, "chatMessages", currentOldest.id)
-      const msgSnap = await getDoc(msgRef)
-      if (!msgSnap.exists()) {
-        setHasMoreOlder(false)
-        return
-      }
-      const q = query(
-        collection(db, "chatMessages"),
-        where("exchangeId", "==", exchangeId),
-        orderBy("createdAt", "asc"),
-        endBefore(msgSnap),
-        limit(LOAD_MORE_SIZE)
+      const res = await authFetchJson<{ messages?: ChatMessage[] }>(
+        `/api/chat/${exchangeId}/messages?limit=${LOAD_MORE_SIZE}&beforeId=${encodeURIComponent(currentOldest.id)}`,
+        { method: "GET" }
       )
-      const snap = await getDocs(q)
-      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage)
+      const docs = (res.data?.messages ?? []) as ChatMessage[]
       setOlderMessages((prev) => [...docs, ...prev])
       if (docs.length < LOAD_MORE_SIZE) setHasMoreOlder(false)
+      if (docs.length > 0) oldestMessageRef.current = docs[0] ?? null
     } catch (err) {
-      toast({
-        title: "โหลดข้อความเก่าไม่สำเร็จ",
-        variant: "destructive",
-      })
+      toast({ title: "โหลดข้อความเก่าไม่สำเร็จ", variant: "destructive" })
     } finally {
       setLoadingOlder(false)
     }
@@ -234,16 +259,23 @@ export default function ChatPage({
     if (!exchange || !user || !exchangeId) return
     const db = getFirebaseDb()
     const otherKey = user.uid === exchange.ownerId ? "requesterTypingAt" : "ownerTypingAt"
-    const unsub = onSnapshot(doc(db, "chatTyping", exchangeId), (snap) => {
-      if (!snap.exists()) {
-        setOtherTyping(false)
-        return
+    const unsub = onSnapshot(
+      doc(db, "chatTyping", exchangeId),
+      (snap) => {
+        if (!snap.exists()) {
+          setOtherTyping(false)
+          return
+        }
+        const data = snap.data()
+        const t = data?.[otherKey]
+        const millis = t && typeof (t as { toMillis?: () => number }).toMillis === "function" ? (t as { toMillis: () => number }).toMillis() : 0
+        setOtherTyping(millis > 0 && Date.now() - millis < 5000)
+      },
+      (err) => {
+        // permission-denied หรือ network error — ปิด typing indicator และไม่ throw
+        if (mountedRef.current) setOtherTyping(false)
       }
-      const data = snap.data()
-      const t = data?.[otherKey]
-      const millis = t && typeof (t as { toMillis?: () => number }).toMillis === "function" ? (t as { toMillis: () => number }).toMillis() : 0
-      setOtherTyping(millis > 0 && Date.now() - millis < 5000)
-    })
+    )
     return () => unsub()
   }, [exchangeId, exchange?.ownerId, user?.uid])
 
@@ -264,11 +296,11 @@ export default function ChatPage({
   const handleEditMessage = async (msg: ChatMessage, newText: string) => {
     if (!user || msg.senderId !== user.uid || !newText.trim()) return
     try {
-      const db = getFirebaseDb()
-      await updateDoc(doc(db, "chatMessages", msg.id), {
-        message: newText.trim(),
-        updatedAt: serverTimestamp(),
-      })
+      const res = await authFetchJson<{ updated?: boolean }>(
+        `/api/chat/${exchangeId}/messages/${msg.id}`,
+        { method: "PATCH", body: { message: newText.trim() } }
+      )
+      if (!res?.data?.updated) throw new Error(res?.error ?? "แก้ไขไม่สำเร็จ")
       setEditingMessageId(null)
       setEditDraft("")
     } catch {
@@ -279,8 +311,11 @@ export default function ChatPage({
   const handleDeleteMessage = async (msg: ChatMessage) => {
     if (!user || msg.senderId !== user.uid) return
     try {
-      const db = getFirebaseDb()
-      await deleteDoc(doc(db, "chatMessages", msg.id))
+      const res = await authFetchJson<{ deleted?: boolean }>(
+        `/api/chat/${exchangeId}/messages/${msg.id}`,
+        { method: "DELETE" }
+      )
+      if (!res?.data?.deleted) throw new Error(res?.error ?? "ลบไม่สำเร็จ")
       setEditingMessageId(null)
     } catch {
       toast({ title: "ลบไม่สำเร็จ", variant: "destructive" })
@@ -293,9 +328,33 @@ export default function ChatPage({
     }
   }
 
+  const isChatClosed = exchange?.status === "cancelled" || exchange?.status === "rejected"
+
+  const handleRespondToRequest = async (action: "accept" | "reject") => {
+    if (!user || !exchange) return
+    setResponding(true)
+    try {
+      await respondToExchange(exchangeId, action, user.uid)
+      toast({
+        title: action === "accept" ? "ตอบรับแล้ว" : "ปฏิเสธแล้ว",
+        description: action === "accept" ? "การแลกเปลี่ยนได้รับการตอบรับ" : "คำขอถูกปฏิเสธแล้ว",
+      })
+      await loadExchange()
+    } catch (error: unknown) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: error instanceof Error ? error.message : "ไม่สามารถดำเนินการได้",
+        variant: "destructive",
+      })
+    } finally {
+      setResponding(false)
+    }
+  }
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if ((!newMessage.trim() && !selectedImageFile) || !user || !exchange) return
+    if (isChatClosed) return
 
     setSending(true)
     try {
@@ -332,16 +391,32 @@ export default function ChatPage({
 
       const messageText = newMessage.trim() || (imageUrl ? "ส่งรูปภาพ" : "")
 
-      const db = getFirebaseDb()
-      await addDoc(collection(db, "chatMessages"), {
-        exchangeId,
-        senderId: user.uid,
-        senderEmail: user.email,
-        message: messageText,
-        imageUrl: imageUrl || null,
-        imageType: imageType || null,
-        createdAt: serverTimestamp(),
-      })
+      const res = await authFetchJson<{ messageId?: string; createdAt?: string }>(
+        `/api/chat/${exchangeId}/messages`,
+        {
+          method: "POST",
+          body: {
+            message: messageText,
+            imageUrl: imageUrl ?? undefined,
+            imageType: imageType ?? undefined,
+          },
+        }
+      )
+      const messageId = res.data?.messageId ?? ""
+      const createdAt = res.data?.createdAt ?? new Date().toISOString()
+      setNewestMessages((prev) => [
+        ...prev,
+        {
+          id: messageId,
+          exchangeId,
+          senderId: user.uid,
+          senderEmail: user.email ?? "",
+          message: messageText,
+          createdAt: createdAt as unknown as ChatMessage["createdAt"],
+          imageUrl: imageUrl ?? null,
+          imageType: imageType ?? null,
+        } as ChatMessage,
+      ])
 
       setNewMessage("")
       setSelectedImageFile(null)
@@ -397,6 +472,14 @@ export default function ChatPage({
 
   const handleConfirm = async (role: "owner" | "requester") => {
     if (!exchange) return
+    if (exchange.status !== "accepted" && exchange.status !== "in_progress") {
+      toast({
+        title: "ไม่สามารถยืนยันได้",
+        description: "การแลกเปลี่ยนต้องได้รับการตอบรับจากเจ้าของก่อน จึงจะกดยืนยันได้",
+        variant: "destructive",
+      })
+      return
+    }
 
     try {
       // Use atomic confirmation transaction
@@ -480,6 +563,7 @@ export default function ChatPage({
   if (!exchange) return null
 
   const isOwner = user?.uid === exchange.ownerId
+  const otherUserId = isOwner ? exchange.requesterId : exchange.ownerId
   const hasConfirmed = isOwner ? exchange.ownerConfirmed : exchange.requesterConfirmed
   const itemImage = item?.imageUrls?.[0] || item?.imageUrl
 
@@ -506,9 +590,16 @@ export default function ChatPage({
                   </div>
                 )}
                 <div>
-                  <CardTitle className="text-lg leading-tight">{exchange.itemTitle}</CardTitle>
+                  <CardTitle className="text-lg leading-tight">
+                    <Link
+                      href={`/profile/${otherUserId}`}
+                      className="hover:underline underline-offset-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded"
+                    >
+                      {otherUserDisplayName ?? (isOwner ? exchange.requesterEmail : exchange.ownerEmail)}
+                    </Link>
+                  </CardTitle>
                   <p className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap mt-1">
-                    {isOwner ? `คุยกับ ${exchange.requesterEmail}` : `คุยกับ ${exchange.ownerEmail}`}
+                    {exchange.itemTitle}
                     {item && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary ml-2 border border-primary/20">
                         {item.category}
@@ -518,39 +609,21 @@ export default function ChatPage({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline" className="h-9 gap-1">
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="hidden sm:inline">รายงาน</span>
-                      <ChevronDown className="h-3 w-3 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        setReportType("chat_report")
-                        setReportTargetId(exchangeId)
-                        setShowReportModal(true)
-                      }}
-                    >
-                      <AlertTriangle className="h-4 w-4 mr-2" />
-                      รายงานแชท
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        setReportType("user_report")
-                        setReportTargetId(isOwner ? exchange.requesterId : exchange.ownerId)
-                        setShowReportModal(true)
-                      }}
-                    >
-                      <AlertTriangle className="h-4 w-4 mr-2" />
-                      รายงานผู้ใช้
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 gap-1"
+                  onClick={() => {
+                    setReportTargetId(isOwner ? exchange.requesterId : exchange.ownerId)
+                    setShowReportModal(true)
+                  }}
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="hidden sm:inline">รายงานผู้ใช้</span>
+                  <span className="sm:hidden">รายงาน</span>
+                </Button>
 
-                {exchange.status === "completed" ? (
+                {exchange.status === "completed" && (
                   <div className="flex items-center gap-2">
                     <div 
                       role="status" 
@@ -573,7 +646,37 @@ export default function ChatPage({
                       </Button>
                     )}
                   </div>
-                ) : (
+                )}
+                {exchange.status === "pending" && (
+                  isOwner ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="h-9 font-bold bg-green-600 hover:bg-green-700 text-white gap-1.5"
+                        disabled={responding}
+                        onClick={() => handleRespondToRequest("accept")}
+                      >
+                        {responding ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                        <span className="hidden sm:inline">ตอบรับ</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 text-destructive border-destructive/50 hover:bg-destructive/10 gap-1.5"
+                        disabled={responding}
+                        onClick={() => handleRespondToRequest("reject")}
+                      >
+                        <XCircle className="h-4 w-4" />
+                        <span className="hidden sm:inline">ปฏิเสธ</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/80 text-muted-foreground text-xs sm:text-sm h-9 border border-border/50">
+                      <span>ปุ่มยืนยันจะแสดงเมื่อเจ้าของตอบรับแล้ว</span>
+                    </div>
+                  )
+                )}
+                {(exchange.status === "accepted" || exchange.status === "in_progress") && (
                   <>
                     {!hasConfirmed && (
                       <AlertDialog>
@@ -590,23 +693,15 @@ export default function ChatPage({
                                 <CheckCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
                               </div>
                               <div>
-                                <AlertDialogTitle>ยืนยันการแลกเปลี่ยน</AlertDialogTitle>
-                                <AlertDialogDescription className="mt-1">
-                                  {isOwner 
-                                    ? "ยืนยันว่าคุณได้ให้สิ่งของและได้รับของแลกเปลี่ยนแล้ว"
-                                    : "ยืนยันว่าคุณได้รับสิ่งของและให้ของแลกเปลี่ยนแล้ว"
-                                  }
+                                <AlertDialogTitle>
+                                  {isOwner ? "ยืนยันการให้" : "ยืนยันการรับ"}
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  {isOwner ? "ยืนยันว่าคุณจะส่งมอบสิ่งของให้ผู้รับ" : "ยืนยันว่าคุณจะรับสิ่งของจากผู้ให้"}
                                 </AlertDialogDescription>
                               </div>
                             </div>
                           </AlertDialogHeader>
-                          <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                            <p className="font-medium mb-1">หมายเหตุ:</p>
-                            <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
-                              <li>กดยืนยันเมื่อคุณได้รับของและตรวจสอบความถูกต้องแล้ว</li>
-                              <li>การแลกเปลี่ยนจะเสร็จสมบูรณ์เมื่อทั้งสองฝ่ายกดยืนยัน</li>
-                            </ul>
-                          </div>
                           <AlertDialogFooter>
                             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
                             <AlertDialogAction 
@@ -614,13 +709,12 @@ export default function ChatPage({
                               className="bg-green-600 hover:bg-green-700 font-bold"
                             >
                               <CheckCheck className="h-4 w-4 mr-2" />
-                              ยืนยันเรียบร้อย
+                              {isOwner ? "ยืนยันการให้" : "ยืนยันการรับ"}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
                     )}
-                    
                     {hasConfirmed && (
                       <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-50 text-green-700 border border-green-200 text-sm font-bold h-9">
                         <CheckCheck className="h-4 w-4" />
@@ -663,7 +757,12 @@ export default function ChatPage({
                   )}
                   {messages.map((msg) => {
                     const isOwnMessage = msg.senderId === user?.uid
-                    const msgDate = msg.createdAt?.toDate?.() || (typeof msg.createdAt === "object" && (msg.createdAt as { toDate?: () => Date }).toDate?.()) || new Date()
+                    const msgDate =
+                      typeof msg.createdAt === "string"
+                        ? new Date(msg.createdAt)
+                        : msg.createdAt?.toDate?.() ||
+                          (typeof msg.createdAt === "object" && (msg.createdAt as { toDate?: () => Date })?.toDate?.()) ||
+                          new Date()
                     const isEditing = editingMessageId === msg.id
 
                     return (
@@ -723,7 +822,13 @@ export default function ChatPage({
                                 )}
                                 <div className="flex items-center gap-1.5 mt-1">
                                   <p className={`text-[10px] ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                                    {formatDistanceToNow(msgDate, { addSuffix: true, locale: th })}
+                                    {isToday(msgDate)
+                                      ? format(msgDate, "HH:mm", { locale: th })
+                                      : isYesterday(msgDate)
+                                        ? `เมื่อวาน ${format(msgDate, "HH:mm", { locale: th })}`
+                                        : msgDate.getFullYear() === new Date().getFullYear()
+                                          ? format(msgDate, "d MMM HH:mm", { locale: th })
+                                          : format(msgDate, "d MMM yyyy HH:mm", { locale: th })}
                                     {msg.updatedAt && " (แก้ไข)"}
                                   </p>
                                   {isOwnMessage && msg.readAt && (
@@ -774,53 +879,61 @@ export default function ChatPage({
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSendMessage} className="border-t p-3 sm:p-4 bg-background">
-              <div className="flex gap-2 items-end">
-                <ChatImageUpload
-                  onImageSelected={(file, preview) => {
-                    setSelectedImageFile(file)
-                    setSelectedImagePreview(preview)
-                  }}
-                  onClear={() => {
-                    setSelectedImageFile(null)
-                    setSelectedImagePreview(null)
-                  }}
-                  selectedImage={selectedImagePreview}
-                  disabled={sending}
-                />
-                <Input
-                  value={newMessage}
-                  onChange={handleInputChange}
-                  placeholder="พิมพ์ข้อความ..."
-                  disabled={sending}
-                  className="min-h-[40px] max-h-[120px] py-2"
-                />
-                <Button 
-                  type="submit" 
-                  disabled={sending || (!newMessage.trim() && !selectedImageFile)}
-                  className="h-10 w-10 p-0 shrink-0"
-                >
-                  {sending ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Send className="h-5 w-5" />
-                  )}
-                  <span className="sr-only">ส่ง</span>
-                </Button>
+            {isChatClosed ? (
+              <div className="border-t p-4 bg-muted/50 text-center text-sm text-muted-foreground">
+                {exchange.status === "cancelled"
+                  ? "การแลกเปลี่ยนนี้ถูกยกเลิกแล้ว ไม่สามารถส่งข้อความได้"
+                  : "การแลกเปลี่ยนนี้ถูกปฏิเสธแล้ว ไม่สามารถส่งข้อความได้"}
               </div>
-            </form>
+            ) : (
+              <form onSubmit={handleSendMessage} className="border-t p-3 sm:p-4 bg-background">
+                <div className="flex gap-2 items-end">
+                  <ChatImageUpload
+                    onImageSelected={(file, preview) => {
+                      setSelectedImageFile(file)
+                      setSelectedImagePreview(preview)
+                    }}
+                    onClear={() => {
+                      setSelectedImageFile(null)
+                      setSelectedImagePreview(null)
+                    }}
+                    selectedImage={selectedImagePreview}
+                    disabled={sending}
+                  />
+                  <Input
+                    value={newMessage}
+                    onChange={handleInputChange}
+                    placeholder="พิมพ์ข้อความ..."
+                    disabled={sending}
+                    className="min-h-[40px] max-h-[120px] py-2"
+                  />
+                  <Button 
+                    type="submit" 
+                    disabled={sending || (!newMessage.trim() && !selectedImageFile)}
+                    className="h-10 w-10 p-0 shrink-0"
+                  >
+                    {sending ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
+                    <span className="sr-only">ส่ง</span>
+                  </Button>
+                </div>
+              </form>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Report Modal */}
+      {/* Report Modal (รายงานผู้ใช้เท่านั้น) */}
       {reportTargetId && exchange && (
         <ReportModal
           open={showReportModal}
           onOpenChange={setShowReportModal}
-          reportType={reportType}
+          reportType="user_report"
           targetId={reportTargetId}
-          targetTitle={reportType === "chat_report" ? exchange.itemTitle : undefined}
+          targetTitle={undefined}
         />
       )}
 

@@ -1,13 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Eye, Save, Loader2 } from "lucide-react"
+import { Save, Loader2 } from "lucide-react"
 
 interface EditProfileFormProps {
   initialDisplayName: string
@@ -24,7 +23,6 @@ export function EditProfileForm({
   userId, 
   onSave 
 }: EditProfileFormProps) {
-  const router = useRouter()
   const [displayName, setDisplayName] = useState(initialDisplayName)
   const [bio, setBio] = useState(initialBio)
   const [saving, setSaving] = useState(false)
@@ -63,20 +61,9 @@ export function EditProfileForm({
 
   return (
     <Card className="border-none shadow-soft">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <div className="space-y-1">
-          <CardTitle className="text-lg">แก้ไขโปรไฟล์</CardTitle>
-          <CardDescription>การเปลี่ยนแปลงจะมีผลทั่วถึงทั้งระบบ</CardDescription>
-        </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="gap-2 h-8"
-          onClick={() => router.push(`/profile/${userId}`)}
-        >
-          <Eye className="h-3.5 w-3.5" />
-          ดูตัวอย่าง
-        </Button>
+      <CardHeader className="space-y-0 pb-4">
+        <CardTitle className="text-lg">แก้ไขโปรไฟล์</CardTitle>
+        <CardDescription>การเปลี่ยนแปลงจะมีผลทั่วถึงทั้งระบบ</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
@@ -109,7 +96,7 @@ export function EditProfileForm({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-bold opacity-50">อีเมล (เปลี่ยนไม่ได้)</Label>
+          <Label className="text-sm font-bold opacity-50">อีเมล (แก้ไขไม่ได้)</Label>
           <Input 
             disabled
             value={email}

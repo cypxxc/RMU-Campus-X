@@ -6,6 +6,16 @@ import type { AdminNotificationInput, ReportCreateDeps } from "@/lib/services/re
 
 const toString = (value: unknown): string => (typeof value === "string" ? value : "")
 
+/** Remove undefined values so Firestore accepts the document */
+function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) continue
+    out[k] = v
+  }
+  return out
+}
+
 export function createFirebaseAdminReportDeps(): ReportCreateDeps {
   const db = getAdminDb()
 
@@ -23,12 +33,12 @@ export function createFirebaseAdminReportDeps(): ReportCreateDeps {
       return snap.exists ? (snap.data() as Record<string, unknown>) : null
     },
     createReport: async (data: Record<string, unknown>) => {
-      const dataToSave = {
+      const dataToSave = stripUndefined({
         ...data,
         status: data.status || "new",
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      }
+      } as Record<string, unknown>)
       const docRef = await db.collection("reports").add(dataToSave)
       return docRef.id
     },

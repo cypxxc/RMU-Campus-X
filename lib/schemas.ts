@@ -15,6 +15,11 @@ export const userProfileSchema = z.object({
     .max(300, "คำแนะนำตัวต้องมีความยาวไม่เกิน 300 ตัวอักษร")
     .optional()
     .transform(val => val ? sanitizeText(val) : val),
+  photoURL: z
+    .string()
+    .max(2000)
+    .optional()
+    .refine((val) => val === undefined || val === "" || /^https?:\/\//.test(val ?? ""), "รูปโปรไฟล์ต้องเป็น URL ที่ถูกต้อง"),
   phoneNumber: z
     .string()
     .regex(/^0[0-9]{9}$/, "เบอร์โทรศัพท์ไม่ถูกต้อง (ต้องเป็นตัวเลข 10 หลัก เริ่มต้นด้วย 0)")
@@ -94,7 +99,7 @@ export const respondExchangeSchema = z.object({
 
 export const cancelExchangeSchema = z.object({
   exchangeId: z.string().min(1, "กรุณาระบุรหัสการแลกเปลี่ยน"),
-  reason: z.string().max(500, "เหตุผลต้องไม่เกิน 500 ตัวอักษร").optional().transform(val => val ? sanitizeText(val) : val),
+  reason: z.string().min(1, "กรุณาระบุเหตุผลการยกเลิก").max(500, "เหตุผลต้องไม่เกิน 500 ตัวอักษร").transform(val => sanitizeText(val)),
 })
 
 // ============ Report Schemas ============
@@ -102,7 +107,6 @@ export const cancelExchangeSchema = z.object({
 export const reportTypeSchema = z.enum([
   "item_report",
   "exchange_report",
-  "chat_report",
   "user_report",
 ])
 

@@ -104,8 +104,21 @@ export default function ProfilePage() {
       setLoading(false)
       loadProfile()
       loadMyItems()
+      loadCompletedExchanges()
     }
   }, [user, authLoading, router])
+
+  useEffect(() => {
+    if (!user) return
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadMyItems()
+        loadCompletedExchanges()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange)
+  }, [user])
 
   const loadCompletedExchanges = async () => {
     if (!user) return
@@ -124,10 +137,6 @@ export default function ProfilePage() {
       if (mountedRef.current) setLoadingExchanges(false)
     }
   }
-
-  useEffect(() => {
-    if (user) loadCompletedExchanges()
-  }, [user])
 
   const loadProfile = async () => {
     if (!user) return
@@ -215,7 +224,7 @@ export default function ProfilePage() {
   }
 
   const handleSaveItemEdit = async () => {
-    if (!selectedItem) return
+    if (!selectedItem || !user) return
     if (!editTitle.trim()) {
       toast({ title: "กรุณากรอกชื่อสิ่งของ", variant: "destructive" })
       return
@@ -233,6 +242,21 @@ export default function ProfilePage() {
         locationDetail: editLocationDetail.trim() || undefined,
         imageUrls: editImageUrls,
       })
+      try {
+        const token = await user.getIdToken()
+        await fetch("/api/line/notify-item", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            userId: user.uid,
+            itemTitle: editTitle.trim(),
+            itemId: selectedItem.id,
+            action: "updated",
+          }),
+        })
+      } catch (lineErr) {
+        console.warn("[LINE] Notify item updated:", lineErr)
+      }
       toast({ title: "บันทึกสำเร็จ" })
       loadMyItems()
       setSelectedItem(null)
@@ -290,9 +314,24 @@ export default function ProfilePage() {
 
 
   const handleDeleteItem = async () => {
-    if (!deleteDialog.itemId) return
+    if (!deleteDialog.itemId || !user) return
+    const itemTitle = myItems.find((i) => i.id === deleteDialog.itemId)?.title ?? ""
     try {
       await deleteItem(deleteDialog.itemId)
+      try {
+        const token = await user.getIdToken()
+        await fetch("/api/line/notify-item", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            userId: user.uid,
+            itemTitle,
+            action: "deleted",
+          }),
+        })
+      } catch (lineErr) {
+        console.warn("[LINE] Notify item deleted:", lineErr)
+      }
       toast({ title: "ลบสิ่งของสำเร็จ" })
       loadMyItems()
     } catch (error: any) {
@@ -418,9 +457,9 @@ export default function ProfilePage() {
                   </div>
                   <div className="text-center border-l">
                     <p className="text-2xl font-black text-primary">
-                      {myItems.filter(i => i.status === 'completed').length}
+                      {completedExchanges.length}
                     </p>
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">สำเร็จ</p>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">แลกเปลี่ยนสำเร็จ</p>
                   </div>
                 </div>
               </CardContent>

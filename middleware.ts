@@ -82,17 +82,8 @@ export async function middleware(request: NextRequest) {
   return response
 }
 
-// Configure which routes to apply middleware to
+// รัน middleware เฉพาะ /api เพื่อลด latency หน้าเพจและ static files
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder files with extensions: svg, png, jpg, jpeg, gif, webp
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ["/api/:path*"],
 }
 

@@ -71,9 +71,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsAdmin(false)
                 const fallback = typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1"
                 setTermsAccepted(fallback)
+                // 401 = token invalid/expired; sign out to keep client in sync (avoid noisy console)
+                if (res.status === 401) {
+                  const { signOut: firebaseSignOut } = await import("firebase/auth")
+                  await firebaseSignOut(auth)
+                }
               }
             } catch (error) {
-              console.error("Auth init error:", error)
+              if (process.env.NODE_ENV === "development") console.warn("Auth profile fetch:", error)
               setIsAdmin(false)
               if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1") {
                 setTermsAccepted(true)

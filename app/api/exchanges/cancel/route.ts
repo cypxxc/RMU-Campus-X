@@ -115,10 +115,14 @@ export async function POST(request: NextRequest) {
     
     if (data) {
         const targetUserId = data.requesterId === userId ? data.ownerId : data.requesterId
+        const cancelReason = (data.cancelReason as string) || ""
+        const message = cancelReason
+          ? `การแลกเปลี่ยน "${data.itemTitle || "สิ่งของ"}" ถูกยกเลิก. เหตุผล: ${cancelReason}`
+          : `การแลกเปลี่ยน "${data.itemTitle || "สิ่งของ"}" ถูกยกเลิก`
         await db.collection("notifications").add({
             userId: targetUserId,
             title: "รายการถูกยกเลิก",
-            message: `การแลกเปลี่ยน "${data.itemTitle || 'สิ่งของ'}" ถูกยกเลิก`,
+            message,
             type: "exchange",
             relatedId: exchangeId,
             createdAt: FieldValue.serverTimestamp(),

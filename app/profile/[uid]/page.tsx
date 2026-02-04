@@ -50,14 +50,21 @@ function toDate(createdAt: unknown): Date | null {
   }
 }
 
+/** ใช้เฉพาะ uid ที่ถูกต้องจาก URL — ป้องกันโหลดรายการทั้งระบบ (แสดงของแอดมิน) เมื่อ postedBy ไม่ส่ง */
+function isValidProfileUid(uid: unknown): uid is string {
+  return typeof uid === "string" && uid.length > 0 && uid !== "undefined" && uid !== "null"
+}
+
 export default function PublicProfilePage() {
   const params = useParams()
   const { user: currentUser } = useAuth()
-  const uid = params?.uid as string
+  const rawUid = params?.uid as string | undefined
+  const uid = isValidProfileUid(rawUid) ? rawUid : ""
 
   const [profile, setProfile] = useState<Partial<User> | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [reviews, setReviews] = useState<any[]>([])
+  const [reviewerProfiles, setReviewerProfiles] = useState<Record<string, { displayName?: string; photoURL?: string }>>({})
   const [loading, setLoading] = useState(true)
   const [loadingItems, setLoadingItems] = useState(true)
   const [loadingReviews, setLoadingReviews] = useState(false)
@@ -71,11 +78,17 @@ export default function PublicProfilePage() {
   }, [])
 
   useEffect(() => {
-    if (uid) {
-      loadProfile()
-      loadUserItems()
-      loadReviews()
+    if (!uid) {
+      setLoading(false)
+      setLoadingItems(false)
+      setProfile(null)
+      setItems([])
+      setReviews([])
+      return
     }
+    loadProfile()
+    loadUserItems()
+    loadReviews()
   }, [uid])
 
   /* Bio Editing State */
@@ -116,12 +129,29 @@ export default function PublicProfilePage() {
   }
 
   const loadReviews = async () => {
+    if (!uid) {
+      setReviews([])
+      setReviewerProfiles({})
+      setLoadingReviews(false)
+      return
+    }
     try {
       setLoadingReviews(true)
       const { getUserReviews } = await import("@/lib/db/reviews")
       const userReviews = await getUserReviews(uid, 50)
       if (!mountedRef.current) return
-      setReviews(userReviews)
+      const filtered = userReviews.filter((r: { targetUserId?: string }) => String(r.targetUserId) === uid)
+      setReviews(filtered)
+
+      const reviewerIds = [...new Set((filtered as { reviewerId?: string }[]).map((r) => r.reviewerId).filter(Boolean))]
+      const profiles: Record<string, { displayName?: string; photoURL?: string }> = {}
+      await Promise.all(
+        reviewerIds.map(async (reviewerId) => {
+          const p = await getUserPublicProfile(reviewerId)
+          if (mountedRef.current && p) profiles[reviewerId] = { displayName: p.displayName, photoURL: p.photoURL }
+        })
+      )
+      if (mountedRef.current) setReviewerProfiles(profiles)
     } catch (error) {
       if (!mountedRef.current) return
       console.error("Error loading reviews:", error)
@@ -146,6 +176,11 @@ export default function PublicProfilePage() {
   }
 
   const loadUserItems = async () => {
+    if (!uid) {
+      setItems([])
+      setLoadingItems(false)
+      return
+    }
     try {
       setLoadingItems(true)
       const { getItems } = await import("@/lib/firestore")
@@ -154,7 +189,7 @@ export default function PublicProfilePage() {
       if (result.success && result.data) {
         let userItems = result.data.items
         userItems = userItems
-          .filter((item: Item) => ["available", "pending"].includes(item.status))
+          .filter((item: Item) => String(item.postedBy) === uid && ["available", "pending"].includes(item.status))
           .sort((a: Item, b: Item) => {
             const timeA = (a.postedAt as { toMillis?: () => number })?.toMillis?.() ?? (typeof a.postedAt === "string" ? new Date(a.postedAt).getTime() : 0)
             const timeB = (b.postedAt as { toMillis?: () => number })?.toMillis?.() ?? (typeof b.postedAt === "string" ? new Date(b.postedAt).getTime() : 0)
@@ -309,19 +344,23 @@ export default function PublicProfilePage() {
                </div>
            ) : reviews.length > 0 ? (
              <div className="grid gap-4">
-               {reviews.map((review) => (
+               {reviews.map((review) => {
+                 const reviewer = reviewerProfiles[review.reviewerId]
+                 const displayName = reviewer?.displayName?.trim() || review.reviewerName
+                 const avatarUrl = reviewer?.photoURL || review.reviewerAvatar
+                 return (
                  <Card key={review.id} className="border-border/60">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-4">
                            <Avatar className="h-10 w-10 shrink-0">
-                             <AvatarImage src={review.reviewerAvatar || undefined} alt={review.reviewerName} className="object-cover" />
+                             <AvatarImage src={avatarUrl || undefined} alt={displayName} className="object-cover" />
                              <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                               {review.reviewerName?.[0] || "?"}
+                               {displayName?.[0] || "?"}
                              </AvatarFallback>
                            </Avatar>
                            <div className="space-y-1">
-                              <h4 className="font-semibold text-sm">{review.reviewerName}</h4>
+                              <h4 className="font-semibold text-sm">{displayName}</h4>
                               <StarRating rating={review.rating} readOnly size={14} />
                               <p className="text-sm text-muted-foreground mt-1">{review.comment ?? "—"}</p>
                               <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded inline-block mt-2">
@@ -335,7 +374,7 @@ export default function PublicProfilePage() {
                       </div>
                     </CardContent>
                  </Card>
-               ))}
+               );})}
              </div>
            ) : (
              <div className="text-center py-16 bg-muted/20 rounded-xl border border-dashed">

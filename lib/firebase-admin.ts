@@ -82,6 +82,28 @@ export function getAdminAuth(): Auth {
   return adminAuth
 }
 
+/** Cache ผลตรวจสถานะ user (ลดการอ่าน Firestore ทุก request) — TTL 30 วินาที */
+const USER_STATUS_CACHE_TTL_MS = 30_000
+const userStatusCache = new Map<string, { status: string; at: number }>()
+
+function getCachedUserStatus(uid: string): string | null {
+  const entry = userStatusCache.get(uid)
+  if (!entry) return null
+  if (Date.now() - entry.at > USER_STATUS_CACHE_TTL_MS) {
+    userStatusCache.delete(uid)
+    return null
+  }
+  return entry.status
+}
+
+function setCachedUserStatus(uid: string, status: string): void {
+  userStatusCache.set(uid, { status, at: Date.now() })
+  if (userStatusCache.size > 500) {
+    const oldest = [...userStatusCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
+    if (oldest) userStatusCache.delete(oldest[0])
+  }
+}
+
 /**
  * Verify Firebase ID token from request
  * @param token - Firebase ID token from Authorization header
@@ -93,24 +115,34 @@ export async function verifyIdToken(token: string, checkStatus: boolean = false)
     const decodedToken = await auth.verifyIdToken(token)
 
     if (checkStatus) {
-      const db = getAdminDb()
-      const userDoc = await db.collection("users").doc(decodedToken.uid).get()
-      
-      if (!userDoc.exists) {
-        console.warn(`[Auth] User ${decodedToken.uid} verified but has no profile (Ghost Account?)`)
-        return null // or throw specific error
+      const uid = decodedToken.uid
+      const cached = getCachedUserStatus(uid)
+      if (cached !== null) {
+        if (cached !== "ACTIVE" && cached !== "WARNING") return null
+        return decodedToken
       }
-      
+
+      const db = getAdminDb()
+      const userDoc = await db.collection("users").doc(uid).get()
+
+      if (!userDoc.exists) {
+        console.warn(`[Auth] User ${uid} verified but has no profile (Ghost Account?)`)
+        return null
+      }
+
       const userData = userDoc.data()
-      if (userData?.status !== 'ACTIVE' && userData?.status !== 'WARNING') {
-         console.warn(`[Auth] User ${decodedToken.uid} verified but status is ${userData?.status}`)
-         return null
+      const status = (userData?.status as string) ?? ""
+      setCachedUserStatus(uid, status)
+
+      if (status !== "ACTIVE" && status !== "WARNING") {
+        console.warn(`[Auth] User ${uid} verified but status is ${status}`)
+        return null
       }
     }
 
     return decodedToken
   } catch (error) {
-    console.error('[Firebase Admin] Token verification failed:', error)
+    console.error("[Firebase Admin] Token verification failed:", error)
     return null
   }
 }

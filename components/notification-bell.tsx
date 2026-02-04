@@ -116,7 +116,14 @@ export function NotificationBell() {
 
   const handleMarkAllRead = async () => {
     if (!user) return
-    await markAllNotificationsAsRead(user.uid)
+    try {
+      await markAllNotificationsAsRead(user.uid)
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+      setUnreadCount(0)
+      toast({ title: "อ่านการแจ้งเตือนทั้งหมดแล้ว" })
+    } catch {
+      toast({ title: "เกิดข้อผิดพลาด", variant: "destructive" })
+    }
   }
 
   const handleDeleteNotification = (e: React.MouseEvent, id: string) => {

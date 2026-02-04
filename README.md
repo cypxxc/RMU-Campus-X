@@ -230,6 +230,26 @@ rmu-campus-x/
 
 ---
 
+## 🚀 Deployment (Vercel) & Environment Checklist
+
+ก่อน deploy ขึ้น Production ควรตรวจสอบค่าต่อไปนี้ใน **Vercel → Project → Settings → Environment Variables**:
+
+| ตัวแปร | บังคับ | การใช้งาน |
+|--------|--------|-----------|
+| `NEXT_PUBLIC_FIREBASE_*` | ✅ | Firebase Client (Auth, config) |
+| `FIREBASE_ADMIN_*` | ✅ | Firebase Admin SDK (Server) |
+| `LINE_CHANNEL_ACCESS_TOKEN` | ✅ | ส่งแจ้งเตือน LINE (ถ้าไม่ตั้ง จะไม่ส่ง LINE) |
+| `LINE_CHANNEL_SECRET` | ✅ | ใช้กับ Webhook / ยืนยัน signature |
+| `NEXT_PUBLIC_BASE_URL` | แนะนำ | ใช้ใน LINE/ลิงก์ (ควรเป็นโดเมนจริง เช่น `https://your-app.vercel.app`) |
+| `CLOUDINARY_*` | ✅ | อัปโหลดรูปภาพ |
+| `UPSTASH_REDIS_REST_*` | แนะนำ | Rate limiting แบบกระจาย (Production) |
+| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | ไม่บังคับ | Error tracking |
+
+- **Project name ใน Vercel:** เปลี่ยนจากชื่อเก่าเป็น `rmu-campus-x` (หรือตามต้องการ) ได้ที่ Settings → General → Project Name เพื่อให้โดเมน `*.vercel.app` ตรงกับชื่อโปรเจกต์
+- คัดลอกจาก `.env.example` ไปใส่ใน Vercel ให้ครบตาม environment (Production / Preview / Development) ตามความต้องการ
+
+---
+
 ## ⭐ ฟีเจอร์หลัก (Key Features)
 
 ### 1. ระบบผู้ใช้งาน (User Management)

@@ -19,19 +19,19 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
  * Zod schema for report creation
  */
 const createReportSchema = z.object({
-  reportType: z.enum(["item_report", "exchange_report", "chat_report", "user_report"], {
+  reportType: z.enum(["item_report", "exchange_report", "user_report"], {
     errorMap: () => ({ message: "กรุณาระบุประเภทการรายงานที่ถูกต้อง" })
   }),
   reasonCode: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   reason: z.string().optional().transform(val => val ? sanitizeText(val) : val),
-  description: z.string().min(1, "กรุณาระบุรายละเอียด").transform(sanitizeText),
+  description: z.string().optional().transform(val => (val ? sanitizeText(val) : "")).default(""),
   targetId: z.string().min(1, "กรุณาระบุเป้าหมายที่ต้องการรายงาน"),
   targetType: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   targetTitle: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   itemId: z.string().optional(),
   itemTitle: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   exchangeId: z.string().optional(),
-  evidenceUrls: z.array(z.string().url()).optional(),
+  evidenceUrls: z.array(z.string().url()).optional().default([]),
 })
 
 type CreateReportInput = z.infer<typeof createReportSchema>
