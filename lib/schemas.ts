@@ -67,7 +67,9 @@ export const itemSchema = z.object({
   locationDetail: z.string().max(200, "รายละเอียดสถานที่ต้องไม่เกิน 200 ตัวอักษร").optional().transform(val => val ? sanitizeText(val) : val),
 })
 
-export const itemUpdateSchema = itemSchema.partial()
+export const itemUpdateSchema = itemSchema.partial().extend({
+  imageUrls: z.array(z.string().url()).max(5).optional(),
+})
 
 // ============ Exchange Schemas ============
 

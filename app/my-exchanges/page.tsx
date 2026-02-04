@@ -9,14 +9,13 @@ import type { Exchange } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, MessageCircle, X, Trash2, AlertTriangle, ArrowLeft, RefreshCw } from "lucide-react"
+import { Loader2, MessageCircle, X, Trash2, AlertTriangle, RefreshCw } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { ReportModal } from "@/components/report-modal"
 import { CancelExchangeDialog, DeleteExchangeDialog } from "@/components/exchange/exchange-action-dialogs"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 export default function MyExchangesPage() {
   const [exchanges, setExchanges] = useState<Exchange[]>([])
@@ -221,16 +220,6 @@ export default function MyExchangesPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6 sm:py-8 max-w-4xl">
-        {/* Back Button */}
-        <Button 
-          variant="ghost" 
-          onClick={() => router.back()} 
-          className="mb-6 -ml-2 gap-2 text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          กลับ
-        </Button>
-
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -261,19 +250,15 @@ export default function MyExchangesPage() {
             <div className="space-y-4 content-auto block">
               {exchanges
                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-                .map((exchange, index) => {
+                .map((exchange) => {
                 const createdDate = typeof exchange.createdAt === "string" ? new Date(exchange.createdAt) : (exchange.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || new Date()
                 const isRequester = user?.uid === exchange.requesterId
 
                 return (
-                  <BounceWrapper 
-                    key={exchange.id} 
-                    variant="bounce-up"
-                    delay={index * 0.05}
-                  >
                     <Card 
+                      key={exchange.id}
                       className="border-border/60 hover:border-border transition-colors"
-                  >
+                    >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -354,7 +339,6 @@ export default function MyExchangesPage() {
                       </div>
                     </CardContent>
                   </Card>
-                  </BounceWrapper>
                 )
               })}
             </div>

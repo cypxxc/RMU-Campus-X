@@ -28,8 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, MessageSquare, Send, Eye, CheckCircle2, Clock, Inbox, ArrowLeft, Search } from "lucide-react"
-import Link from "next/link"
+import { Loader2, MessageSquare, Send, Eye, CheckCircle2, Clock, Inbox, Search } from "lucide-react"
 
 const ticketCategoryLabels: Record<string, string> = {
   general: "ปัญหาทั่วไป",
@@ -265,11 +264,6 @@ export default function AdminSupportPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <Link href="/admin">
-            <Button variant="ghost" size="icon" className="h-9 w-9">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <MessageSquare className="h-8 w-8 text-primary" />
@@ -382,7 +376,7 @@ export default function AdminSupportPage() {
                     try {
                       const profile = await getUserProfile(ticket.userId)
                       setTicketUser(profile)
-                    } catch (e) {
+                    } catch {
                       setTicketUser(null)
                     }
                  }} 
@@ -401,7 +395,7 @@ export default function AdminSupportPage() {
                     try {
                       const profile = await getUserProfile(ticket.userId)
                       setTicketUser(profile)
-                    } catch (e) {
+                    } catch {
                       setTicketUser(null)
                     }
                  }} 
@@ -548,7 +542,7 @@ export default function AdminSupportPage() {
                                    await updateTicketStatus(selectedTicket.id, 'resolved', user.uid, user.email || "")
                                    toast({ title: "เปลี่ยนสถานะเป็น แก้ไขแล้ว" })
                                    setSelectedTicket(null)
-                                } catch (error: any) {
+                                } catch {
                                    toast({ title: "เกิดข้อผิดพลาด", variant: "destructive" })
                                 } finally {
                                    setProcessing(false)

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useAuth } from "@/components/auth-provider"
+import { getAuth } from "firebase/auth"
 import { updateUserProfile } from "@/lib/firestore"
 import { LINE_CONFIG } from "@/lib/line-config"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,7 +63,7 @@ function UnlinkButton({ userId, onSuccess }: { userId?: string, onSuccess?: () =
       })
       
       onSuccess?.()
-    } catch (error) {
+    } catch {
       toast({
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถยกเลิกการเชื่อมต่อได้",
@@ -106,6 +108,68 @@ function UnlinkButton({ userId, onSuccess }: { userId?: string, onSuccess?: () =
   )
 }
 
+function LinkByCodeForm({ userId, onSuccess }: { userId?: string; onSuccess?: () => void }) {
+  const [code, setCode] = useState("")
+  const [loading, setLoading] = useState(false)
+  const { toast } = useToast()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userId || !code.trim()) return
+    const linkCode = code.trim().replace(/\s/g, "")
+    if (linkCode.length !== 6 || !/^\d+$/.test(linkCode)) {
+      toast({ title: "กรุณากรอกรหัส 6 หลักจาก LINE", variant: "destructive" })
+      return
+    }
+    setLoading(true)
+    try {
+      const auth = getAuth()
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
+      if (!token) {
+        toast({ title: "กรุณาเข้าสู่ระบบ", variant: "destructive" })
+        return
+      }
+      const base = typeof window !== "undefined" ? window.location.origin : ""
+      const res = await fetch(`${base}/api/line/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ userId, linkCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast({ title: data.error || "เชื่อมบัญชีไม่สำเร็จ", variant: "destructive" })
+        return
+      }
+      toast({ title: "เชื่อมบัญชี LINE สำเร็จ" })
+      setCode("")
+      onSuccess?.()
+    } catch {
+      toast({ title: "เกิดข้อผิดพลาด", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-2">
+      <Label className="text-sm">หรือกรอกรหัส 6 หลักจาก LINE</Label>
+      <div className="flex gap-2">
+        <Input
+          placeholder="000000"
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          maxLength={6}
+          className="font-mono text-center"
+          disabled={loading}
+        />
+        <Button type="submit" size="sm" disabled={loading || !userId}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "เชื่อมบัญชี"}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
 interface LineNotificationSettingsProps {
   profile?: User | null
   onUpdate?: () => void
@@ -144,7 +208,7 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
       toast({
         title: "บันทึกการตั้งค่าสำเร็จ",
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถบันทึกการตั้งค่าได้",
@@ -203,13 +267,16 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-5 w-5 rounded-full bg-[#00B900] text-white text-xs flex items-center justify-center font-bold">2</span>
-                <span>พิมพ์อีเมล <span className="font-mono text-xs bg-muted px-1 rounded">{user?.email}</span> ในแชท</span>
+                <span>พิมพ์อีเมล <span className="font-mono text-xs bg-muted px-1 rounded">{user?.email}</span> ในแชท หรือพิมพ์ &quot;เชื่อมบัญชี&quot; เพื่อรับรหัส 6 หลัก</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-5 w-5 rounded-full bg-[#00B900] text-white text-xs flex items-center justify-center font-bold">3</span>
-                <span>เชื่อมอัตโนมัติ! 🎉</span>
+                <span>เชื่อมอัตโนมัติ หรือกรอกรหัสด้านล่าง</span>
               </div>
             </div>
+
+            {/* Link by code */}
+            <LinkByCodeForm userId={user?.uid} onSuccess={onUpdate} />
           </div>
         ) : (
           // Already linked - show notification settings

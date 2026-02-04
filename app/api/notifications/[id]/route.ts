@@ -23,7 +23,8 @@ export async function PATCH(
     const db = getAdminDb()
     const ref = db.collection("notifications").doc(notificationId)
     const snap = await ref.get()
-    if (!snap.exists) return ApiErrors.notFound("Notification not found")
+    // ข้อมูลเก่าหรือถูกลบไปแล้ว → ถือว่าสำเร็จ (idempotent)
+    if (!snap.exists) return NextResponse.json({ success: true, message: "Already removed" })
 
     const data = snap.data()
     if (data?.userId !== decoded.uid) return ApiErrors.forbidden("Not your notification")
@@ -53,7 +54,8 @@ export async function DELETE(
     const db = getAdminDb()
     const ref = db.collection("notifications").doc(notificationId)
     const snap = await ref.get()
-    if (!snap.exists) return ApiErrors.notFound("Notification not found")
+    // ข้อมูลเก่าหรือถูกลบไปแล้ว → ถือว่าสำเร็จ (idempotent)
+    if (!snap.exists) return NextResponse.json({ success: true, message: "Already deleted" })
 
     const data = snap.data()
     if (data?.userId !== decoded.uid) return ApiErrors.forbidden("Not your notification")

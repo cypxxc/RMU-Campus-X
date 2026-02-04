@@ -13,7 +13,7 @@ import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal
 import { useToast } from "@/hooks/use-toast"
 import { useImageUpload } from "@/hooks/use-image-upload"
 import type { ItemCategory } from "@/types"
-import { X, Loader2, ImagePlus, Package } from 'lucide-react'
+import { X, Loader2, ImagePlus, Package, MapPin } from "lucide-react"
 import Image from "next/image"
 import { isOnCooldown, getRemainingCooldown, recordAction, loadCooldownFromStorage, formatCooldownTime } from "@/lib/rate-limit"
 import { CATEGORY_OPTIONS, LOCATION_OPTIONS } from "@/lib/constants"
@@ -29,6 +29,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState<ItemCategory>("other")
   const [location, setLocation] = useState("")
+  const [locationDetail, setLocationDetail] = useState("")
   const [loading, setLoading] = useState(false)
   const [userDisplayName, setUserDisplayName] = useState<string>("")
   const { user } = useAuth()
@@ -91,6 +92,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
     setDescription("")
     setCategory("other")
     setLocation("")
+    setLocationDetail("")
     clearImages()
   }
 
@@ -116,6 +118,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
       description,
       category,
       location,
+      locationDetail: locationDetail || undefined,
     })
 
     if (!validationResult.success) {
@@ -156,6 +159,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
         description,
         category,
         location,
+        locationDetail: locationDetail.trim() || undefined,
         imageUrl: images[0] || "", // First image for backward compatibility
         imageUrls: images,
         status: "available",
@@ -230,19 +234,18 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
       onOpenChange={handleClose}
       size="lg"
       title="โพสต์สิ่งของ"
-      description="แบ่งปันสิ่งของที่ไม่ใช้แล้วกับเพื่อนนักศึกษา"
       icon={<Package className="h-5 w-5" />}
       footer={
         <UnifiedModalActions
           onCancel={handleClose}
           submitText="โพสต์สิ่งของ"
-          submitDisabled={loading || !title.trim() || !description.trim()}
+          submitDisabled={loading || !title.trim() || !description.trim() || !location.trim()}
           loading={loading}
           submitButton={
             <Button 
               type="button"
               onClick={handleButtonClick}
-              disabled={loading || !title.trim() || !description.trim()}
+              disabled={loading || !title.trim() || !description.trim() || !location.trim()}
               className="flex-1 font-bold h-11 shadow-md"
             >
               {loading ? (
@@ -295,55 +298,66 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               aria-describedby={errors.description ? "description-error" : undefined}
               className={`resize-none ${errors.description ? "border-destructive focus-visible:ring-destructive" : ""}`}
             />
+            <p className="text-xs text-muted-foreground">รายละเอียดที่ดีจะช่วยเพิ่มโอกาสในการแลกเปลี่ยน</p>
             {errors.description && <p id="description-error" role="alert" className="text-xs text-destructive">{errors.description}</p>}
           </div>
 
-          {/* Category and Location */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                หมวดหมู่ <span className="text-destructive">*</span>
-              </Label>
-              <Select value={category} onValueChange={(value) => setCategory(value as ItemCategory)} disabled={loading}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((option) => {
-                    const IconComponent = option.icon
-                    return (
-                      <SelectItem key={option.value} value={option.value}>
-                        <span className="flex items-center gap-2">
-                          <IconComponent className={`h-4 w-4 ${option.color}`} />
-                          {option.label}
-                        </span>
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">สถานที่ <span className="text-destructive">*</span></Label>
-              <Select value={location} onValueChange={setLocation} disabled={loading} required>
-                <SelectTrigger className={errors.location ? "border-destructive ring-destructive" : ""}>
-                  <SelectValue placeholder="เลือกสถานที่" />
-                </SelectTrigger>
-                <SelectContent>
-                  {LOCATION_OPTIONS.map((loc) => (
-                    <SelectItem key={loc} value={loc}>
-                      {loc}
+          {/* หมวดหมู่ */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">
+              หมวดหมู่ <span className="text-destructive">*</span>
+            </Label>
+            <Select value={category} onValueChange={(value) => setCategory(value as ItemCategory)} disabled={loading}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORY_OPTIONS.map((option) => {
+                  const IconComponent = option.icon
+                  return (
+                    <SelectItem key={option.value} value={option.value}>
+                      <span className="flex items-center gap-2">
+                        <IconComponent className={`h-4 w-4 ${option.color}`} />
+                        {option.label}
+                      </span>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-               {errors.location && <p className="text-xs text-destructive">{errors.location}</p>}
-            </div>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* สถานที่นัดรับ - รูปแบบเดียวกับหน้าแก้ไขสิ่งของในโปรไฟล์ */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-primary" />
+              สถานที่นัดรับ <span className="text-destructive">*</span>
+            </Label>
+            <Select value={location} onValueChange={setLocation} disabled={loading} required>
+              <SelectTrigger className={`w-full ${errors.location ? "border-destructive ring-destructive" : ""}`}>
+                <SelectValue placeholder="เลือกสถานที่" />
+              </SelectTrigger>
+              <SelectContent>
+                {LOCATION_OPTIONS.map((loc) => (
+                  <SelectItem key={loc} value={loc}>
+                    {loc}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="รายละเอียดสถานที่ (ไม่บังคับ)"
+              value={locationDetail}
+              onChange={(e) => setLocationDetail(e.target.value.slice(0, 200))}
+              maxLength={200}
+              className="mt-1"
+              disabled={loading}
+            />
+            {errors.location && <p className="text-xs text-destructive">{errors.location}</p>}
           </div>
 
           {location === "อื่นๆ (ภายในมหาวิทยาลัย)" && (
-            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
               <div className="h-5 w-5 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
                 <span className="text-amber-500 text-[10px] font-bold">!</span>
               </div>

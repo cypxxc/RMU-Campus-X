@@ -64,6 +64,7 @@ export default function ChatPage({
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const oldestMessageRef = useRef<ChatMessage | null>(null)
+  const mountedRef = useRef(true)
 
   const messages = [...olderMessages, ...newestMessages]
 
@@ -86,18 +87,18 @@ export default function ChatPage({
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // รอให้ auth โหลดเสร็จก่อน
-    if (authLoading) return
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
-    // ถ้าไม่มี user หลังจาก auth โหลดเสร็จแล้ว ให้ redirect
+  useEffect(() => {
+    if (authLoading) return
     if (!user) {
       router.push("/login")
       return
     }
-
     loadExchange()
     const unsubscribe = subscribeToMessages()
-
     return () => unsubscribe()
   }, [exchangeId, user, authLoading])
 
@@ -110,16 +111,14 @@ export default function ChatPage({
       const db = getFirebaseDb()
       const docRef = doc(db, "exchanges", exchangeId)
       const docSnap = await getDoc(docRef)
+      if (!mountedRef.current) return
 
       if (docSnap.exists()) {
         const exchangeData = { id: docSnap.id, ...docSnap.data() } as Exchange
         setExchange(exchangeData)
-        
-        // Fetch item details
         const itemRes = await getItemById(exchangeData.itemId)
-        if (itemRes.success && itemRes.data) {
-          setItem(itemRes.data)
-        }
+        if (!mountedRef.current) return
+        if (itemRes.success && itemRes.data) setItem(itemRes.data)
       } else {
         toast({
           title: "ไม่พบการแลกเปลี่ยน",
@@ -128,20 +127,22 @@ export default function ChatPage({
         router.push("/dashboard")
       }
     } catch (error: unknown) {
+      if (!mountedRef.current) return
       toast({
         title: "เกิดข้อผิดพลาด",
         description: error instanceof Error ? error.message : "ไม่สามารถโหลดการแลกเปลี่ยนได้",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      if (mountedRef.current) setLoading(false)
     }
   }
 
-  // Check if user has already reviewed when exchange is completed
   useEffect(() => {
     if (exchange?.status === "completed" && user) {
-      checkExchangeReviewed(exchange.id, user.uid).then(setHasReviewed)
+      checkExchangeReviewed(exchange.id, user.uid).then((value) => {
+        if (mountedRef.current) setHasReviewed(value)
+      })
     }
   }, [exchange?.status, exchange?.id, user])
 

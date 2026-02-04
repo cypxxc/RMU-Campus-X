@@ -6,7 +6,8 @@ import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
 import { QueryProvider } from "@/components/query-provider"
 import { AuthProvider } from "@/components/auth-provider"
-import { SiteFooter } from "@/components/site-footer"
+import { ConditionalFooter } from "@/components/conditional-footer"
+import { NavigationHistoryProvider } from "@/components/navigation-history-provider"
 import { ConsentGuard } from "@/components/consent-guard"
 import "./globals.css"
 
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
     default: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ",
     template: "%s | RMU-Campus X",
   },
-  description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของสำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม",
+  description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม",
   keywords: ["RMU", "Campus X", "แลกเปลี่ยน", "สิ่งของ", "นักศึกษา", "มหาวิทยาลัยราชภัฏมหาสารคาม"],
   authors: [{ name: "RMU-Campus X Team" }],
   icons: {
@@ -44,8 +45,8 @@ export const metadata: Metadata = {
     type: "website",
     locale: "th_TH",
     title: "RMU-Campus X",
-    description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของสำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม",
-    siteName: "RMU-Campus X",
+description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม",
+  siteName: "RMU-Campus X",
   },
   robots: {
     follow: true,
@@ -79,8 +80,10 @@ export default function RootLayout({
               enableSystem
               disableTransitionOnChange
             >
-              {children}
-              <SiteFooter />
+              <NavigationHistoryProvider>
+                {children}
+                <ConditionalFooter />
+              </NavigationHistoryProvider>
               <Toaster />
               <Analytics />
             </ThemeProvider>

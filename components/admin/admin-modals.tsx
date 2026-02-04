@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, Loader2, User, X } from "lucide-react"
+import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, Loader2, User, X, ExternalLink, Calendar, Package, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 // ============ Admin Action Modal ============
 
@@ -276,16 +277,37 @@ interface Warning {
   issuedAt: any
 }
 
+export interface UserDetailExtra {
+  displayName?: string
+  createdAt?: string
+  itemsPosted?: number
+  exchangesCompleted?: number
+  reportsReceived?: number
+  suspendedUntil?: string | null
+  bannedReason?: string | null
+}
+
 interface UserDetailModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   email: string
   stats: UserStats
   user: any
+  userDetail?: UserDetailExtra | null
   warnings?: Warning[]
   onAction: (type: ActionType) => void
   getStatusBadge: (user: any) => React.ReactNode
   formatDate?: (date: any) => string
+}
+
+function formatDateStr(iso?: string): string {
+  if (!iso) return "—"
+  try {
+    const d = new Date(iso)
+    return d.toLocaleString("th-TH", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })
+  } catch {
+    return iso
+  }
 }
 
 export function UserDetailModal({
@@ -294,11 +316,13 @@ export function UserDetailModal({
   email,
   stats,
   user,
+  userDetail = null,
   warnings = [],
   onAction,
   getStatusBadge,
   formatDate,
 }: UserDetailModalProps) {
+  const uid = user?.uid
   return (
     <UnifiedModal
       open={open}
@@ -369,6 +393,73 @@ export function UserDetailModal({
       }
     >
       <div className="space-y-6">
+        {/* ข้อมูลผู้ใช้ (จาก API detail) */}
+        {(userDetail || uid) && (
+          <div>
+            <h3 className="font-semibold text-sm text-foreground/80 mb-3 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              ข้อมูลผู้ใช้
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              {userDetail?.displayName != null && (
+                <div className="p-3 rounded-lg bg-muted/30 border">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">ชื่อที่แสดง</p>
+                  <p className="font-medium truncate">{userDetail.displayName || "—"}</p>
+                </div>
+              )}
+              {userDetail?.createdAt != null && (
+                <div className="p-3 rounded-lg bg-muted/30 border flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">สร้างบัญชีเมื่อ</p>
+                    <p className="font-medium">{formatDateStr(userDetail.createdAt)}</p>
+                  </div>
+                </div>
+              )}
+              {userDetail?.itemsPosted != null && (
+                <div className="p-3 rounded-lg bg-muted/30 border flex items-center gap-2">
+                  <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">จำนวนโพสต์</p>
+                    <p className="font-medium">{userDetail.itemsPosted}</p>
+                  </div>
+                </div>
+              )}
+              {userDetail?.exchangesCompleted != null && (
+                <div className="p-3 rounded-lg bg-muted/30 border flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">แลกเปลี่ยนสำเร็จ</p>
+                    <p className="font-medium">{userDetail.exchangesCompleted}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            {(userDetail?.suspendedUntil || userDetail?.bannedReason) && (
+              <div className="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 text-sm">
+                {userDetail.bannedReason && (
+                  <p><span className="font-medium text-foreground">เหตุผลแบน:</span> <span className="text-muted-foreground">{userDetail.bannedReason}</span></p>
+                )}
+                {userDetail.suspendedUntil && !userDetail.bannedReason && (
+                  <p><span className="font-medium text-foreground">ระงับจนถึง:</span> <span className="text-muted-foreground">{formatDateStr(userDetail.suspendedUntil)}</span></p>
+                )}
+              </div>
+            )}
+            {uid && (
+              <div className="mt-3">
+                <Button variant="outline" size="sm" className="gap-2" asChild>
+                  <Link href={`/profile/${uid}`} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" />
+                    ดูโปรไฟล์สาธารณะ
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Separator className="opacity-50" />
+
         {/* Stats Grid */}
         <div>
           <h3 className="font-semibold text-sm text-foreground/80 mb-3 flex items-center gap-2">

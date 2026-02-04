@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
-import { getItems, deleteItem, updateItem, getExchangesByUser } from "@/lib/firestore"
+import { getItems, deleteItem, updateItem } from "@/lib/firestore"
+import { authFetchJson } from "@/lib/api-client"
 import { updateUserPassword, deleteUserAccount } from "@/lib/auth"
 import type { Item, Exchange } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,11 +24,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Loader2, Shield, Package, Trash2, Edit, Save, ArrowLeft, History, Camera, AlertTriangle } from "lucide-react"
+import { Loader2, Package, Trash2, Edit, Save, History, Camera, AlertTriangle, ImagePlus, X, MapPin } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 import Image from "next/image"
-import { uploadToCloudinary } from "@/lib/storage"
+import { uploadToCloudinary, validateImageFile } from "@/lib/storage"
+import { getFirebaseAuth } from "@/lib/firebase"
+import { IMAGE_UPLOAD_CONFIG, LOCATION_OPTIONS } from "@/lib/constants"
 import { updateUserProfile, getUserProfile } from "@/lib/firestore"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -55,6 +59,10 @@ export default function ProfilePage() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [editTitle, setEditTitle] = useState("")
   const [editDescription, setEditDescription] = useState("")
+  const [editImageUrls, setEditImageUrls] = useState<string[]>([])
+  const [editLocation, setEditLocation] = useState("")
+  const [editLocationDetail, setEditLocationDetail] = useState("")
+  const [uploadingItemImage, setUploadingItemImage] = useState(false)
   const [savingItem, setSavingItem] = useState(false)
   
   // Profile Image State
@@ -70,6 +78,7 @@ export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+  const mountedRef = useRef(true)
 
   const statusLabels: Record<string, string> = {
     available: "พร้อมให้",
@@ -82,6 +91,11 @@ export default function ProfilePage() {
     pending: "badge-warning",
     completed: "bg-muted text-muted-foreground border-border",
   }
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -97,18 +111,17 @@ export default function ProfilePage() {
     if (!user) return
     setLoadingExchanges(true)
     try {
-      const result = await getExchangesByUser(user.uid)
-      if (result.success && result.data) {
-        const completed = result.data.exchanges.filter(e => e.status === 'completed')
-        setCompletedExchanges(completed)
-      } else {
-        setCompletedExchanges([])
-      }
+      const res = await authFetchJson("/api/exchanges", { method: "GET" }) as { data?: { exchanges?: Exchange[] } }
+      if (!mountedRef.current) return
+      const list = res.data?.exchanges ?? []
+      const completed = list.filter((e: Exchange) => e.status === "completed")
+      setCompletedExchanges(completed)
     } catch (error) {
+      if (!mountedRef.current) return
       console.error("Error loading completed exchanges:", error)
       setCompletedExchanges([])
     } finally {
-      setLoadingExchanges(false)
+      if (mountedRef.current) setLoadingExchanges(false)
     }
   }
 
@@ -120,11 +133,13 @@ export default function ProfilePage() {
     if (!user) return
     try {
       const profile = await getUserProfile(user.uid)
+      if (!mountedRef.current) return
       if (profile) {
         setUserProfile(profile)
         setProfileImage(profile.photoURL || null)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (!mountedRef.current) return
       console.error("Error loading profile:", error)
     }
   }
@@ -134,6 +149,7 @@ export default function ProfilePage() {
     setLoadingItems(true)
     try {
       const result = await getItems({ postedBy: user.uid, pageSize: 50 })
+      if (!mountedRef.current) return
       if (result.success && result.data) {
         const list = result.data.items
         setMyItems(list)
@@ -141,10 +157,11 @@ export default function ProfilePage() {
         setMyItems([])
       }
     } catch (error: unknown) {
+      if (!mountedRef.current) return
       console.error("[Profile] Error loading items:", error)
       setMyItems([])
     } finally {
-      setLoadingItems(false)
+      if (mountedRef.current) setLoadingItems(false)
     }
   }
 
@@ -152,6 +169,49 @@ export default function ProfilePage() {
     setSelectedItem(item)
     setEditTitle(item.title)
     setEditDescription(item.description)
+    setEditLocation(item.location || "")
+    setEditLocationDetail(item.locationDetail || "")
+    setEditImageUrls(
+      (item.imageUrls && item.imageUrls.length > 0)
+        ? [...item.imageUrls]
+        : item.imageUrl
+          ? [item.imageUrl]
+          : []
+    )
+  }
+
+  const handleEditItemImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length || !user) return
+    const maxImages = IMAGE_UPLOAD_CONFIG.maxImages
+    const remaining = maxImages - editImageUrls.length
+    if (remaining <= 0) {
+      toast({ title: "เพิ่มรูปได้สูงสุด 5 รูป", variant: "destructive" })
+      e.target.value = ""
+      return
+    }
+    setUploadingItemImage(true)
+    try {
+      const auth = getFirebaseAuth()
+      const token = await auth.currentUser?.getIdToken()
+      const added: string[] = []
+      for (const file of Array.from(files).slice(0, remaining)) {
+        const valid = validateImageFile(file)
+        if (!valid.valid) {
+          toast({ title: "ไฟล์ไม่ถูกต้อง", description: `${file.name}: ${valid.error}`, variant: "destructive" })
+          continue
+        }
+        const url = await uploadToCloudinary(file, "item", token)
+        added.push(url)
+      }
+      if (added.length) setEditImageUrls((prev) => [...prev, ...added].slice(0, maxImages))
+      if (added.length) toast({ title: `เพิ่ม ${added.length} รูปสำเร็จ` })
+    } catch (err: any) {
+      toast({ title: "อัปโหลดไม่สำเร็จ", description: err?.message, variant: "destructive" })
+    } finally {
+      setUploadingItemImage(false)
+      e.target.value = ""
+    }
   }
 
   const handleSaveItemEdit = async () => {
@@ -160,11 +220,18 @@ export default function ProfilePage() {
       toast({ title: "กรุณากรอกชื่อสิ่งของ", variant: "destructive" })
       return
     }
+    if (!editLocation.trim()) {
+      toast({ title: "กรุณาเลือกสถานที่นัดรับ", variant: "destructive" })
+      return
+    }
     setSavingItem(true)
     try {
       await updateItem(selectedItem.id, { 
         title: editTitle.trim(), 
-        description: editDescription.trim() 
+        description: editDescription.trim(),
+        location: editLocation.trim(),
+        locationDetail: editLocationDetail.trim() || undefined,
+        imageUrls: editImageUrls,
       })
       toast({ title: "บันทึกสำเร็จ" })
       loadMyItems()
@@ -292,16 +359,6 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6 sm:py-8 max-w-5xl">
-        {/* Back Button */}
-        <Button 
-          variant="ghost" 
-          onClick={() => router.back()} 
-          className="mb-6 -ml-2 gap-2 text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          กลับ
-        </Button>
-
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Column: Profile Info */}
           <div className="lg:col-span-4 space-y-6">
@@ -357,7 +414,7 @@ export default function ProfilePage() {
                 <div className="mt-8 pt-8 border-t grid grid-cols-2 gap-4">
                   <div className="text-center">
                     <p className="text-2xl font-black text-primary">{myItems.length}</p>
-                    <p className="text--[10px] uppercase tracking-wider font-bold text-muted-foreground">สิ่งของ</p>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">โพส</p>
                   </div>
                   <div className="text-center border-l">
                     <p className="text-2xl font-black text-primary">
@@ -368,34 +425,23 @@ export default function ProfilePage() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card className="border-none shadow-soft bg-muted/30">
-               <CardContent className="p-4 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-background flex items-center justify-center text-muted-foreground">
-                    <Shield className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">บัญชีของคุณปลอดภัย</p>
-                    <p className="text-xs text-muted-foreground">ข้อมูลส่วนตัวถูกจัดเก็บอย่างปลอดภัย</p>
-                  </div>
-               </CardContent>
-            </Card>
           </div>
 
           {/* Right Column: Content Tabs */}
           <div className="lg:col-span-8">
             <Tabs defaultValue="items" className="space-y-6">
-              <TabsList className="bg-muted/50 p-1 border h-12 w-full sm:w-auto justify-start inline-flex">
-                <TabsTrigger value="items" className="px-4 gap-2 h-full">
-                  <Package className="h-4 w-4" />
-                  สิ่งของ
+              <TabsList className="bg-muted/50 p-1 border h-12 w-full sm:w-auto justify-start inline-flex flex-nowrap overflow-x-auto scrollbar-hide">
+                <TabsTrigger value="items" className="px-4 gap-2 h-full shrink-0">
+                  <Package className="h-4 w-4 shrink-0" />
+                  โพส
                 </TabsTrigger>
-                <TabsTrigger value="history" className="px-4 gap-2 h-full">
-                  <History className="h-4 w-4" />
-                  ประวัติแลกเปลี่ยน
+                <TabsTrigger value="history" className="px-4 gap-2 h-full shrink-0">
+                  <History className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">ประวัติแลกเปลี่ยน</span>
+                  <span className="sm:hidden">ประวัติ</span>
                 </TabsTrigger>
-                <TabsTrigger value="settings" className="px-4 gap-2 h-full">
-                  <Settings className="h-4 w-4" />
+                <TabsTrigger value="settings" className="px-4 gap-2 h-full shrink-0">
+                  <Settings className="h-4 w-4 shrink-0" />
                   ตั้งค่า
                 </TabsTrigger>
               </TabsList>
@@ -446,17 +492,18 @@ export default function ProfilePage() {
                        <AlertTriangle className="h-5 w-5" />
                        พื้นที่อันตราย (Danger Zone)
                     </CardTitle>
-                    <CardDescription>การดำเนินการเหล่านี้ไม่สามารถย้อนกลับได้</CardDescription>
+                    <CardDescription>การดำเนินการด้านล่างไม่สามารถย้อนกลับได้ กรุณาตรวจสอบให้ดีก่อนกดดำเนินการ</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-background/50">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 border border-destructive/20 rounded-lg bg-background/50">
                       <div>
                         <h4 className="font-medium text-destructive">ลบบัญชีผู้ใช้</h4>
-                        <p className="text-sm text-muted-foreground">ข้อความ ข้อมูล และสิ่งของทั้งหมดจะถูกลบถาวร</p>
+                        <p className="text-sm text-muted-foreground">บัญชี ข้อความ การแลกเปลี่ยน และสิ่งของทั้งหมดจะถูกลบถาวร</p>
                       </div>
                       <Button 
                         variant="destructive" 
                         onClick={() => setDeleteAccountDialog(true)}
+                        className="shrink-0 w-full sm:w-auto"
                       >
                         ลบบัญชี
                       </Button>
@@ -532,19 +579,55 @@ export default function ProfilePage() {
       >
         {selectedItem && (
           <div className="space-y-4">
-            {/* Image Preview - Compact */}
-            {(selectedItem.imageUrls?.[0] || selectedItem.imageUrl) && (
-              <div className="relative w-full h-32 rounded-lg overflow-hidden bg-linear-to-br from-muted to-muted/50 border shadow-sm group">
-                <Image 
-                  src={selectedItem.imageUrls?.[0] || selectedItem.imageUrl || ''} 
-                  alt={selectedItem.title} 
-                  fill 
-                  className="object-cover group-hover:scale-105 transition-transform duration-300" 
-                  unoptimized 
-                />
+            {/* รูปภาพ - แก้ไข/เพิ่ม/ลบ */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold flex items-center gap-2">
+                <ImagePlus className="h-4 w-4 text-primary" />
+                รูปภาพ ({editImageUrls.length}/{IMAGE_UPLOAD_CONFIG.maxImages})
+              </Label>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {editImageUrls.map((url, index) => (
+                  <div key={`${url}-${index}`} className="relative aspect-square rounded-lg overflow-hidden bg-muted border group">
+                    <Image src={url} alt="" fill className="object-cover" sizes="120px" unoptimized />
+                    <button
+                      type="button"
+                      onClick={() => setEditImageUrls((prev) => prev.filter((_, i) => i !== index))}
+                      className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="ลบรูป"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    {index === 0 && (
+                      <span className="absolute bottom-1 left-1 text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded font-medium">
+                        หลัก
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {editImageUrls.length < IMAGE_UPLOAD_CONFIG.maxImages && (
+                  <label className="aspect-square border-2 border-dashed border-border rounded-lg cursor-pointer bg-muted/30 hover:bg-muted/50 hover:border-primary/50 flex flex-col items-center justify-center gap-1">
+                    {uploadingItemImage ? (
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    ) : (
+                      <>
+                        <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                        <span className="text-[10px] text-muted-foreground">เพิ่มรูป</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      multiple
+                      className="hidden"
+                      onChange={handleEditItemImageUpload}
+                      disabled={uploadingItemImage || savingItem}
+                    />
+                  </label>
+                )}
               </div>
-            )}
-            
+              <p className="text-xs text-muted-foreground">สูงสุด {IMAGE_UPLOAD_CONFIG.maxImages} รูป (JPEG, PNG)</p>
+            </div>
+
             {/* Title Input */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -591,6 +674,34 @@ export default function ProfilePage() {
               <p className="text-xs text-muted-foreground">
                 รายละเอียดที่ดีจะช่วยเพิ่มโอกาสในการแลกเปลี่ยน
               </p>
+            </div>
+
+            {/* สถานที่นัดรับ */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                สถานที่นัดรับ <span className="text-destructive">*</span>
+              </Label>
+              <Select value={editLocation} onValueChange={setEditLocation} disabled={savingItem}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="เลือกสถานที่" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOCATION_OPTIONS.map((loc) => (
+                    <SelectItem key={loc} value={loc}>
+                      {loc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="รายละเอียดสถานที่ (ไม่บังคับ)"
+                value={editLocationDetail}
+                onChange={(e) => setEditLocationDetail(e.target.value.slice(0, 200))}
+                maxLength={200}
+                className="mt-1"
+                disabled={savingItem}
+              />
             </div>
 
             {/* Status Badge */}

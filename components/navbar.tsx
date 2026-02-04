@@ -137,8 +137,8 @@ export function Navbar() {
                 {/* Theme Toggle */}
                 <ModeToggle />
 
-                {/* User Email - Desktop only */}
-                <span className="text-sm text-muted-foreground hidden lg:inline max-w-[150px] truncate">
+                {/* User Email - Desktop only (แสดงเต็ม) */}
+                <span className="text-sm text-muted-foreground hidden lg:inline">
                   {user.email}
                 </span>
 
@@ -170,7 +170,7 @@ export function Navbar() {
                             <User className="h-5 w-5 text-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{user.email}</p>
+                            <p className="text-sm font-medium break-all">{user.email}</p>
                             <p className="text-xs text-muted-foreground">
                               {isAdmin ? "ผู้ดูแลระบบ" : "สมาชิก"}
                             </p>

@@ -18,48 +18,49 @@ import { apiCall, TIMEOUT_CONFIG, type ApiResponse } from "@/lib/api-wrapper";
 import { authFetchJson } from "@/lib/api-client";
 import { createNotification } from "./notifications";
 
-// Exchanges
+const isClient = typeof window !== "undefined";
+
+// Exchanges – บน client ใช้ API ทั้งหมด
 export const createExchange = async (
   exchangeData: Omit<Exchange, "id" | "createdAt" | "updatedAt">
 ) => {
+  if (isClient) {
+    return apiCall(
+      async () => {
+        const res = await authFetchJson<{ data?: { exchangeId?: string } }>("/api/exchanges", {
+          method: "POST",
+          body: {
+            itemId: exchangeData.itemId,
+            itemTitle: exchangeData.itemTitle,
+            ownerId: exchangeData.ownerId,
+            ownerEmail: exchangeData.ownerEmail,
+            requesterId: exchangeData.requesterId,
+            requesterEmail: exchangeData.requesterEmail,
+            requesterName: exchangeData.requesterName,
+          },
+        });
+        const id = res?.data?.exchangeId;
+        if (!id) throw new Error(res?.error || "Failed to create exchange");
+        return id;
+      },
+      "createExchange",
+      TIMEOUT_CONFIG.STANDARD
+    );
+  }
   return apiCall(
     async () => {
       const db = getFirebaseDb();
-
       const result = await runTransaction(db, async (transaction) => {
-        // 1. Check item availability
         const itemRef = doc(db, "items", exchangeData.itemId);
         const itemDoc = await transaction.get(itemRef);
-
-        if (!itemDoc.exists()) {
-          throw new Error("Item not found");
-        }
-
+        if (!itemDoc.exists()) throw new Error("Item not found");
         const item = itemDoc.data() as any;
-        if (item.status !== "available") {
-          throw new Error(
-            `Item is no longer available (status: ${item.status})`
-          );
-        }
-
-        // 2. Create Exchange
+        if (item.status !== "available") throw new Error(`Item is no longer available (status: ${item.status})`);
         const newExchangeRef = doc(collection(db, "exchanges"));
-        transaction.set(newExchangeRef, {
-          ...exchangeData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        // 3. Update Item Status
-        transaction.update(itemRef, {
-          status: "pending",
-          updatedAt: serverTimestamp(),
-        });
-
+        transaction.set(newExchangeRef, { ...exchangeData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        transaction.update(itemRef, { status: "pending", updatedAt: serverTimestamp() });
         return newExchangeRef.id;
       });
-
-      // 4. Notify (outside transaction)
       try {
         await createNotification({
           userId: exchangeData.ownerId,
@@ -68,11 +69,9 @@ export const createExchange = async (
           type: "exchange",
           relatedId: result,
         });
-      } catch (error) {
-        console.error("[createExchange] Notification failed:", error);
-        // Consume error so it doesn't fail the transaction result
+      } catch (e) {
+        console.error("[createExchange] Notification failed:", e);
       }
-
       return result;
     },
     "createExchange",
@@ -80,7 +79,7 @@ export const createExchange = async (
   );
 };
 
-// Pagination support for exchanges
+// Pagination support for exchanges – บน client ใช้ GET /api/exchanges
 export const getExchangesByUser = async (
   userId: string,
   pageSize: number = 20,
@@ -88,6 +87,21 @@ export const getExchangesByUser = async (
 ): Promise<
   ApiResponse<{ exchanges: Exchange[]; lastDoc: any; hasMore: boolean }>
 > => {
+  if (isClient) {
+    return apiCall(
+      async () => {
+        const res = await authFetchJson<{ data?: { exchanges?: Exchange[] } }>("/api/exchanges", { method: "GET" });
+        const list = res?.data?.exchanges ?? [];
+        return {
+          exchanges: list,
+          lastDoc: null,
+          hasMore: false,
+        };
+      },
+      "getExchangesByUser",
+      TIMEOUT_CONFIG.STANDARD
+    );
+  }
   return apiCall(
     async () => {
       const db = getFirebaseDb();
@@ -97,21 +111,12 @@ export const getExchangesByUser = async (
         orderBy("createdAt", "desc"),
         limit(pageSize)
       );
-
-      if (lastDoc) {
-        q = query(q, startAfter(lastDoc));
-      }
-
+      if (lastDoc) q = query(q, startAfter(lastDoc));
       const snapshot = await getDocs(q);
-      const exchanges = snapshot.docs.map(
-        (doc) => ({ id: doc.id, ...doc.data() } as Exchange)
-      );
-
-      const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null;
-
+      const exchanges = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Exchange));
       return {
         exchanges,
-        lastDoc: lastVisible,
+        lastDoc: snapshot.docs[snapshot.docs.length - 1] || null,
         hasMore: snapshot.docs.length === pageSize,
       };
     },
@@ -123,16 +128,27 @@ export const getExchangesByUser = async (
 export const getExchangeById = async (
   id: string
 ): Promise<ApiResponse<Exchange | null>> => {
+  if (isClient) {
+    return apiCall(
+      async () => {
+        try {
+          const res = await authFetchJson<{ exchange?: Exchange & { id?: string } }>(`/api/exchanges/${id}`, { method: "GET" });
+          const ex = (res as { exchange?: Exchange & { id?: string } })?.exchange;
+          if (!ex) return null;
+          return { id: ex.id ?? id, ...ex } as Exchange;
+        } catch {
+          return null;
+        }
+      },
+      "getExchangeById",
+      TIMEOUT_CONFIG.QUICK
+    );
+  }
   return apiCall(
     async () => {
       const db = getFirebaseDb();
-      const docRef = doc(db, "exchanges", id);
-      const docSnap = await getDoc(docRef);
-
-      if (!docSnap.exists()) {
-        return null;
-      }
-
+      const docSnap = await getDoc(doc(db, "exchanges", id));
+      if (!docSnap.exists()) return null;
       return { id: docSnap.id, ...docSnap.data() } as Exchange;
     },
     "getExchangeById",

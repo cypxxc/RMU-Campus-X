@@ -88,7 +88,7 @@ export function EditProfileForm({
             onChange={(e) => setDisplayName(e.target.value)}
             className="h-11 bg-muted/20"
           />
-          <p className="text-[11px] text-muted-foreground">ชื่อนี้จะปรากฏเมื่อคุณแชทหรือประกาศสิ่งของ</p>
+          <p className="text-[11px] text-muted-foreground">ชื่อนี้จะปรากฏเมื่อคุณแชทหรือโพส</p>
           {errors.displayName && <p className="text-xs text-destructive mt-1">{errors.displayName}</p>}
         </div>
         

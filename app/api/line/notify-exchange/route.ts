@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { sendPushMessage } from "@/lib/line"
+import { notifyExchangeRequest } from "@/lib/line"
 import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
@@ -88,19 +88,22 @@ export async function POST(request: NextRequest) {
       (exchange?.requesterName as string | undefined) ||
       (decoded.email ? decoded.email.split("@")[0] : "ผู้ใช้")
 
-    // Send LINE notification
-    await sendPushMessage(lineUserId, [
-      {
-        type: "text",
-        text: `📦 มีคนขอรับสิ่งของของคุณ!
+    let itemImage: string | undefined
+    const itemId = exchange?.itemId as string | undefined
+    if (itemId) {
+      const itemSnap = await db.collection("items").doc(itemId).get()
+      const itemData = itemSnap.data() as { imageUrls?: string[]; imageUrl?: string } | undefined
+      itemImage = itemData?.imageUrls?.[0] ?? itemData?.imageUrl
+    }
 
-🏷️ ${itemTitle}
-👤 จาก: ${requesterName}
-
-🔗 ดูรายละเอียด:
-${BASE_URL}/chat/${exchangeId}`,
-      },
-    ])
+    await notifyExchangeRequest(
+      lineUserId,
+      itemTitle,
+      requesterName,
+      exchangeId,
+      BASE_URL,
+      itemImage
+    )
 
     console.log("[LINE Notify Exchange] Sent successfully!")
     return NextResponse.json({ sent: true })

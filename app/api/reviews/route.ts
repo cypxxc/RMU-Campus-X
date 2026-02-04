@@ -142,7 +142,7 @@ export async function POST(req: Request) {
       })
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, data: { reviewId: `${exchangeId}_${reviewerId}` } })
 
   } catch (error: any) {
     console.error("Review API Error:", error)

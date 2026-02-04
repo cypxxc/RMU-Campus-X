@@ -59,3 +59,9 @@ dataconnect-generated/
 # Bun Cache
 *.db
 bun.lockb.bak
+
+# Local test / debug output
+errors.txt
+test_output.txt
+test_exchanges.txt
+test_rules_output.txt

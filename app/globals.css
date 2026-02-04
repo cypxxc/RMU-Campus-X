@@ -3,56 +3,53 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* RMU University Colors - Modern Blue Theme */
-/* Conveying Trust, Technology, and Professionalism */
+/* RMU University Colors - Light Theme: เขียว-แดง (Green-Red) */
 :root {
-  /* Base colors - Clean white backgrounds */
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(
-    0.2 0.02 260
-  ); /* Dark Slate Blue for text, softer than black */
+  /* Base colors */
+  --background: oklch(0.99 0.005 145);
+  --foreground: oklch(0.22 0.03 260);
 
-  /* Cards - Pure white with subtle distinction */
+  /* Cards */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 260);
+  --card-foreground: oklch(0.22 0.03 260);
 
   /* Popover */
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 260);
+  --popover-foreground: oklch(0.22 0.03 260);
 
-  /* Primary - University Royal Blue */
-  --primary: oklch(0.45 0.16 260); /* Deep Royal Blue */
-  --primary-foreground: oklch(1 0 0); /* White */
+  /* Primary - เขียว (Green) */
+  --primary: oklch(0.42 0.16 145);
+  --primary-foreground: oklch(0.99 0 0);
 
-  /* Secondary - Technologic Cyan/Teal (Accents) */
-  --secondary: oklch(0.95 0.03 240); /* Very light blue/cyan tint */
-  --secondary-foreground: oklch(0.35 0.1 240); /* Darker cyan text */
+  /* Secondary - โทนเขียวอ่อน */
+  --secondary: oklch(0.94 0.04 145);
+  --secondary-foreground: oklch(0.32 0.1 145);
 
-  /* Muted - Neutral Cool Grays */
-  --muted: oklch(0.97 0.01 260);
-  --muted-foreground: oklch(0.5 0.03 260);
+  /* Muted */
+  --muted: oklch(0.96 0.02 145);
+  --muted-foreground: oklch(0.5 0.04 260);
 
-  /* Accent - Highlight Blue */
-  --accent: oklch(0.94 0.04 250);
-  --accent-foreground: oklch(0.35 0.1 260);
+  /* Accent - โทนแดงอ่อน (แดง) */
+  --accent: oklch(0.94 0.05 25);
+  --accent-foreground: oklch(0.38 0.12 25);
 
-  /* Destructive - Standard Red */
-  --destructive: oklch(0.6 0.15 25);
+  /* Destructive - แดง */
+  --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.99 0 0);
 
-  /* Borders - Subtle Blue-Gray */
-  --border: oklch(0.92 0.02 260);
-  --input: oklch(0.92 0.02 260);
-  --ring: oklch(0.45 0.16 260); /* Matches Primary */
+  /* Borders */
+  --border: oklch(0.9 0.03 145);
+  --input: oklch(0.9 0.03 145);
+  --ring: oklch(0.42 0.16 145);
 
-  /* Charts - Adjusted to Blue Theme */
-  --chart-1: oklch(0.45 0.16 260); /* Primary Blue */
-  --chart-2: oklch(0.55 0.15 230); /* Cyan/Teal */
-  --chart-3: oklch(0.35 0.12 280); /* Purple/Indigo */
-  --chart-4: oklch(0.6 0.15 25); /* Red/Orange Accent */
-  --chart-5: oklch(0.65 0.15 60); /* Gold/Yellow Accent */
+  /* Charts - เขียวและแดง */
+  --chart-1: oklch(0.42 0.16 145);
+  --chart-2: oklch(0.55 0.2 25);
+  --chart-3: oklch(0.5 0.14 160);
+  --chart-4: oklch(0.6 0.18 30);
+  --chart-5: oklch(0.55 0.12 75);
 
-  /* Radius - Softer corners */
+  /* Radius */
   --radius: 0.625rem;
 
   /* Modal Sizes */
@@ -63,21 +60,21 @@
   --modal-full: 90vw;
 
   /* Sidebar */
-  --sidebar: oklch(0.98 0.005 260);
-  --sidebar-foreground: oklch(0.2 0.02 260);
-  --sidebar-primary: oklch(0.45 0.16 260);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.96 0.01 260);
-  --sidebar-accent-foreground: oklch(0.2 0.02 260);
-  --sidebar-border: oklch(0.92 0.02 260);
-  --sidebar-ring: oklch(0.45 0.16 260);
+  --sidebar: oklch(0.98 0.01 145);
+  --sidebar-foreground: oklch(0.22 0.03 260);
+  --sidebar-primary: oklch(0.42 0.16 145);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.95 0.03 145);
+  --sidebar-accent-foreground: oklch(0.22 0.03 260);
+  --sidebar-border: oklch(0.9 0.03 145);
+  --sidebar-ring: oklch(0.42 0.16 145);
 
   /* Utility Colors */
-  --success: oklch(0.55 0.15 150); /* Green */
+  --success: oklch(0.5 0.16 145);
   --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.75 0.16 75); /* Amber */
-  --warning-foreground: oklch(0.2 0.02 260);
-  --info: oklch(0.55 0.15 240); /* Light Blue */
+  --warning: oklch(0.75 0.16 75);
+  --warning-foreground: oklch(0.22 0.03 260);
+  --info: oklch(0.5 0.14 230);
   --info-foreground: oklch(0.99 0 0);
 
   /* Overlay */

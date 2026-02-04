@@ -28,7 +28,7 @@ export default function AdminError({
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
-      <div className="text-center max-w-2xl mx-auto space-y-6 animate-fade-in">
+      <div className="text-center max-w-2xl mx-auto space-y-6">
         {/* Admin Error Icon */}
         <div className="mx-auto w-20 h-20 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center">
           <ShieldAlert className="h-10 w-10 text-amber-600" />

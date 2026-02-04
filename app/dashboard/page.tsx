@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog"
 import { ItemDetailView } from "@/components/item-detail-view"
 import { AccountStatusBanner } from "@/components/account-status-banner"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import debounce from 'lodash/debounce'
@@ -44,6 +43,12 @@ export default function DashboardPage() {
   const [totalCount, setTotalCount] = useState(0)
   const paginationLastIds = useRef<Map<number, string | null>>(new Map([[1, null]]))
   const [totalPages, setTotalPages] = useState(1)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   // Debounce search query
   useEffect(() => {
@@ -87,14 +92,13 @@ export default function DashboardPage() {
       }
 
       const result = await getItems(filters)
+      if (!mountedRef.current) return
 
       if (result.success && result.data) {
         setItems(result.data.items)
-
         const count = result.data.totalCount || 0
         setTotalCount(count)
         setTotalPages(count > 0 ? Math.ceil(count / PAGE_SIZE) : (result.data.hasMore ? page + 1 : page))
-
         if (result.data.lastId != null && result.data.hasMore) {
           paginationLastIds.current.set(page + 1, result.data.lastId)
         }
@@ -107,13 +111,14 @@ export default function DashboardPage() {
         setTotalCount(0)
       }
     } catch (error) {
+      if (!mountedRef.current) return
       if (!silent) {
         console.error("[Dashboard] Error:", error)
         toast.error("เกิดข้อผิดพลาดในการโหลดข้อมูล")
       }
       setItems([])
     } finally {
-      if (!silent) setLoading(false)
+      if (mountedRef.current && !silent) setLoading(false)
     }
   }, [categories, status, debouncedSearchQuery])
 
@@ -154,7 +159,7 @@ export default function DashboardPage() {
       {/* Hero Section */}
       <div className="border-b bg-linear-to-b from-primary/5 to-background">
         <div className="container mx-auto px-4 py-8 sm:py-12">
-          <BounceWrapper variant="bounce-in" className="space-y-2">
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               <span className="text-sm font-medium text-primary">แพลตฟอร์มแลกเปลี่ยน</span>
@@ -163,10 +168,10 @@ export default function DashboardPage() {
               RMU-Campus X
             </h1>
             <p className="text-muted-foreground max-w-lg">
-              แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของสำหรับนักศึกษา
+              แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร
               <span className="hidden sm:inline"> มหาวิทยาลัยราชภัฏมหาสารคาม</span>
             </p>
-          </BounceWrapper>
+          </div>
         </div>
       </div>
 
@@ -288,18 +293,13 @@ export default function DashboardPage() {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 content-auto">
                   {items.map((item, index) => (
-                    <BounceWrapper 
-                      key={item.id} 
-                      variant="bounce-up"
-                      delay={Math.min(index, 4) * 0.03}
-                    >
-                      <MemoizedItemCard 
-                        item={item} 
-                        showRequestButton={!!user} 
-                        onViewDetails={(item) => setSelectedItem(item)}
-                        priority={index < 4}
-                      />
-                    </BounceWrapper>
+                    <MemoizedItemCard
+                      key={item.id}
+                      item={item}
+                      showRequestButton={!!user}
+                      onViewDetails={(item) => setSelectedItem(item)}
+                      priority={index < 4}
+                    />
                   ))}
                 </div>
 

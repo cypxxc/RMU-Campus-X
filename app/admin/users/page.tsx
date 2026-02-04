@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, getDocs, query, where } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import { authFetchJson } from "@/lib/api-client"
 import { getReports, updateUserStatus, issueWarning, getUserWarnings, deleteUserAndData } from "@/lib/firestore"
 import type { Report, User, UserStatus, UserWarning } from "@/types"
 import { useAuth } from "@/components/auth-provider"
@@ -27,7 +26,6 @@ import {
   CheckCircle2, 
   Eye, 
   User as UserIcon, 
-  ArrowLeft, 
   Search
 } from "lucide-react"
 import { UserDetailModal } from "@/components/admin/admin-modals"
@@ -42,11 +40,20 @@ interface UserWithReports extends User {
 
 export default function AdminReportedUsersPage() {
   const [users, setUsers] = useState<UserWithReports[]>([])
-  const [_reports, setReports] = useState<Report[]>([])
+  const [, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserWithReports | null>(null)
   const [userWarnings, setUserWarnings] = useState<UserWarning[]>([])
+  const [userDetail, setUserDetail] = useState<{
+    displayName?: string
+    createdAt?: string
+    itemsPosted?: number
+    exchangesCompleted?: number
+    reportsReceived?: number
+    suspendedUntil?: string | null
+    bannedReason?: string | null
+  } | null>(null)
   const [searchQuery, setSearchQuery] = useState("") // New state
   const [actionDialog, setActionDialog] = useState<{
     open: boolean
@@ -57,35 +64,9 @@ export default function AdminReportedUsersPage() {
   
   // State for actions moved to ActionDialog component to prevent re-renders
 
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, isAdmin: isAdminFromAuth } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-
-  const checkAdmin = useCallback(async () => {
-    if (!user) return
-
-    try {
-      const db = getFirebaseDb()
-      const adminsRef = collection(db, "admins")
-      const q = query(adminsRef, where("email", "==", user.email))
-      const snapshot = await getDocs(q)
-
-      if (snapshot.empty) {
-        toast({
-          title: "ไม่มีสิทธิ์เข้าถึง",
-          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
-          variant: "destructive",
-        })
-        router.push("/dashboard")
-        return
-      }
-
-      setIsAdmin(true)
-    } catch (error) {
-      console.error("[AdminReportedUsers] Error checking admin:", error)
-      router.push("/dashboard")
-    }
-  }, [router, toast, user])
 
   useEffect(() => {
     if (authLoading) return
@@ -93,23 +74,30 @@ export default function AdminReportedUsersPage() {
       router.push("/login")
       return
     }
-    checkAdmin()
-  }, [authLoading, checkAdmin, router, user])
+    if (!isAdminFromAuth) {
+      toast({
+        title: "ไม่มีสิทธิ์เข้าถึง",
+        description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+        variant: "destructive",
+      })
+      router.push("/dashboard")
+    } else {
+      setIsAdmin(true)
+    }
+  }, [authLoading, user, isAdminFromAuth, router, toast])
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const db = getFirebaseDb()
-      
-      // Get all reports
       const allReports = await getReports()
       setReports(allReports)
-      
-      // Get all users from Firestore
-      const usersSnapshot = await getDocs(collection(db, "users"))
+
+      const usersRes = await authFetchJson<{ data?: { users?: User[] } }>("/api/admin/users?limit=500", { method: "GET" })
+      const usersList = usersRes?.data?.users ?? []
       const firestoreUsersMap = new Map<string, User>()
-      usersSnapshot.docs.forEach(doc => {
-        firestoreUsersMap.set(doc.id, { ...doc.data() } as User)
+      usersList.forEach((u: any) => {
+        const id = u.uid ?? u.id
+        if (id) firestoreUsersMap.set(id, { ...u, uid: id } as User)
       })
       
       // Map to track report stats
@@ -207,7 +195,7 @@ export default function AdminReportedUsersPage() {
           })
         }
         return deleted
-      } catch (e: any) {
+      } catch {
         return 0
       }
     },
@@ -231,13 +219,50 @@ export default function AdminReportedUsersPage() {
     return () => clearInterval(interval)
   }, [isAdmin, loadData])
 
-  const handleViewUser = async (user: UserWithReports) => {
-    setSelectedUser(user)
+  const handleViewUser = async (userRow: UserWithReports) => {
+    setSelectedUser(userRow)
+    setUserDetail(null)
+    setUserWarnings([])
     try {
-      const warnings = await getUserWarnings(user.uid)
-      setUserWarnings(warnings)
+      const [warningsRes, detailRes] = await Promise.all([
+        getUserWarnings(userRow.uid),
+        (async () => {
+          try {
+            const token = await user?.getIdToken()
+            if (!token) return null
+            const r = await fetch(`/api/admin/users/${userRow.uid}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (!r.ok) return null
+            const json = await r.json()
+            return json?.data ?? null
+          } catch {
+            return null
+          }
+        })(),
+      ])
+      setUserWarnings(warningsRes)
+      if (detailRes?.user || detailRes?.stats) {
+        const u = detailRes.user ?? {}
+        const toDateStr = (v: unknown): string | undefined => {
+          if (!v) return undefined
+          if (typeof v === "string") return v
+          if (typeof v === "object" && v !== null && "toDate" in (v as { toDate?: () => Date }) && typeof (v as { toDate: () => Date }).toDate === "function") return (v as { toDate: () => Date }).toDate().toISOString()
+          if (typeof v === "object" && v !== null && "_seconds" in (v as { _seconds?: number })) return new Date(((v as { _seconds: number })._seconds) * 1000).toISOString()
+          return undefined
+        }
+        setUserDetail({
+          displayName: (u.displayName as string) ?? undefined,
+          createdAt: toDateStr(u.createdAt),
+          itemsPosted: detailRes.stats?.itemsPosted ?? 0,
+          exchangesCompleted: detailRes.stats?.exchangesCompleted ?? 0,
+          reportsReceived: detailRes.stats?.reportsReceived ?? 0,
+          suspendedUntil: u.suspendedUntil != null ? toDateStr(u.suspendedUntil) ?? null : null,
+          bannedReason: (u.bannedReason as string) ?? null,
+        })
+      }
     } catch (error) {
-      console.error("[AdminReportedUsers] Error loading warnings:", error)
+      console.error("[AdminReportedUsers] Error loading user detail:", error)
     }
   }
 
@@ -327,7 +352,7 @@ export default function AdminReportedUsersPage() {
           )
        }
        
-       // SHow remaining
+       // Show remaining
        return (
           <Badge className={`${configs.SUSPENDED.className} gap-1`}>
              <ShieldAlert className="h-3 w-3" />
@@ -367,9 +392,6 @@ export default function AdminReportedUsersPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")}>
-                <ArrowLeft className="h-4 w-4" />
-             </Button>
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <UserIcon className="h-8 w-8 text-primary" />
@@ -417,19 +439,27 @@ export default function AdminReportedUsersPage() {
               </TableHeader>
               <TableBody>
                 {filteredUsers.length === 0 ? (
-                   <div className="text-center py-16 px-4 bg-linear-to-b from-transparent to-muted/20">
-                    <div className="p-4 rounded-full bg-muted/50 w-fit mx-auto mb-4">
-                      <UserIcon className="h-12 w-12 text-muted-foreground/50" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-1">
-                      {searchQuery ? "ไม่พบผู้ใช้ที่ค้นหา" : "ไม่พบข้อมูลผู้ใช้"}
-                    </h3>
-                  </div>
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-48">
+                      <div className="flex flex-col items-center justify-center text-center py-8">
+                        <div className="p-4 rounded-full bg-muted/50 w-fit mb-4">
+                          <UserIcon className="h-12 w-12 text-muted-foreground/50" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground mb-1">
+                          {searchQuery ? "ไม่พบผู้ใช้ที่ค้นหา" : "ไม่พบข้อมูลผู้ใช้"}
+                        </h3>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filteredUsers
                     .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                     .map((u, index) => (
-                    <TableRow key={u.uid} className={`hover:bg-muted/50 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
+                    <TableRow
+                      key={u.uid}
+                      className={`hover:bg-muted/50 transition-colors cursor-pointer ${index % 2 === 0 ? "bg-background" : "bg-muted/10"}`}
+                      onClick={() => handleViewUser(u)}
+                    >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -460,7 +490,7 @@ export default function AdminReportedUsersPage() {
                           ? u.lastReportDate.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -468,7 +498,7 @@ export default function AdminReportedUsersPage() {
                           className="hover:bg-primary/10 hover:text-primary"
                         >
                           <Eye className="h-4 w-4 mr-2" />
-                          จัดการ
+                          ดูข้อมูล
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -522,16 +552,22 @@ export default function AdminReportedUsersPage() {
       {selectedUser && (
         <UserDetailModal
           open={!!selectedUser}
-          onOpenChange={(open) => !open && setSelectedUser(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedUser(null)
+              setUserDetail(null)
+            }
+          }}
           email={selectedUser.email}
           user={selectedUser}
+          userDetail={userDetail}
           stats={{
-            status: selectedUser.status || 'ACTIVE',
+            status: selectedUser.status || "ACTIVE",
             warningCount: selectedUser.warningCount || 0,
             reportsReceived: selectedUser.reportsReceived,
-            reportsFiled: selectedUser.reportsFiled
+            reportsFiled: selectedUser.reportsFiled,
           }}
-          warnings={userWarnings.map(w => ({
+          warnings={userWarnings.map((w) => ({
             id: w.id,
             reason: w.reason,
             action: w.action,
@@ -545,7 +581,7 @@ export default function AdminReportedUsersPage() {
             }
           }}
           getStatusBadge={getStatusBadge}
-          formatDate={(date) => date.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          formatDate={(date) => date.toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
         />
       )}
 

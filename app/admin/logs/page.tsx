@@ -30,13 +30,10 @@ import {
   Package,
   MessageSquare,
   ClipboardList,
-  ArrowLeft,
   Search
 } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
-
-import Link from "next/link"
 
 const ACTION_TYPE_LABELS: Record<AdminActionType, { label: string; color: string; icon: any }> = {
   user_warning: { label: "ออกคำเตือน", color: "bg-amber-100 text-amber-800", icon: AlertTriangle },
@@ -187,11 +184,6 @@ export default function AdminLogsPage() {
         <div className="flex items-center justify-between mb-6">
           {/* ... existing header content ... */}
           <div className="flex items-center gap-4">
-            <Link href="/admin">
-              <Button variant="ghost" size="icon" className="h-9 w-9">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <ClipboardList className="h-8 w-8 text-primary" />

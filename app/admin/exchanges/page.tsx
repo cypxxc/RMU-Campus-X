@@ -43,7 +43,6 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import {
   Loader2,
-  ArrowLeft,
   Package,
   Trash2,
   Eye,
@@ -218,9 +217,6 @@ export default function AdminExchangesPage() {
       <div className="max-w-7xl mx-auto px-6 space-y-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <Package className="h-8 w-8 text-primary" />

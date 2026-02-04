@@ -8,7 +8,7 @@ import { getFirebaseDb } from "@/lib/firebase"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, ArrowLeft, Package, Users, RefreshCw, MessageSquare, AlertTriangle, History, Database, Trash2, UserX } from "lucide-react"
+import { Loader2, Package, Users, RefreshCw, MessageSquare, AlertTriangle, History, Database, Trash2, UserX } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 const MANAGEMENT_LINKS = [
@@ -130,9 +130,6 @@ export default function AdminDataPage() {
     <div className="min-h-screen bg-background py-6">
       <div className="max-w-4xl mx-auto px-6 space-y-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Database className="h-8 w-8 text-primary" />

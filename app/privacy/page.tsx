@@ -1,44 +1,29 @@
-import Link from "next/link"
-import { Lock, Eye, Database, Share2, ShieldAlert, FileText, ChevronLeft, Cookie, Server, ShieldCheck } from "lucide-react"
+import { Lock, Eye, Database, Share2, ShieldAlert, FileText, Cookie, Server, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Button } from "@/components/ui/button"
+
+const PRIVACY_LAST_UPDATED = "4 กุมภาพันธ์ 2568"
+
 export default function PrivacyPage() {
-  const lastUpdated = new Date().toLocaleDateString('th-TH', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
 
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 py-12 px-4 sm:px-6">
       <div className="max-w-4xl mx-auto space-y-6">
-
-        {/* Navigation */}
-        <div>
-          <Link href="/">
-            <Button variant="ghost" className="gap-2 pl-0 hover:pl-2 transition-all">
-              <ChevronLeft className="h-4 w-4" />
-              กลับสู่หน้าหลัก
-            </Button>
-          </Link>
-        </div>
-
         {/* Main Content */}
         <Card className="border-none shadow-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
           <CardHeader className="text-center pb-8 pt-10">
             <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6">
               <Lock className="w-8 h-8 text-primary" />
             </div>
-            <CardTitle className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+            <CardTitle className="text-3xl sm:text-4xl font-bold bg-linear-to-r from-primary to-blue-600 bg-clip-text text-transparent">
               นโยบายความเป็นส่วนตัว
             </CardTitle>
             <CardDescription className="text-base mt-2">
-              RMU-Campus X Platform
+              RMU-Campus X — แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม
             </CardDescription>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-4 bg-muted/50 py-1.5 px-4 rounded-full w-fit mx-auto">
-              <FileText className="w-4 h-4" />
-              <span>อัปเดตล่าสุด: {lastUpdated}</span>
+              <FileText className="w-4 h-4 shrink-0" />
+              <span>อัปเดตล่าสุด: {PRIVACY_LAST_UPDATED}</span>
             </div>
           </CardHeader>
           
@@ -63,9 +48,9 @@ export default function PrivacyPage() {
                     </p>
                     <ul className="text-xs text-muted-foreground space-y-1 list-none">
                       <li><span className="font-medium text-foreground">P — Privacy:</span> เก็บ/ใช้/เปิดเผยข้อมูลตามนโยบายนี้ มี consent และสิทธิ์ลบข้อมูล</li>
-                      <li><span className="font-medium text-foreground">A — Accuracy:</span> ตรวจสอบข้อมูล (ยืนยันอีเมล, validation) และมีช่องทางรายงานเนื้อหาไม่เหมาะสม</li>
+                      <li><span className="font-medium text-foreground">A — Accuracy:</span> ตรวจสอบข้อมูล (ยืนยันอีเมล, validation)</li>
                       <li><span className="font-medium text-foreground">P — Property:</span> ข้อมูลที่คุณสร้างเป็นของคุณ ลบบัญชีได้ตลอดเวลา</li>
-                      <li><span className="font-medium text-foreground">A — Accessibility:</span> เข้าถึงระบบได้เฉพาะผู้มีอีเมล @rmu.ac.th ข้อมูลเปิดเผยเฉพาะเมื่อจำเป็น (คู่แลกเปลี่ยน/ตามกฎหมาย)</li>
+                      <li><span className="font-medium text-foreground">A — Accessibility:</span> เข้าถึงระบบได้เฉพาะผู้มีอีเมล @rmu.ac.th</li>
                     </ul>
                   </div>
                 </section>
@@ -79,11 +64,10 @@ export default function PrivacyPage() {
                     <h3 className="text-xl font-semibold">1. ข้อมูลที่เราเก็บรวบรวม</h3>
                   </div>
                   <div className="pl-14 space-y-2 text-muted-foreground">
-                    <p>เราเก็บรวบรวมข้อมูลเพื่อให้บริการที่ดีที่สุดแก่คุณ:</p>
+                    <p>เราเก็บรวบรวมข้อมูล:</p>
                     <ul className="list-disc list-outside ml-4 space-y-1">
-                      <li><span className="font-medium text-foreground">ข้อมูลบัญชี:</span> ชื่อ, อีเมล (@rmu.ac.th), รูปโปรไฟล์ (จาก Google)</li>
-                      <li><span className="font-medium text-foreground">ข้อมูลการใช้งาน:</span> ประวัติการโพสต์, การแลกเปลี่ยน, และการสนทนาในระบบ</li>
-                      <li><span className="font-medium text-foreground">ข้อมูลทางเทคนิค:</span> IP Address, ประเภทอุปกรณ์, และการเข้าถึงระบบ</li>
+                      <li><span className="font-medium text-foreground">ข้อมูลบัญชี:</span> ชื่อที่แสดง, อีเมล (@rmu.ac.th), รูปโปรไฟล์</li>
+                      <li><span className="font-medium text-foreground">ข้อมูลการใช้งาน:</span> ประวัติการโพสต์ (รายการสิ่งของ), การแลกเปลี่ยน</li>
                     </ul>
                   </div>
                 </section>
@@ -100,11 +84,8 @@ export default function PrivacyPage() {
                      <p>เราใช้ข้อมูลของคุณเพื่อ:</p>
                      <div className="grid sm:grid-cols-2 gap-3 mt-3">
                       {[
-                        "ยืนยันตัวตนว่าเป็นนักศึกษา RMU",
+                        "ยืนยันตัวตนว่าเป็นนักศึกษาและบุคลากร RMU",
                         "จัดการรายการสิ่งของและการแลกเปลี่ยน",
-                        "ติดต่อสื่อสารเกี่ยวกับสถานะคำขอ",
-                        "ปรับปรุงประสบการณ์การใช้งาน",
-                        "ดูแลความปลอดภัยและป้องกันการทุจริต",
                         "ส่งแจ้งเตือนที่สำคัญ"
                       ].map((item, i) => (
                         <div key={i} className="flex items-center gap-2 bg-muted/30 p-2 rounded border text-sm">
@@ -126,8 +107,7 @@ export default function PrivacyPage() {
                   </div>
                   <p className="text-muted-foreground leading-relaxed pl-14">
                     เรา <span className="text-red-500 font-medium">ไม่ขาย</span> ข้อมูลส่วนบุคคลของคุณให้กับบุคคลภายนอก 
-                    ข้อมูลของคุณจะถูกเปิดเผยเฉพาะกับคู่กรณีในการแลกเปลี่ยน (เช่น ชื่อและช่องทางติดต่อ) เมื่อการแลกเปลี่ยนได้รับการยืนยันแล้วเท่านั้น 
-                    หรือเมื่อมีการร้องขอตามกฎหมาย
+                    ข้อมูลของคุณจะถูกเปิดเผยเฉพาะกับคู่กรณีในการแลกเปลี่ยน เมื่อการแลกเปลี่ยนได้รับการยืนยันแล้วเท่านั้น
                   </p>
                 </section>
 
@@ -140,8 +120,7 @@ export default function PrivacyPage() {
                     <h3 className="text-xl font-semibold">4. ความปลอดภัยของข้อมูล</h3>
                   </div>
                   <p className="text-muted-foreground leading-relaxed pl-14">
-                    เราใช้มาตรการความปลอดภัยมาตรฐานอุตสาหกรรม (Firebase Authentication & Security Rules) เพื่อปกป้องข้อมูลของคุณจาการเข้าถึงโดยไม่ได้รับอนุญาต 
-                    อย่างไรก็ตาม การส่งข้อมูลผ่านอินเทอร์เน็ตไม่มีความปลอดภัย 100%
+                    เราใช้มาตรการความปลอดภัยมาตรฐานอุตสาหกรรม (Firebase Authentication & Security Rules) เพื่อปกป้องข้อมูลของคุณจากการเข้าถึงโดยไม่ได้รับอนุญาต
                   </p>
                 </section>
 
@@ -171,10 +150,6 @@ export default function PrivacyPage() {
                     เมื่อทำการลบแล้ว ข้อมูลจะไม่สามารถกู้คืนได้
                   </div>
                 </section>
-
-                <div className="pt-8 text-center text-sm text-muted-foreground">
-                  <p>หากมีข้อสงสัยเกี่ยวกับนโยบายความเป็นส่วนตัว ส่งคำร้องขอความช่วยเหลือได้ที่เมนู ช่วยเหลือ</p>
-                </div>
               </div>
           </CardContent>
         </Card>

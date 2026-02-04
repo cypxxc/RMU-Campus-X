@@ -26,7 +26,7 @@ export function LandingHero3D() {
   if (!show3D) return null
 
   return (
-    <div className="fixed inset-0 h-screen animate-in fade-in duration-1000 -z-10">
+    <div className="fixed inset-0 h-screen -z-10">
       <ThreeBackgroundLite />
     </div>
   )

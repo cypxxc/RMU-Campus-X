@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { AlertCircle, RefreshCw, ArrowLeft, Home } from "lucide-react"
+import { AlertCircle, RefreshCw, ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export default function Error({
@@ -27,7 +27,7 @@ export default function Error({
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-background via-background to-muted/20">
-      <div className="text-center max-w-lg mx-auto space-y-6 animate-fade-in">
+      <div className="text-center max-w-lg mx-auto space-y-6">
         {/* Error Icon */}
         <div className="mx-auto w-20 h-20 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center shadow-lg">
           <AlertCircle className="h-10 w-10 text-destructive" />
@@ -72,15 +72,6 @@ export default function Error({
           <Button onClick={reset} size="default" className="gap-2 shadow-sm">
             <RefreshCw className="h-4 w-4" />
             ลองใหม่อีกครั้ง
-          </Button>
-          <Button 
-            variant="outline" 
-            size="default" 
-            onClick={() => router.push('/dashboard')}
-            className="gap-2"
-          >
-            <Home className="h-4 w-4" />
-            กลับหน้าหลัก
           </Button>
           <Button 
             variant="ghost" 

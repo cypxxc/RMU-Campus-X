@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, History, CheckCircle } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 interface CompletedExchangesListProps {
   exchanges: Exchange[]
@@ -56,39 +55,36 @@ export function CompletedExchangesList({ exchanges, loading, currentUserId }: Co
   return (
     <>
       <div className="grid grid-cols-1 gap-4">
-        {paginatedExchanges.map((exchange, index) => {
-          const createdAt = (exchange.createdAt as any)?.toDate?.() || new Date()
+        {paginatedExchanges.map((exchange) => {
+          const createdAt =
+            typeof exchange.createdAt === "string"
+              ? new Date(exchange.createdAt)
+              : (exchange.createdAt as { toDate?: () => Date })?.toDate?.() ?? new Date()
           const isOwner = exchange.ownerId === currentUserId
           return (
-            <BounceWrapper 
-              key={exchange.id} 
-              variant="bounce-up"
-              delay={index * 0.05}
-            >
-              <Card className="border-none shadow-soft hover:shadow-md transition-all overflow-hidden">
-                <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <CheckCircle className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold truncate">{exchange.itemTitle}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {isOwner ? "คุณให้สิ่งของนี้" : "คุณได้รับสิ่งของนี้"}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
-                        สำเร็จ
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(createdAt, { addSuffix: true, locale: th })}
-                      </p>
-                    </div>
+            <Card key={exchange.id} className="border-none shadow-soft hover:shadow-md transition-shadow overflow-hidden">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <CheckCircle className="h-6 w-6 text-primary" />
                   </div>
-                </CardContent>
-              </Card>
-            </BounceWrapper>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold truncate">{exchange.itemTitle}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {isOwner ? "คุณให้สิ่งของนี้" : "คุณได้รับสิ่งของนี้"}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+                      สำเร็จ
+                    </Badge>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDistanceToNow(createdAt, { addSuffix: true, locale: th })}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )
         })}
       </div>

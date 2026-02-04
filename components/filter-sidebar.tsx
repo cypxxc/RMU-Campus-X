@@ -58,7 +58,7 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
               ทั้งหมด
             </Label>
             {allSelected && (
-              <Check className="h-4 w-4 text-primary animate-fade-in" />
+              <Check className="h-4 w-4 text-primary" />
             )}
           </div>
           
@@ -86,7 +86,7 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
                   {option.label}
                 </Label>
                 {isSelected && (
-                  <Check className="h-4 w-4 text-primary animate-fade-in" />
+                  <Check className="h-4 w-4 text-primary" />
                 )}
               </div>
             )
@@ -122,7 +122,7 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
                   {option.label}
                 </Label>
                 {status === option.value && (
-                  <Check className="h-4 w-4 text-primary animate-fade-in" />
+                  <Check className="h-4 w-4 text-primary" />
                 )}
               </div>
             )

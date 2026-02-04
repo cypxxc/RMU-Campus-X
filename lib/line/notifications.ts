@@ -7,34 +7,31 @@ import type { ExchangeStatus } from "@/types"
 import { getReportTypeLabel } from "@/lib/reports/report-types"
 import type { LinePushResponse, LineTextMessage } from "./types"
 import { sendPushMessage, sendReplyMessage } from "./core"
-import { 
-  createExchangeRequestFlex, 
-  createItemPostedFlex, 
-  createChatMessageFlex,
-  createWarningFlex 
-} from "./flex-templates"
 
 // ============ Exchange Notifications ============
 
 /**
- * แจ้งเตือนเจ้าของสิ่งของเมื่อมีคนขอรับ (Flex Message)
+ * แจ้งเตือนเจ้าของสิ่งของเมื่อมีคนขอรับ (ข้อความแจ้งเตือนอย่างเดียว)
  */
 export async function notifyExchangeRequest(
   ownerLineUserId: string,
   itemTitle: string,
   requesterName: string,
-  exchangeId: string,
-  baseUrl: string,
-  itemImage?: string
+  _exchangeId: string,
+  _baseUrl: string,
+  _itemImage?: string
 ): Promise<LinePushResponse> {
-  const flexMessage = createExchangeRequestFlex({
-    itemTitle,
-    requesterName,
-    itemImage,
-    chatUrl: `${baseUrl}/chat/${exchangeId}`
-  })
+  const message: LineTextMessage = {
+    type: "text",
+    text: `📦 มีคนขอรับสิ่งของของคุณ
 
-  return sendPushMessage(ownerLineUserId, [flexMessage])
+🏷️ รายการ: ${itemTitle}
+👤 ผู้ขอ: ${requesterName}
+
+💬 ตอบผ่าน LINE ได้เลย: พิมพ์ "แชท" ในแชทนี้ แล้วเลือกรายการนี้
+(หรือเข้าเว็บแอป → การแลกเปลี่ยนของฉัน)`,
+  }
+  return sendPushMessage(ownerLineUserId, [message])
 }
 
 /**
@@ -45,7 +42,7 @@ export async function notifyExchangeStatusChange(
   itemTitle: string,
   status: ExchangeStatus,
   _exchangeId: string,
-  baseUrl: string
+  _baseUrl: string
 ): Promise<LinePushResponse> {
   const statusMessages: Record<ExchangeStatus, { emoji: string; text: string }> = {
     pending: { emoji: "⏳", text: "รอการตอบรับ" },
@@ -60,12 +57,12 @@ export async function notifyExchangeStatusChange(
 
   const message: LineTextMessage = {
     type: "text",
-    text: `${statusInfo.emoji} อัปเดตสถานะ
+    text: `${statusInfo.emoji} อัปเดตสถานะการแลกเปลี่ยน
 
-📦 ${itemTitle}
+📦 รายการ: ${itemTitle}
 สถานะ: ${statusInfo.text}
 
-${baseUrl}/my-exchanges`,
+(เข้าเว็บแอป → การแลกเปลี่ยนของฉัน)`,
   }
 
   return sendPushMessage(lineUserId, [message])
@@ -84,7 +81,7 @@ export async function notifyExchangeCompleted(
 
 📦 ${itemTitle}
 
-ขอบคุณที่ใช้บริการ ShareHub 🙏`,
+ขอบคุณที่ใช้บริการ RMU-Campus X 🙏`,
   }
 
   return sendPushMessage(lineUserId, [message])
@@ -100,7 +97,7 @@ export async function notifyAdminsNewReport(
   reportType: string,
   targetTitle: string,
   reporterEmail: string,
-  baseUrl: string
+  _baseUrl: string
 ): Promise<void> {
   console.log(`[LINE Admin] Sending report notification to ${adminLineUserIds.length} admin(s)`)
   const reportTypeLabel = getReportTypeLabel(reportType) || reportType
@@ -113,7 +110,7 @@ export async function notifyAdminsNewReport(
 🎯 เป้าหมาย: ${targetTitle}
 👤 ผู้รายงาน: ${reporterEmail}
 
-กรุณาตรวจสอบ: ${baseUrl}/admin/reports`,
+(เข้าเว็บแอป → เข้าสู่ระบบแอดมิน → หน้า Reports)`,
   }
 
   // ส่งแจ้งเตือนให้ admin ทุกคน (แบบ parallel)
@@ -139,7 +136,7 @@ export async function notifyAdminsNewSupportTicket(
   subject: string,
   category: string,
   userEmail: string,
-  baseUrl: string
+  _baseUrl: string
 ): Promise<void> {
   console.log(`[LINE Admin] Sending support ticket notification to ${adminLineUserIds.length} admin(s)`)
   
@@ -159,7 +156,7 @@ export async function notifyAdminsNewSupportTicket(
 📂 หมวด: ${categoryLabels[category] || category}
 👤 จาก: ${userEmail}
 
-กรุณาตรวจสอบ: ${baseUrl}/admin/support`,
+(เข้าเว็บแอป → เข้าสู่ระบบแอดมิน → หน้า Support)`,
   }
 
   const results = await Promise.allSettled(
@@ -178,22 +175,24 @@ export async function notifyAdminsNewSupportTicket(
 // ============ Item Notifications ============
 
 /**
- * แจ้งเตือนผู้ใช้เมื่อโพสต์สิ่งของสำเร็จ (Flex Message)
+ * แจ้งเตือนผู้ใช้เมื่อโพสต์สิ่งของสำเร็จ (ข้อความแจ้งเตือนอย่างเดียว)
  */
 export async function notifyItemPosted(
   lineUserId: string,
   itemTitle: string,
-  itemId: string,
-  baseUrl: string,
-  itemImage?: string
+  _itemId: string,
+  _baseUrl: string,
+  _itemImage?: string
 ): Promise<LinePushResponse> {
-  const flexMessage = createItemPostedFlex({
-    itemTitle,
-    itemImage,
-    itemUrl: `${baseUrl}/item/${itemId}`
-  })
+  const message: LineTextMessage = {
+    type: "text",
+    text: `✅ โพสต์สำเร็จ
 
-  return sendPushMessage(lineUserId, [flexMessage])
+📦 รายการ: ${itemTitle}
+
+(เข้าเว็บแอป RMU-Campus X → โปรไฟล์ → โพสของฉัน เพื่อดูรายละเอียด)`,
+  }
+  return sendPushMessage(lineUserId, [message])
 }
 
 /**
@@ -202,16 +201,16 @@ export async function notifyItemPosted(
 export async function notifyItemUpdated(
   lineUserId: string,
   itemTitle: string,
-  itemId: string,
-  baseUrl: string
+  _itemId: string,
+  _baseUrl: string
 ): Promise<LinePushResponse> {
   const message: LineTextMessage = {
     type: "text",
-    text: `✏️ แก้ไขโพสต์สำเร็จ!
+    text: `✏️ แก้ไขโพสต์สำเร็จ
 
-📦 ${itemTitle}
+📦 รายการ: ${itemTitle}
 
-กดดูโพสต์: ${baseUrl}/item/${itemId}`,
+(เข้าเว็บแอป → โปรไฟล์ → โพสของฉัน)`,
   }
 
   return sendPushMessage(lineUserId, [message])
@@ -230,7 +229,7 @@ export async function notifyItemDeleted(
 
 📦 ${itemTitle}
 
-ขอบคุณที่ใช้บริการ ShareHub 🙏`,
+ขอบคุณที่ใช้บริการ RMU-Campus X 🙏`,
   }
 
   return sendPushMessage(lineUserId, [message])
@@ -239,24 +238,27 @@ export async function notifyItemDeleted(
 // ============ Chat Notifications ============
 
 /**
- * แจ้งเตือนเมื่อมีข้อความแชทใหม่ (Flex Message)
+ * แจ้งเตือนเมื่อมีข้อความแชทใหม่ (ข้อความแจ้งเตือนอย่างเดียว)
  */
 export async function notifyNewChatMessage(
   lineUserId: string,
   senderName: string,
   itemTitle: string,
   messagePreview: string,
-  exchangeId: string,
-  baseUrl: string
+  _exchangeId: string,
+  _baseUrl: string
 ): Promise<LinePushResponse> {
-  const flexMessage = createChatMessageFlex({
-    senderName,
-    itemTitle,
-    messagePreview,
-    chatUrl: `${baseUrl}/chat/${exchangeId}`
-  })
+  const preview = messagePreview ? `\n💬 ข้อความ: ${messagePreview}` : ""
+  const message: LineTextMessage = {
+    type: "text",
+    text: `💬 มีข้อความแชทใหม่
 
-  return sendPushMessage(lineUserId, [flexMessage])
+👤 จาก: ${senderName}
+📦 รายการ: ${itemTitle}${preview}
+
+(เข้าเว็บแอป RMU-Campus X → การแลกเปลี่ยนของฉัน → เลือกรายการเพื่อเปิดแชท)`,
+  }
+  return sendPushMessage(lineUserId, [message])
 }
 
 // ============ User Action Notifications ============
@@ -276,7 +278,7 @@ export async function notifyUserReported(
     text: `⚠️ แจ้งเตือน
 
 มีผู้รายงาน${reportTypeLabel}ของคุณ
-🎯 ${targetTitle}
+🎯 เป้าหมาย: ${targetTitle}
 
 กรุณาตรวจสอบและปฏิบัติตามกฎของชุมชน`,
   }
@@ -285,19 +287,23 @@ export async function notifyUserReported(
 }
 
 /**
- * แจ้งเตือนผู้ใช้เมื่อได้รับคำเตือน (Flex Message)
+ * แจ้งเตือนผู้ใช้เมื่อได้รับคำเตือน (ข้อความแจ้งเตือนอย่างเดียว)
  */
 export async function notifyUserWarning(
   lineUserId: string,
   reason: string,
   warningCount: number
 ): Promise<LinePushResponse> {
-  const flexMessage = createWarningFlex({
-    reason,
-    warningCount
-  })
+  const message: LineTextMessage = {
+    type: "text",
+    text: `⚠️ คุณได้รับคำเตือนจากระบบ
 
-  return sendPushMessage(lineUserId, [flexMessage])
+📋 เหตุผล: ${reason}
+🔢 จำนวนคำเตือนสะสม: ${warningCount}
+
+กรุณาปฏิบัติตามแนวทางชุมชน หากได้รับคำเตือนซ้ำอาจถูกระงับหรือแบน`,
+  }
+  return sendPushMessage(lineUserId, [message])
 }
 
 /**
@@ -382,11 +388,11 @@ export async function sendLinkCodeMessage(
 ): Promise<LinePushResponse> {
   const message: LineTextMessage = {
     type: "text",
-    text: `🔗 รหัสเชื่อมบัญชี ShareHub
+    text: `🔗 รหัสเชื่อมบัญชี RMU-Campus X
 
 รหัสของคุณคือ: ${linkCode}
 
-กรุณานำรหัสนี้ไปกรอกในหน้าตั้งค่าโปรไฟล์ของคุณบนเว็บไซต์ ShareHub
+กรุณานำรหัสนี้ไปกรอกในหน้าตั้งค่าโปรไฟล์ของคุณบนเว็บแอป RMU-Campus X
 
 ⏰ รหัสนี้จะหมดอายุใน 5 นาที`,
   }
@@ -407,7 +413,7 @@ export async function sendLinkSuccessMessage(
 
 สวัสดี ${displayName} 👋
 
-บัญชี LINE ของคุณเชื่อมกับ ShareHub เรียบร้อยแล้ว คุณจะได้รับการแจ้งเตือนผ่าน LINE เมื่อ:
+บัญชี LINE ของคุณเชื่อมกับ RMU-Campus X เรียบร้อยแล้ว คุณจะได้รับการแจ้งเตือนผ่าน LINE เมื่อ:
 • มีคนขอรับสิ่งของของคุณ
 • สถานะการแลกเปลี่ยนเปลี่ยน
 • การแลกเปลี่ยนสำเร็จ

@@ -27,12 +27,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Package, Search, Trash2, Clock, CheckCircle2, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
+import { Loader2, Package, Search, Trash2, Clock, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react"
 import { ItemCard } from "@/components/item-card"
 import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
 import { ItemDetailView } from "@/components/item-detail-view"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import { memo, useRef } from "react"
 
 const MemoizedItemCard = memo(ItemCard)
@@ -294,9 +293,6 @@ export default function AdminItemsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")}>
-              <ArrowLeft className="h-4 w-4" />
-           </Button>
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Package className="h-8 w-8 text-primary" />
@@ -410,15 +406,14 @@ export default function AdminItemsPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 content-auto">
           {items.map((item, index) => (
-            <BounceWrapper key={item.id} variant="bounce-up" delay={Math.min(index, 4) * 0.03}>
-              <MemoizedItemCard
-                item={item}
-                variant="admin"
-                onViewDetails={(i) => setSelectedItem(i)}
-                onDelete={() => setDeleteDialog({ open: true, itemId: item.id })}
-                priority={index < 4}
-              />
-            </BounceWrapper>
+            <MemoizedItemCard
+              key={item.id}
+              item={item}
+              variant="admin"
+              onViewDetails={(i) => setSelectedItem(i)}
+              onDelete={() => setDeleteDialog({ open: true, itemId: item.id })}
+              priority={index < 4}
+            />
           ))}
         </div>
       )}

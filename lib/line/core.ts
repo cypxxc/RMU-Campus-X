@@ -55,9 +55,16 @@ export async function sendPushMessage(
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      console.error("[LINE] Push message failed:", error)
-      return { success: false, error: error.message || "Failed to send message" }
+      const text = await response.text()
+      let errorMessage = `HTTP ${response.status}`
+      try {
+        const error = JSON.parse(text) as { message?: string }
+        if (error?.message) errorMessage = error.message
+      } catch {
+        if (text) errorMessage = text.slice(0, 200)
+      }
+      console.error("[LINE] Push message failed:", errorMessage)
+      return { success: false, error: errorMessage }
     }
 
     return { success: true }
@@ -93,9 +100,16 @@ export async function sendReplyMessage(
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      console.error("[LINE] Reply message failed:", error)
-      return { success: false, error: error.message || "Failed to reply" }
+      const text = await response.text()
+      let errorMessage = `HTTP ${response.status}`
+      try {
+        const error = JSON.parse(text) as { message?: string }
+        if (error?.message) errorMessage = error.message
+      } catch {
+        if (text) errorMessage = text.slice(0, 200)
+      }
+      console.error("[LINE] Reply message failed:", errorMessage)
+      return { success: false, error: errorMessage }
     }
 
     return { success: true }

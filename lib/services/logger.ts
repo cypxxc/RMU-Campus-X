@@ -7,9 +7,15 @@ export type { LogSeverity, LogCategory } from "@/lib/services/logging/types"
 
 const DEFAULT_COLLECTION = "systemLogs"
 
+// ใช้ Firestore sink เฉพาะฝั่ง server — บน client ไม่เขียน log ลง Firestore เพื่อเลี่ยงการซ้ำเติมเมื่อเกิด Firestore "Unexpected state"
+const firestoreSink =
+  typeof window === "undefined"
+    ? createFirestoreSink({ collectionName: DEFAULT_COLLECTION })
+    : undefined
+
 let logger: Logger = createSystemLogger({
   consoleSink: createConsoleSink(),
-  firestoreSink: createFirestoreSink({ collectionName: DEFAULT_COLLECTION }),
+  firestoreSink,
   adminNotifier: createAdminNotifier(),
 })
 

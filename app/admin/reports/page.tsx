@@ -40,8 +40,7 @@ import {
   Package,
   Clock,
   Search,
-  User as UserIcon,
-  ArrowLeft
+  User as UserIcon
 } from "lucide-react"
 import Image from "next/image"
 import { Input } from "@/components/ui/input"
@@ -281,9 +280,6 @@ export default function AdminReportsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin")}>
-              <ArrowLeft className="h-4 w-4" />
-           </Button>
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Flag className="h-8 w-8 text-primary" />
@@ -485,7 +481,7 @@ export default function AdminReportsPage() {
                                 )}
                              </>
                           ) : (
-                             <div className="col-span-3 text-destructive italic">ไมพบข้อมูล (อาจถูกลบไปแล้ว)</div>
+                             <div className="col-span-3 text-destructive italic">ไม่พบข้อมูล (อาจถูกลบไปแล้ว)</div>
                           )}
                        </div>
                     </div>

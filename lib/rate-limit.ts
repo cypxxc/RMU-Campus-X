@@ -33,7 +33,7 @@ export const recordAction = (action: string, userId: string): void => {
   // Also save to localStorage for persistence across page reloads
   try {
     localStorage.setItem(`cooldown_${key}`, Date.now().toString())
-  } catch (e) {
+  } catch {
     // localStorage not available
   }
 }
@@ -45,7 +45,7 @@ export const loadCooldownFromStorage = (action: string, userId: string): void =>
     if (stored) {
       lastActionTime[key] = parseInt(stored, 10)
     }
-  } catch (e) {
+  } catch {
     // localStorage not available
   }
 }

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Mail, RefreshCw, Loader2, Lightbulb } from "lucide-react"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 import dynamic from "next/dynamic"
 
 // Dynamic import for Three.js - loads only when needed
@@ -156,7 +155,7 @@ export default function VerifyEmailPage() {
       {/* 3D Background - lazy loaded */}
       {show3D && <ThreeBackground />}
       
-      <BounceWrapper variant="bounce-in">
+      <div>
         <Card className="w-full max-w-md relative z-10 shadow-soft border-border/60">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
@@ -209,7 +208,7 @@ export default function VerifyEmailPage() {
             )}
           </CardContent>
         </Card>
-      </BounceWrapper>
+      </div>
     </div>
   )
 }

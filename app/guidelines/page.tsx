@@ -1,38 +1,29 @@
 import Link from "next/link"
-import { BookOpen, Handshake, AlertTriangle, ShieldCheck, Heart, UserPlus, MessageCircle, ChevronLeft } from "lucide-react"
+import { BookOpen, Handshake, AlertTriangle, ShieldCheck, Heart, UserPlus, MessageCircle, FileText } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Button } from "@/components/ui/button"
+
+const GUIDELINES_LAST_UPDATED = "4 กุมภาพันธ์ 2568"
+
 export default function GuidelinesPage() {
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 py-12 px-4 sm:px-6">
       <div className="max-w-4xl mx-auto space-y-6">
-
-        {/* Navigation */}
-        <div>
-          <Link href="/">
-            <Button variant="ghost" className="gap-2 pl-0 hover:pl-2 transition-all">
-              <ChevronLeft className="h-4 w-4" />
-              กลับสู่หน้าหลัก
-            </Button>
-          </Link>
-        </div>
-
         {/* Main Content */}
         <Card className="border-none shadow-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
           <CardHeader className="text-center pb-8 pt-10">
             <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6">
               <BookOpen className="w-8 h-8 text-primary" />
             </div>
-            <CardTitle className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-              แนวทางปฏิบัติชุมชน
+            <CardTitle className="text-3xl sm:text-4xl font-bold bg-linear-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+              แนวทางชุมชน
             </CardTitle>
             <CardDescription className="text-base mt-2">
-              Community Guidelines
+              RMU-Campus X — สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม
             </CardDescription>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-4 bg-muted/50 py-1.5 px-4 rounded-full w-fit mx-auto">
-              <ShieldCheck className="w-4 h-4" />
-              <span>สร้างสังคมให้น่าอยู่ร่วมกัน</span>
+              <FileText className="w-4 h-4 shrink-0" />
+              <span>อัปเดตล่าสุด: {GUIDELINES_LAST_UPDATED}</span>
             </div>
           </CardHeader>
           
@@ -44,8 +35,9 @@ export default function GuidelinesPage() {
                 {/* Introduction */}
                 <section className="space-y-4">
                   <p className="text-muted-foreground leading-relaxed text-center max-w-2xl mx-auto">
-                    RMU-Campus X เป็นพื้นที่สำหรับแบ่งปันและช่วยเหลือซึ่งกันและกันของพี่น้องชาวราชภัฏ 
-                    เพื่อให้ชุมชนของเราน่าอยู่ เราขอความร่วมมือจากสมาชิกทุกท่านปฏิบัติตามแนวทางดังนี้
+                    RMU-Campus X เป็นพื้นที่สำหรับแบ่งปันและแลกเปลี่ยนสิ่งของระหว่างนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม
+                    เพื่อให้ชุมชนน่าอยู่และปลอดภัย เราขอความร่วมมือจากสมาชิกทุกท่านปฏิบัติตามแนวทางด้านล่าง.
+                    การใช้งานอยู่ภายใต้ <Link href="/terms" className="text-primary hover:underline font-medium">ข้อกำหนดและเงื่อนไขการใช้งาน</Link> และ <Link href="/privacy" className="text-primary hover:underline font-medium">นโยบายความเป็นส่วนตัว</Link>
                   </p>
                 </section>
 
@@ -89,19 +81,19 @@ export default function GuidelinesPage() {
                         <CardContent className="space-y-2 text-sm">
                             <div className="flex gap-2">
                                 <span className="text-red-600 font-bold shrink-0">✕</span>
-                                <span>ลงประกาศสิ่งของผิดกฎหมายหรือละเมิดลิขสิทธิ์</span>
+                                <span>ลงประกาศสิ่งของผิดกฎหมาย ละเมิดลิขสิทธิ์ หรือสิ่งของที่ห้ามโพสต์ตามข้อกำหนด</span>
                             </div>
                             <div className="flex gap-2">
                                 <span className="text-red-600 font-bold shrink-0">✕</span>
-                                <span>ใช้ถ้อยคำหยาบคาย รุนแรง หรือคุกคามทางเพศ</span>
+                                <span>ใช้ถ้อยคำหยาบคาย รุนแรง หรือคุกคามผู้อื่น (รวมถึงในแชทและการติดต่อ)</span>
                             </div>
-                             <div className="flex gap-2">
+                            <div className="flex gap-2">
                                 <span className="text-red-600 font-bold shrink-0">✕</span>
                                 <span>นัดรับสิ่งของในที่เปลี่ยวหรือไม่ปลอดภัย</span>
                             </div>
-                             <div className="flex gap-2">
+                            <div className="flex gap-2">
                                 <span className="text-red-600 font-bold shrink-0">✕</span>
-                                <span>สแปมประกาศหรือส่งข้อความรบกวนผู้อื่น</span>
+                                <span>สแปมประกาศ โพสต์ซ้ำ หรือส่งข้อความรบกวนผู้อื่น</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -150,8 +142,17 @@ export default function GuidelinesPage() {
                    </div>
                 </section>
 
+                {/* การรายงานและผลของการฝ่าฝืน */}
+                <section className="pt-4">
+                  <h3 className="text-lg font-semibold text-foreground mb-3">การรายงานและผลของการฝ่าฝืน</h3>
+                  <div className="space-y-3 text-muted-foreground text-sm leading-relaxed">
+                    <p>หากพบเห็นการกระทำที่ผิดกฎระเบียบหรือขัดกับแนวทางชุมชน โปรดใช้ปุ่ม <strong className="text-foreground">"รายงานปัญหา"</strong> บนหน้ารายการสิ่งของหรือในจุดที่ระบบกำหนด เพื่อให้ทีมงานพิจารณาต่อไป</p>
+                    <p>การฝ่าฝืนแนวทางนี้อาจนำไปสู่ <strong className="text-foreground">การออกคำเตือน</strong> <strong className="text-foreground">การระงับบัญชีชั่วคราว</strong> หรือ <strong className="text-foreground">การแบนถาวร</strong> ตามที่ระบุใน <Link href="/terms" className="text-primary hover:underline font-medium">ข้อกำหนดและเงื่อนไขการใช้งาน</Link></p>
+                  </div>
+                </section>
+
                 <div className="pt-8 text-center text-sm text-muted-foreground">
-                  <p>ช่วยกันสอดส่องดูแล หากพบเห็นการกระทำผิดกฎระเบียบ <br/> โปรดใช้ปุ่ม <strong className="text-red-500">"รายงานปัญหา"</strong> บนหน้าประกาศนั้นๆ</p>
+                  <p>ขอบคุณที่ร่วมสร้างชุมชนให้น่าอยู่</p>
                 </div>
               </div>
           </CardContent>

@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Package, Edit, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { formatPostedAt, safeToDate } from "@/lib/utils"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
 
 interface MyItemsListProps {
   items: Item[]
@@ -69,73 +68,70 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
   return (
     <>
       <div className="grid grid-cols-1 gap-4">
-        {paginatedItems.map((item, index) => {
+        {paginatedItems.map((item) => {
           const postedDate = safeToDate(item.postedAt, new Date(0))
           return (
-            <BounceWrapper 
+            <Card 
               key={item.id} 
-              variant="bounce-up"
-              delay={index * 0.05}
-              className="group"
+              className="group border-none shadow-soft hover:shadow-md transition-shadow overflow-hidden cursor-pointer hover:border-primary/30"
+              onClick={() => onEdit(item)}
             >
-              <Card className="border-none shadow-soft hover:shadow-md transition-all overflow-hidden">
-                <div className="flex flex-col sm:flex-row sm:items-center">
-                  {/* Image Part */}
-                  <div className="relative w-24 h-24 m-4 rounded-xl overflow-hidden bg-muted shrink-0">
-                    {(item.imageUrls?.[0] || item.imageUrl) ? (
-                      <Image 
-                        src={item.imageUrls?.[0] || item.imageUrl || ''} 
-                        alt={item.title} 
-                        fill 
-                        className="object-cover group-hover:scale-105 transition-transform" 
-                        sizes="(max-width: 768px) 100px, 96px"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Package className="h-8 w-8 text-muted-foreground/20" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info Part */}
-                  <div className="flex-1 p-5 min-w-0">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-bold text-lg truncate">{item.title}</h4>
-                      <Badge variant="outline" className={`ml-2 shrink-0 ${statusColors[item.status]}`}>
-                        {statusLabels[item.status]}
-                      </Badge>
+              <div className="flex flex-col sm:flex-row sm:items-center">
+                {/* Image Part */}
+                <div className="relative w-24 h-24 m-4 rounded-xl overflow-hidden bg-muted shrink-0">
+                  {(item.imageUrls?.[0] || item.imageUrl) ? (
+                    <Image 
+                      src={item.imageUrls?.[0] || item.imageUrl || ''} 
+                      alt={item.title} 
+                      fill 
+                      className="object-cover group-hover:scale-105 transition-transform duration-200" 
+                      sizes="(max-width: 768px) 100px, 96px"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Package className="h-8 w-8 text-muted-foreground/20" />
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-1 mb-4">
-                      {item.description || "ไม่มีคำอธิบาย"}
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        ประกาศเมื่อ {formatPostedAt(postedDate)}
-                      </span>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          className="h-8 rounded-full"
-                          onClick={() => onEdit(item)}
-                        >
-                          <Edit className="h-3.5 w-3.5 mr-1" />
-                          แก้ไข
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          className="h-8 w-8 rounded-full text-destructive hover:bg-destructive/10"
-                          onClick={() => onDelete(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                  )}
+                </div>
+
+                {/* Info Part */}
+                <div className="flex-1 p-5 min-w-0">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-lg truncate">{item.title}</h4>
+                    <Badge variant="outline" className={`ml-2 shrink-0 ${statusColors[item.status]}`}>
+                      {statusLabels[item.status]}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-1 mb-4">
+                    {item.description || "ไม่มีคำอธิบาย"}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      ประกาศเมื่อ {formatPostedAt(postedDate)}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="h-8 rounded-full"
+                        onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                      >
+                        <Edit className="h-3.5 w-3.5 mr-1" />
+                        แก้ไข
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-8 w-8 rounded-full text-destructive hover:bg-destructive/10"
+                        onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 </div>
-              </Card>
-            </BounceWrapper>
+              </div>
+            </Card>
           )
         })}
       </div>

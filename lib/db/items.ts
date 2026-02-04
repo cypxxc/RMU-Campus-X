@@ -100,7 +100,7 @@ export const getItemById = async (id: string): Promise<ApiResponse<Item | null>>
 
 export const updateItem = async (
   id: string,
-  data: Partial<Pick<Item, "title" | "description" | "category" | "location" | "locationDetail" | "status">>
+  data: Partial<Pick<Item, "title" | "description" | "category" | "location" | "locationDetail" | "status" | "imageUrls">>
 ): Promise<ApiResponse<void>> => {
   return apiCall(
     async () => {
@@ -111,6 +111,7 @@ export const updateItem = async (
       if (data.location !== undefined) body.location = data.location
       if (data.locationDetail !== undefined) body.locationDetail = data.locationDetail
       if (data.status !== undefined) body.status = data.status
+      if (data.imageUrls !== undefined) body.imageUrls = data.imageUrls
 
       const json = await authFetchJson(`/api/items/${id}`, {
         method: "PATCH",

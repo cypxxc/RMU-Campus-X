@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
-import type { User, UserStatus } from "@/types"
+import { useAuth } from "@/components/auth-provider"
+import { authFetchJson } from "@/lib/api-client"
+import type { UserStatus } from "@/types"
 import { toast } from "sonner"
 
 interface AccountStatusCheck {
@@ -14,118 +14,111 @@ interface AccountStatusCheck {
   suspendedUntil?: Date
 }
 
+function parseSuspendedUntil(su: unknown): Date | undefined {
+  if (!su) return undefined
+  if (typeof su === "string") return new Date(su)
+  if (typeof su === "object" && su !== null && "_seconds" in su && typeof (su as { _seconds: number })._seconds === "number") {
+    return new Date((su as { _seconds: number })._seconds * 1000)
+  }
+  if (typeof su === "object" && su !== null && "toDate" in su && typeof (su as { toDate: () => Date }).toDate === "function") {
+    return (su as { toDate: () => Date }).toDate()
+  }
+  return undefined
+}
+
+/**
+ * โหลดโปรไฟล์ผู้ใช้ผ่าน API (ไม่ใช้ Firestore บน client)
+ */
+async function fetchMeProfile(): Promise<{
+  status: UserStatus
+  restrictions?: { canPost?: boolean; canExchange?: boolean; canChat?: boolean }
+  bannedReason?: string
+  warningCount?: number
+  suspendedUntil?: Date
+} | null> {
+  try {
+    const res = await authFetchJson<{ data?: { user?: Record<string, unknown> } }>("/api/users/me", { method: "GET" })
+    const u = res?.data?.user
+    if (!u) return null
+    const status = (u.status as UserStatus) || "ACTIVE"
+    const restrictions = u.restrictions as { canPost?: boolean; canExchange?: boolean; canChat?: boolean } | undefined
+    const suspendedUntil = parseSuspendedUntil(u.suspendedUntil)
+    return {
+      status,
+      restrictions,
+      bannedReason: String(u.bannedReason ?? ""),
+      warningCount: Number(u.warningCount) || 0,
+      suspendedUntil,
+    }
+  } catch {
+    return null
+  }
+}
+
 /**
  * Hook สำหรับตรวจสอบสถานะบัญชีผู้ใช้
- * ใช้ก่อนทำการดำเนินการสำคัญ เช่น โพสต์ของ, แลกเปลี่ยน, แชท
+ * โหลดผ่าน API ทั้งหมด (ไม่ใช้ Firestore)
  */
 export function useAccountStatus() {
+  const { user } = useAuth()
   const [userStatus, setUserStatus] = useState<UserStatus>("ACTIVE")
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const auth = getFirebaseAuth()
-        const user = auth.currentUser
-
-        if (!user) {
-          setLoading(false)
-          return
-        }
-
-        const db = getFirebaseDb()
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-
-        if (userDoc.exists()) {
-          const userData = userDoc.data() as User
-          setUserStatus(userData.status || "ACTIVE")
-        }
-      } catch (error) {
-        console.error("Error checking account status:", error)
-      } finally {
-        setLoading(false)
-      }
+    if (!user) {
+      setLoading(false)
+      return
     }
-
-    checkStatus()
-  }, [])
+    let cancelled = false
+    fetchMeProfile().then((profile) => {
+      if (cancelled) return
+      if (profile) setUserStatus(profile.status)
+      setLoading(false)
+    }).catch(() => {
+      if (!cancelled) setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [user])
 
   /**
    * ตรวจสอบว่าผู้ใช้สามารถโพสต์ของได้หรือไม่
    */
   const canPost = async (): Promise<AccountStatusCheck> => {
-    const auth = getFirebaseAuth()
-    const user = auth.currentUser
-
     if (!user) {
       router.push("/login")
       return { isAllowed: false, status: "ACTIVE", message: "กรุณาเข้าสู่ระบบก่อน" }
     }
+    const profile = await fetchMeProfile()
+    if (!profile) return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
+    const { status, restrictions, bannedReason, suspendedUntil, warningCount } = profile
 
-    const db = getFirebaseDb()
-    const userDoc = await getDoc(doc(db, "users", user.uid))
-
-    if (!userDoc.exists()) {
-      return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
-    }
-
-    const userData = userDoc.data() as User
-    const status = userData.status || "ACTIVE"
-    const restrictions = userData.restrictions
-
-    // ตรวจสอบสถานะ BANNED
     if (status === "BANNED") {
-      const reason = userData.bannedReason || "ไม่ระบุเหตุผล"
       toast.error("บัญชีถูกระงับถาวร", {
-        description: `เหตุผล: ${reason}\nกรุณาติดต่อทีมสนับสนุนหากคุณคิดว่านี่เป็นข้อผิดพลาด`,
+        description: `เหตุผล: ${bannedReason || "ไม่ระบุเหตุผล"}\nกรุณาติดต่อทีมสนับสนุนหากคุณคิดว่านี่เป็นข้อผิดพลาด`,
         duration: 5000,
       })
-      return { isAllowed: false, status, message: `บัญชีถูกแบนถาวร: ${reason}` }
+      return { isAllowed: false, status, message: `บัญชีถูกแบนถาวร: ${bannedReason || "ไม่ระบุเหตุผล"}` }
     }
 
-    // ตรวจสอบสถานะ SUSPENDED
     if (status === "SUSPENDED") {
-      const suspendedUntil = userData.suspendedUntil
-      let untilDate: Date | undefined
-
-      if (suspendedUntil && typeof suspendedUntil === "object" && "toDate" in suspendedUntil) {
-        untilDate = suspendedUntil.toDate()
+      const until = suspendedUntil
+      if (until) {
         const now = new Date()
-
-        // ถ้าหมดเวลาระงับแล้ว ให้อัปเดตสถานะ
-        if (untilDate <= now) {
-          // อัปเดตสถานะกลับเป็น ACTIVE ผ่าน checkAndAutoUnsuspend
-          const { checkAndAutoUnsuspend } = await import("@/lib/firestore")
-          await checkAndAutoUnsuspend(user.uid)
+        if (until <= now) {
           return { isAllowed: true, status: "ACTIVE" }
         }
-
-        const daysLeft = Math.ceil((untilDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        const daysLeft = Math.ceil((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         toast.error("บัญชีถูกระงับชั่วคราว", {
-          description: `บัญชีของคุณถูกระงับจนถึง ${untilDate.toLocaleDateString("th-TH", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}\nเหลืออีก ${daysLeft} วัน`,
+          description: `บัญชีของคุณถูกระงับจนถึง ${until.toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })}\nเหลืออีก ${daysLeft} วัน`,
           duration: 5000,
         })
-        return {
-          isAllowed: false,
-          status,
-          message: `บัญชีถูกระงับจนถึง ${untilDate.toLocaleDateString("th-TH")}`,
-          suspendedUntil: untilDate,
-        }
+        return { isAllowed: false, status, message: `บัญชีถูกระงับจนถึง ${until.toLocaleDateString("th-TH")}`, suspendedUntil: until }
       }
-
-      toast.error("บัญชีถูกระงับชั่วคราว", {
-        description: "กรุณาติดต่อทีมสนับสนุนสำหรับข้อมูลเพิ่มเติม",
-        duration: 5000,
-      })
+      toast.error("บัญชีถูกระงับชั่วคราว", { description: "กรุณาติดต่อทีมสนับสนุนสำหรับข้อมูลเพิ่มเติม", duration: 5000 })
       return { isAllowed: false, status, message: "บัญชีถูกระงับชั่วคราว" }
     }
 
-    // ตรวจสอบ restrictions
     if (restrictions && !restrictions.canPost) {
       toast.error("ไม่สามารถโพสต์ของได้", {
         description: "บัญชีของคุณถูกจำกัดสิทธิ์การโพสต์ของ กรุณาติดต่อทีมสนับสนุน",
@@ -134,15 +127,12 @@ export function useAccountStatus() {
       return { isAllowed: false, status, message: "ถูกจำกัดสิทธิ์การโพสต์" }
     }
 
-    // ตรวจสอบสถานะ WARNING
-    if (status === "WARNING") {
-      const warningCount = userData.warningCount || 0
+    if (status === "WARNING" && (warningCount || 0) > 0) {
       toast.warning("คำเตือน: บัญชีของคุณได้รับการเตือน", {
         description: `คุณได้รับคำเตือน ${warningCount} ครั้ง หากได้รับคำเตือนเพิ่มเติม บัญชีอาจถูกระงับ`,
         duration: 4000,
       })
     }
-
     return { isAllowed: true, status }
   }
 
@@ -150,58 +140,33 @@ export function useAccountStatus() {
    * ตรวจสอบว่าผู้ใช้สามารถแลกเปลี่ยนได้หรือไม่
    */
   const canExchange = async (): Promise<AccountStatusCheck> => {
-    const auth = getFirebaseAuth()
-    const user = auth.currentUser
-
     if (!user) {
       router.push("/login")
       return { isAllowed: false, status: "ACTIVE", message: "กรุณาเข้าสู่ระบบก่อน" }
     }
-
-    const db = getFirebaseDb()
-    const userDoc = await getDoc(doc(db, "users", user.uid))
-
-    if (!userDoc.exists()) {
-      return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
-    }
-
-    const userData = userDoc.data() as User
-    const status = userData.status || "ACTIVE"
-    const restrictions = userData.restrictions
+    const profile = await fetchMeProfile()
+    if (!profile) return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
+    const { status, restrictions, bannedReason, suspendedUntil, warningCount } = profile
 
     if (status === "BANNED") {
-      const reason = userData.bannedReason || "ไม่ระบุเหตุผล"
       toast.error("บัญชีถูกระงับถาวร", {
-        description: `เหตุผล: ${reason}\nไม่สามารถทำการแลกเปลี่ยนได้`,
+        description: `เหตุผล: ${bannedReason || "ไม่ระบุเหตุผล"}\nไม่สามารถทำการแลกเปลี่ยนได้`,
         duration: 5000,
       })
-      return { isAllowed: false, status, message: `บัญชีถูกแบนถาวร: ${reason}` }
+      return { isAllowed: false, status, message: `บัญชีถูกแบนถาวร: ${bannedReason || "ไม่ระบุเหตุผล"}` }
     }
 
     if (status === "SUSPENDED") {
-      const suspendedUntil = userData.suspendedUntil
-      if (suspendedUntil && typeof suspendedUntil === "object" && "toDate" in suspendedUntil) {
-        const untilDate = suspendedUntil.toDate()
-        const now = new Date()
-
-        if (untilDate <= now) {
-          // อัปเดตสถานะกลับเป็น ACTIVE
-          const { checkAndAutoUnsuspend } = await import("@/lib/firestore")
-          await checkAndAutoUnsuspend(user.uid)
-          return { isAllowed: true, status: "ACTIVE" }
-        }
-
+      const until = suspendedUntil
+      if (until && until <= new Date()) return { isAllowed: true, status: "ACTIVE" }
+      if (until) {
         toast.error("บัญชีถูกระงับชั่วคราว", {
-          description: `ไม่สามารถทำการแลกเปลี่ยนได้จนถึง ${untilDate.toLocaleDateString("th-TH")}`,
+          description: `ไม่สามารถทำการแลกเปลี่ยนได้จนถึง ${until.toLocaleDateString("th-TH")}`,
           duration: 5000,
         })
-        return { isAllowed: false, status, suspendedUntil: untilDate }
+        return { isAllowed: false, status, suspendedUntil: until }
       }
-
-      toast.error("บัญชีถูกระงับชั่วคราว", {
-        description: "ไม่สามารถทำการแลกเปลี่ยนได้ในขณะนี้",
-        duration: 5000,
-      })
+      toast.error("บัญชีถูกระงับชั่วคราว", { description: "ไม่สามารถทำการแลกเปลี่ยนได้ในขณะนี้", duration: 5000 })
       return { isAllowed: false, status }
     }
 
@@ -213,14 +178,12 @@ export function useAccountStatus() {
       return { isAllowed: false, status, message: "ถูกจำกัดสิทธิ์การแลกเปลี่ยน" }
     }
 
-    if (status === "WARNING") {
-      const warningCount = userData.warningCount || 0
+    if (status === "WARNING" && (warningCount || 0) > 0) {
       toast.warning("คำเตือน", {
         description: `บัญชีของคุณได้รับคำเตือน ${warningCount} ครั้ง กรุณาปฏิบัติตามกฎระเบียบ`,
         duration: 3000,
       })
     }
-
     return { isAllowed: true, status }
   }
 
@@ -228,49 +191,26 @@ export function useAccountStatus() {
    * ตรวจสอบว่าผู้ใช้สามารถแชทได้หรือไม่
    */
   const canChat = async (): Promise<AccountStatusCheck> => {
-    const auth = getFirebaseAuth()
-    const user = auth.currentUser
-
     if (!user) {
       router.push("/login")
       return { isAllowed: false, status: "ACTIVE", message: "กรุณาเข้าสู่ระบบก่อน" }
     }
-
-    const db = getFirebaseDb()
-    const userDoc = await getDoc(doc(db, "users", user.uid))
-
-    if (!userDoc.exists()) {
-      return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
-    }
-
-    const userData = userDoc.data() as User
-    const status = userData.status || "ACTIVE"
-    const restrictions = userData.restrictions
+    const profile = await fetchMeProfile()
+    if (!profile) return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
+    const { status, restrictions } = profile
 
     if (status === "BANNED") {
-      toast.error("บัญชีถูกระงับถาวร", {
-        description: "ไม่สามารถใช้งานแชทได้",
-        duration: 5000,
-      })
+      toast.error("บัญชีถูกระงับถาวร", { description: "ไม่สามารถใช้งานแชทได้", duration: 5000 })
       return { isAllowed: false, status }
     }
-
     if (status === "SUSPENDED") {
-      toast.error("บัญชีถูกระงับชั่วคราว", {
-        description: "ไม่สามารถใช้งานแชทได้ในขณะนี้",
-        duration: 5000,
-      })
+      toast.error("บัญชีถูกระงับชั่วคราว", { description: "ไม่สามารถใช้งานแชทได้ในขณะนี้", duration: 5000 })
       return { isAllowed: false, status }
     }
-
     if (restrictions && !restrictions.canChat) {
-      toast.error("ไม่สามารถแชทได้", {
-        description: "บัญชีของคุณถูกจำกัดสิทธิ์การแชท",
-        duration: 5000,
-      })
-      return { isAllowed: false, status }
+      toast.error("ไม่สามารถแชทได้", { description: "บัญชีของคุณถูกจำกัดสิทธิ์การแชท", duration: 5000 })
+      return { isAllowed: false, status, message: "ถูกจำกัดสิทธิ์การแชท" }
     }
-
     return { isAllowed: true, status }
   }
 

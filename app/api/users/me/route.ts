@@ -19,11 +19,49 @@ export async function GET(request: NextRequest) {
     if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
 
     const db = getAdminDb()
-    const snap = await db.collection("users").doc(decoded.uid).get()
-    if (!snap.exists) return ApiErrors.notFound("User not found")
+    const [userSnap, adminSnap] = await Promise.all([
+      db.collection("users").doc(decoded.uid).get(),
+      db.collection("admins").doc(decoded.uid).get(),
+    ])
 
-    const data = snap.data()
-    return successResponse({ user: { id: snap.id, ...data } })
+    let data: Record<string, unknown>
+    if (!userSnap.exists) {
+      // สร้าง user doc ฝั่ง server ถ้ายังไม่มี (เช่น login ครั้งแรกจาก provider อื่น)
+      const now = FieldValue.serverTimestamp()
+      const initial = {
+        uid: decoded.uid,
+        email: decoded.email ?? "",
+        displayName: (decoded.name as string) || (decoded.email as string)?.split("@")[0] || "",
+        photoURL: (decoded.picture as string) || "",
+        status: "ACTIVE",
+        warningCount: 0,
+        restrictions: { canPost: true, canExchange: true, canChat: true },
+        termsAccepted: false,
+        createdAt: now,
+        updatedAt: now,
+      }
+      await db.collection("users").doc(decoded.uid).set(initial)
+      data = { ...initial, createdAt: new Date(), updatedAt: new Date() }
+    } else {
+      data = userSnap.data() as Record<string, unknown>
+      // Auto-unsuspend ฝั่ง server ถ้าถึงเวลาแล้ว
+      if (data?.status === "SUSPENDED" && data.suspendedUntil) {
+        const until = (data.suspendedUntil as { toDate?: () => Date })?.toDate?.() ?? (typeof data.suspendedUntil === "string" ? new Date(data.suspendedUntil) : null)
+        if (until && new Date() >= until) {
+          const ref = db.collection("users").doc(decoded.uid)
+          await ref.update({
+            status: "ACTIVE",
+            restrictions: { canPost: true, canExchange: true, canChat: true },
+            suspendedUntil: null,
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+          data = { ...data, status: "ACTIVE", restrictions: { canPost: true, canExchange: true, canChat: true }, suspendedUntil: null }
+        }
+      }
+    }
+
+    const isAdmin = adminSnap.exists
+    return successResponse({ user: { id: userSnap.id || decoded.uid, ...data, isAdmin } })
   } catch (e) {
     console.error("[Users Me API] GET Error:", e)
     return ApiErrors.internalError("Internal server error")

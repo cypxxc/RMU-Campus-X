@@ -12,8 +12,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, ArrowLeft } from "lucide-react"
 import { Logo } from "@/components/logo"
-import { BounceWrapper } from "@/components/ui/bounce-wrapper"
-
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
@@ -31,7 +29,7 @@ export default function ForgotPasswordPage() {
         title: "ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว",
         description: "กรุณาตรวจสอบอีเมลของคุณเพื่อตั้งรหัสผ่านใหม่",
       })
-    } catch (error: any) {
+    } catch {
       toast({
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถส่งอีเมลรีเซ็ตรหัสผ่านได้ กรุณาตรวจสอบอีเมลอีกครั้ง",
@@ -45,7 +43,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-b from-primary/5 via-background to-background p-4 relative overflow-hidden">
       
-      <BounceWrapper variant="bounce-in" className="w-full max-w-md relative z-10">
+      <div className="w-full max-w-md relative z-10">
         <Card className="shadow-soft border-border/60">
           <CardHeader className="text-center space-y-4 pb-2">
             {/* Logo */}
@@ -122,7 +120,7 @@ export default function ForgotPasswordPage() {
         <p className="mt-6 text-center text-xs text-muted-foreground">
           มหาวิทยาลัยราชภัฏมหาสารคาม
         </p>
-      </BounceWrapper>
+      </div>
     </div>
   )
 }

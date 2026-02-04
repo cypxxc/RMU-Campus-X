@@ -11,10 +11,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, MessageSquare, Clock, CheckCircle2, AlertCircle, ArrowLeft, Inbox, Send } from "lucide-react"
+import { Loader2, MessageSquare, Clock, CheckCircle2, AlertCircle, Inbox, Send } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { th } from "date-fns/locale"
-import Link from "next/link"
 import {
   Dialog,
   DialogContent,
@@ -170,11 +169,6 @@ export default function SupportPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="icon" className="h-9 w-9">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <MessageSquare className="h-6 w-6 text-primary" />
