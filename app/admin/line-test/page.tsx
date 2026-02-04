@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { authFetchJson } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
+import type { LucideIcon } from "lucide-react"
 import {
   Loader2,
   MessageSquare,
@@ -22,7 +23,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { LineTestType } from "@/app/api/admin/line-test/route"
 
-const TEST_BUTTONS: { type: LineTestType; label: string; icon: React.ElementType; group: string }[] = [
+const TEST_BUTTONS: { type: LineTestType; label: string; icon: LucideIcon; group: string }[] = [
   { type: "exchange_request", label: "มีคนขอรับของ", icon: Package, group: "การแลกเปลี่ยน" },
   { type: "exchange_status", label: "อัปเดตสถานะการแลกเปลี่ยน", icon: RefreshCw, group: "การแลกเปลี่ยน" },
   { type: "exchange_completed", label: "แลกเปลี่ยนสำเร็จ", icon: UserCheck, group: "การแลกเปลี่ยน" },
