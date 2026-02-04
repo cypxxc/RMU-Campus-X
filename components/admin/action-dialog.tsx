@@ -15,12 +15,11 @@ import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal
 
 export type SuspendDuration = { value: number; unit: "minute" | "hour" | "day" }
 
-interface UserWithReports {
+export interface UserWithReports {
   uid: string
   email: string
   warningCount?: number
   reportsReceived: number
-  [key: string]: unknown
 }
 
 interface ActionDialogProps {

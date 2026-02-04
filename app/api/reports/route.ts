@@ -24,7 +24,7 @@ const createReportSchema = z.object({
   }),
   reasonCode: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   reason: z.string().optional().transform(val => val ? sanitizeText(val) : val),
-  description: z.string().optional().transform(val => (val ? sanitizeText(val) : "")).default(""),
+  description: z.string().transform(val => (val ? sanitizeText(val) : "")).default(""),
   targetId: z.string().min(1, "กรุณาระบุเป้าหมายที่ต้องการรายงาน"),
   targetType: z.string().optional().transform(val => val ? sanitizeText(val) : val),
   targetTitle: z.string().optional().transform(val => val ? sanitizeText(val) : val),
@@ -41,7 +41,7 @@ type CreateReportInput = z.infer<typeof createReportSchema>
  * Create a new report
  */
 export const POST = withValidation(
-  createReportSchema,
+  createReportSchema as z.ZodType<CreateReportInput>,
   async (_request, data: CreateReportInput, ctx: ValidationContext | null) => {
     if (!ctx) {
       return NextResponse.json(

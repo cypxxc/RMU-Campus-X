@@ -437,7 +437,7 @@ async function handleTextMessage(event: LineEvent) {
     // รองรับ "1", "2", "1-1", "10" ฯลฯ — ดึงเลขตัวแรกมาใช้เป็นลำดับ
     const numMatch = text.match(/^(\d+)/)
     if (session?.exchangeIds && session.exchangeIds.length > 0 && numMatch) {
-      const idx = parseInt(numMatch[1], 10) - 1
+      const idx = parseInt(numMatch[1] ?? "", 10) - 1
       if (idx >= 0 && idx < session.exchangeIds.length) {
         const exchangeId = session.exchangeIds[idx]!
         const userId = await getUserIdByLineUserId(lineUserId)

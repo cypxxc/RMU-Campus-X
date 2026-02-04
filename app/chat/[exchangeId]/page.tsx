@@ -151,7 +151,7 @@ export default function ChatPage({
         if (ordered.length > 0) oldestMessageRef.current = ordered[0] ?? null
         setHasMoreOlder(snapshot.docs.length >= MESSAGE_PAGE_SIZE)
       },
-      (err) => {
+      (_err) => {
         if (mountedRef.current) toast({ title: "โหลดข้อความไม่สำเร็จ", variant: "destructive" })
       }
     )
@@ -271,7 +271,7 @@ export default function ChatPage({
         const millis = t && typeof (t as { toMillis?: () => number }).toMillis === "function" ? (t as { toMillis: () => number }).toMillis() : 0
         setOtherTyping(millis > 0 && Date.now() - millis < 5000)
       },
-      (err) => {
+      (_err) => {
         // permission-denied หรือ network error — ปิด typing indicator และไม่ throw
         if (mountedRef.current) setOtherTyping(false)
       }

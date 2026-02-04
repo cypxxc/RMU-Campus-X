@@ -143,7 +143,7 @@ export default function PublicProfilePage() {
       const filtered = userReviews.filter((r: { targetUserId?: string }) => String(r.targetUserId) === uid)
       setReviews(filtered)
 
-      const reviewerIds = [...new Set((filtered as { reviewerId?: string }[]).map((r) => r.reviewerId).filter(Boolean))]
+      const reviewerIds: string[] = [...new Set((filtered as { reviewerId?: string }[]).map((r) => r.reviewerId).filter((id): id is string => Boolean(id)))]
       const profiles: Record<string, { displayName?: string; photoURL?: string }> = {}
       await Promise.all(
         reviewerIds.map(async (reviewerId) => {

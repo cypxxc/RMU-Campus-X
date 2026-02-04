@@ -89,7 +89,7 @@ export function createUserStatusDeps(): UserStatusUpdateDeps {
     },
 
     async createAuditLog(log: AuditLogInput): Promise<void> {
-      const sanitized = stripUndefinedForFirestore(log as Record<string, unknown>)
+      const sanitized = stripUndefinedForFirestore(log as unknown as Record<string, unknown>)
       await db.collection("adminLogs").add({
         ...sanitized,
         createdAt: FieldValue.serverTimestamp(),
@@ -137,7 +137,7 @@ export function createWarningIssueDeps(): WarningIssueDeps {
     },
 
     async createAuditLog(log: AuditLogInput): Promise<void> {
-      const sanitized = stripUndefinedForFirestore(log as Record<string, unknown>)
+      const sanitized = stripUndefinedForFirestore(log as unknown as Record<string, unknown>)
       await db.collection("adminLogs").add({
         ...sanitized,
         createdAt: FieldValue.serverTimestamp(),

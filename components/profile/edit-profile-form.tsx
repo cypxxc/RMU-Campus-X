@@ -20,7 +20,7 @@ export function EditProfileForm({
   initialDisplayName, 
   initialBio, 
   email, 
-  userId, 
+  userId: _userId, 
   onSave 
 }: EditProfileFormProps) {
   const [displayName, setDisplayName] = useState(initialDisplayName)

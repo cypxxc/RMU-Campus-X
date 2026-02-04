@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const adminEmail = userDoc.exists ? userDoc.data()?.email : decodedToken.email || "unknown"
 
     // 5. Create Log Entry (strip undefined so Firestore accepts beforeState/afterState)
-    const sanitized = stripUndefined(body as Record<string, unknown>)
+    const sanitized = stripUndefined(body as unknown as Record<string, unknown>)
     const logRef = await db.collection("adminLogs").add({
       ...sanitized,
       adminId: decodedToken.uid,

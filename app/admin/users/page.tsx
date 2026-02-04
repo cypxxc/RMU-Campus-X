@@ -32,18 +32,18 @@ import { UserDetailModal } from "@/components/admin/admin-modals"
 import { ActionDialog, type SuspendDuration } from "@/components/admin/action-dialog"
 import { Input } from "@/components/ui/input"
 
-interface UserWithReports extends User {
+interface UserWithReportsRow extends User {
   reportsReceived: number
   reportsFiled: number
   lastReportDate?: Date
 }
 
 export default function AdminReportedUsersPage() {
-  const [users, setUsers] = useState<UserWithReports[]>([])
+  const [users, setUsers] = useState<UserWithReportsRow[]>([])
   const [, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<UserWithReports | null>(null)
+  const [selectedUser, setSelectedUser] = useState<UserWithReportsRow | null>(null)
   const [userWarnings, setUserWarnings] = useState<UserWarning[]>([])
   const [userDetail, setUserDetail] = useState<{
     displayName?: string
@@ -132,7 +132,7 @@ export default function AdminReportedUsersPage() {
       // Combine Firestore users and Ghost users (from reports)
       const allUserIds = new Set([...Array.from(firestoreUsersMap.keys()), ...Array.from(userStatsMap.keys())])
       
-      const finalUsers: UserWithReports[] = Array.from(allUserIds).map(uid => {
+      const finalUsers: UserWithReportsRow[] = Array.from(allUserIds).map(uid => {
         const firestoreUser = firestoreUsersMap.get(uid)
         const stats = userStatsMap.get(uid) || { received: 0, filed: 0 }
         
@@ -219,7 +219,7 @@ export default function AdminReportedUsersPage() {
     return () => clearInterval(interval)
   }, [isAdmin, loadData])
 
-  const handleViewUser = async (userRow: UserWithReports) => {
+  const handleViewUser = async (userRow: UserWithReportsRow) => {
     setSelectedUser(userRow)
     setUserDetail(null)
     setUserWarnings([])
@@ -340,7 +340,7 @@ export default function AdminReportedUsersPage() {
     }
   }
 
-  const getStatusBadge = (userItem: UserWithReports) => {
+  const getStatusBadge = (userItem: UserWithReportsRow) => {
     const status = userItem.status || 'ACTIVE'
     const configs = {
       ACTIVE: { label: "ใช้งานปกติ", className: "bg-green-100 text-green-800 border-green-200", icon: CheckCircle2 },
