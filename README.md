@@ -279,13 +279,16 @@ rmu-campus-x/
 ### 4. ระบบแลกเปลี่ยน (Exchange System)
 
 - **ขอรับสิ่งของ** - ส่งคำขอพร้อมข้อความ
-- **ยืนยัน/ปฏิเสธ** - เจ้าของเลือกอนุมัติ
-- **ระบบแชท** - สนทนานัดรับของ
-- **ติดตามสถานะ** - Pending → Accepted → Completed
+- **ยืนยัน/ปฏิเสธ** - เจ้าของเลือกอนุมัติ (ได้ทั้งหน้ารายการและหน้าแชท)
+- **ระบบแชท** - สนทนานัดรับของ ชื่อคู่สนทนากดไปดูโปรไฟล์สาธารณะได้
+- **ติดตามสถานะ** - Pending → Accepted → In Progress → Completed
+- **ซ่อนจากรายการ** - ผู้ใช้สามารถซ่อนการแลกเปลี่ยนจากรายการของตนได้ (อีกฝ่ายยังเห็นอยู่)
+- **แจ้งเตือนเมื่ออีกฝ่ายยืนยัน** - แจ้งให้อีกฝ่ายทราบเมื่อมีการกดยืนยันการแลกเปลี่ยน
 
 ### 5. ระบบแจ้งเตือน (Notification System)
 
 - **In-App Notifications** - แจ้งเตือนในระบบ (list, mark read, mark all read, delete ผ่าน API)
+- **อัปเดตทันที** - กด "อ่านทั้งหมด" แล้ว UI (dropdown รูประฆัง + หน้าแจ้งเตือน) อัปเดตทันที ไม่ต้องรอโพล
 - **LINE Push Notifications** - แจ้งเตือนผ่าน LINE
 - **Admin Alerts** - แจ้ง Admin เมื่อมีรายงานใหม่
 
@@ -573,10 +576,11 @@ bun start
 | | DELETE | `/api/notifications/[id]` | ลบการแจ้งเตือน |
 | **Reviews** | GET | `/api/reviews?targetUserId=&limit=` | list รีวิวที่ user ได้รับ (กรองผู้รีวิวที่ถูกลบแล้ว) |
 | | POST | `/api/reviews` | สร้างรีวิว (ตรวจผู้ร่วมแลกเปลี่ยน, อัปเดต rating) |
-| **Exchanges** | GET | `/api/exchanges` | list การแลกเปลี่ยน |
+| **Exchanges** | GET | `/api/exchanges` | list การแลกเปลี่ยน (ไม่รวมที่ผู้ใช้ซ่อนแล้ว) |
 | | POST | `/api/exchanges` | สร้างคำขอแลกเปลี่ยน (ต้อง terms) |
 | | POST | `/api/exchanges/respond` | ตอบรับ/ปฏิเสธ |
 | | PATCH | `/api/exchanges/[id]` | อัปเดตสถานะ |
+| | POST | `/api/exchanges/[id]/hide` | ซ่อนจากรายการของฉัน |
 | **Reports / Support** | POST | `/api/reports`, `/api/support` | สร้างรายงาน / ticket (ต้อง terms) |
 | **Admin / LINE / Upload** | - | `/api/admin/*`, `/api/line/*`, `/api/upload` | ดู docs/API.md |
 
