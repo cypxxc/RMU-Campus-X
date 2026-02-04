@@ -3,7 +3,7 @@
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTriangle, History, RefreshCw } from "lucide-react"
+import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTriangle, History, RefreshCw, Bot } from "lucide-react"
 import { useState } from "react"
 
 import { AuthGuard } from "@/components/auth-guard"
@@ -25,6 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/support", label: "จัดการคำร้อง", icon: MessageSquare },
     { href: "/admin/reports", label: "รายงานความไม่เหมาะสม", icon: AlertTriangle },
     { href: "/admin/logs", label: "ประวัติกิจกรรม", icon: History },
+    { href: "/admin/line-test", label: "ทดสอบ LINE Bot", icon: Bot },
   ]
  
   const NavLink = ({ item, onClick }: { item: typeof navItems[0], onClick?: () => void }) => {
