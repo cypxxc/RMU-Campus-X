@@ -38,11 +38,11 @@ import Link from "next/link"
 import { format, isToday, isYesterday } from "date-fns"
 import { th } from "date-fns/locale"
 import { ReportModal } from "@/components/report-modal"
-import { ChatImageUpload } from "@/components/chat/chat-image-upload"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { ReviewModal } from "@/components/review-modal"
 import { checkExchangeReviewed } from "@/lib/db/reviews"
 import { Star } from "lucide-react"
+import { getConfirmButtonLabel, getWaitingOtherConfirmationMessage } from "@/lib/exchange-state-machine"
+import { ExchangeStepIndicator } from "@/components/exchange/exchange-step-indicator"
 
 
 export default function ChatPage({
@@ -80,10 +80,6 @@ export default function ChatPage({
     })
   })()
 
-  // Image Upload State
-  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
-  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null)
-  
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportTargetId, setReportTargetId] = useState<string | null>(null)
   const [otherUserDisplayName, setOtherUserDisplayName] = useState<string | null>(null)
@@ -328,7 +324,10 @@ export default function ChatPage({
     }
   }
 
-  const isChatClosed = exchange?.status === "cancelled" || exchange?.status === "rejected"
+  const isChatClosed =
+    exchange?.status === "cancelled" ||
+    exchange?.status === "rejected" ||
+    exchange?.status === "completed"
 
   const handleRespondToRequest = async (action: "accept" | "reject") => {
     if (!user || !exchange) return
@@ -353,53 +352,18 @@ export default function ChatPage({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if ((!newMessage.trim() && !selectedImageFile) || !user || !exchange) return
+    if (!newMessage.trim() || !user || !exchange) return
     if (isChatClosed) return
 
     setSending(true)
     try {
-      let imageUrl = undefined
-      let imageType = undefined
-
-      // Upload image if selected
-      if (selectedImageFile) {
-        const formData = new FormData()
-        formData.append('file', selectedImageFile)
-        formData.append('preset', 'chat')
-
-        const token = await user.getIdToken()
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-
-        if (!uploadRes.ok) {
-           // Try to parse error
-           let errorMsg = 'Image upload failed'
-           try {
-             const errData = await uploadRes.json()
-             errorMsg = errData.error || errorMsg
-           } catch {}
-           throw new Error(errorMsg)
-        }
-
-        const data = await uploadRes.json()
-        imageUrl = data.url
-        imageType = selectedImageFile.type
-      }
-
-      const messageText = newMessage.trim() || (imageUrl ? "ส่งรูปภาพ" : "")
+      const messageText = newMessage.trim()
 
       const res = await authFetchJson<{ messageId?: string; createdAt?: string }>(
         `/api/chat/${exchangeId}/messages`,
         {
           method: "POST",
-          body: {
-            message: messageText,
-            imageUrl: imageUrl ?? undefined,
-            imageType: imageType ?? undefined,
-          },
+          body: { message: messageText },
         }
       )
       const messageId = res.data?.messageId ?? ""
@@ -413,21 +377,15 @@ export default function ChatPage({
           senderEmail: user.email ?? "",
           message: messageText,
           createdAt: createdAt as unknown as ChatMessage["createdAt"],
-          imageUrl: imageUrl ?? null,
-          imageType: imageType ?? null,
         } as ChatMessage,
       ])
 
       setNewMessage("")
-      setSelectedImageFile(null)
-      setSelectedImagePreview(null)
       scrollToBottom()
 
       // Create notification for recipient
       const recipientId = user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
-      const notificationMessage = imageUrl ? 
-        (newMessage.trim() ? `ส่งรูปภาพและข้อความถึงคุณ: ${newMessage.trim()}` : `ส่งรูปภาพถึงคุณ`) : 
-        `ส่งข้อความถึงคุณ: ${newMessage.substring(0, 30)}...`
+      const notificationMessage = `ส่งข้อความถึงคุณ: ${messageText.substring(0, 30)}${messageText.length > 30 ? "..." : ""}`
 
       await createNotification({
         userId: recipientId,
@@ -451,7 +409,7 @@ export default function ChatPage({
             recipientId,
             senderName: user.email?.split('@')[0] || 'ผู้ใช้',
             itemTitle: exchange.itemTitle,
-            messagePreview: imageUrl ? '[ส่งรูปภาพ]' : newMessage.trim(),
+            messagePreview: messageText,
             exchangeId
           })
         }).catch(err => console.log('[LINE] Notify chat error:', err))
@@ -589,7 +547,7 @@ export default function ChatPage({
                     <Package className="h-6 w-6 text-muted-foreground" />
                   </div>
                 )}
-                <div>
+                <div className="flex-1 min-w-0">
                   <CardTitle className="text-lg leading-tight">
                     <Link
                       href={`/profile/${otherUserId}`}
@@ -671,8 +629,8 @@ export default function ChatPage({
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/80 text-muted-foreground text-xs sm:text-sm h-9 border border-border/50">
-                      <span>ปุ่มยืนยันจะแสดงเมื่อเจ้าของตอบรับแล้ว</span>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/80 text-muted-foreground text-xs sm:text-sm h-9 border border-border/50" role="status">
+                      <span>รอเจ้าของตอบรับคำขอ — แชทเพื่อสอบถามได้</span>
                     </div>
                   )
                 )}
@@ -683,7 +641,7 @@ export default function ChatPage({
                         <AlertDialogTrigger asChild>
                           <Button size="sm" className="h-9 font-bold bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md transition-all">
                             <CheckCheck className="h-4 w-4 mr-2" />
-                            ยืนยัน
+                            {getConfirmButtonLabel(exchange.status, isOwner ? "owner" : "requester")}
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent className="max-w-md">
@@ -694,10 +652,14 @@ export default function ChatPage({
                               </div>
                               <div>
                                 <AlertDialogTitle>
-                                  {isOwner ? "ยืนยันการให้" : "ยืนยันการรับ"}
+                                  {getConfirmButtonLabel(exchange.status, isOwner ? "owner" : "requester")}
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  {isOwner ? "ยืนยันว่าคุณจะส่งมอบสิ่งของให้ผู้รับ" : "ยืนยันว่าคุณจะรับสิ่งของจากผู้ให้"}
+                                  {exchange.status === "accepted"
+                                    ? "ยืนยันว่าพร้อมเริ่มส่งมอบ/รับของแล้ว (นัดหมายหรือจัดส่ง)"
+                                    : isOwner
+                                      ? "ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว"
+                                      : "ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว"}
                                 </AlertDialogDescription>
                               </div>
                             </div>
@@ -709,22 +671,32 @@ export default function ChatPage({
                               className="bg-green-600 hover:bg-green-700 font-bold"
                             >
                               <CheckCheck className="h-4 w-4 mr-2" />
-                              {isOwner ? "ยืนยันการให้" : "ยืนยันการรับ"}
+                              {getConfirmButtonLabel(exchange.status, isOwner ? "owner" : "requester")}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
                     )}
                     {hasConfirmed && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-50 text-green-700 border border-green-200 text-sm font-bold h-9">
-                        <CheckCheck className="h-4 w-4" />
-                        คุณยืนยันแล้ว
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-sm font-bold h-9" role="status">
+                        <CheckCheck className="h-4 w-4 shrink-0" />
+                        {getWaitingOtherConfirmationMessage(isOwner ? "owner" : "requester")}
                       </div>
                     )}
                   </>
                 )}
               </div>
             </div>
+            {/* Step indicator: แสดงขั้นตอนการแลกเปลี่ยน */}
+            {exchange.status !== "cancelled" && exchange.status !== "rejected" && (
+              <div className="mt-3 pt-3 border-t border-border/50">
+                <ExchangeStepIndicator
+                  status={exchange.status}
+                  ownerConfirmed={exchange.ownerConfirmed}
+                  requesterConfirmed={exchange.requesterConfirmed}
+                />
+              </div>
+            )}
           </CardHeader>
 
           <CardContent className="flex flex-col h-full p-0 overflow-hidden">
@@ -775,29 +747,6 @@ export default function ChatPage({
                                 : "bg-white dark:bg-muted text-foreground border border-border/40 rounded-bl-none"
                             }`}
                           >
-                            {msg.imageUrl && (
-                              <div className="mb-2 rounded-lg overflow-hidden relative">
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <div className="relative cursor-pointer hover:opacity-90 transition-opacity">
-                                      <Image
-                                        src={msg.imageUrl}
-                                        alt="Sent image"
-                                        width={300}
-                                        height={200}
-                                        className="w-full h-auto object-cover max-h-[250px] rounded-lg bg-black/5"
-                                        unoptimized
-                                      />
-                                    </div>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-3xl p-0 overflow-hidden bg-transparent border-none shadow-none">
-                                    <div className="relative w-full h-[80vh]">
-                                      <Image src={msg.imageUrl} alt="Full view" fill className="object-contain" unoptimized />
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
-                              </div>
-                            )}
                             {isEditing ? (
                               <div className="flex flex-col gap-2">
                                 <Input
@@ -883,33 +832,23 @@ export default function ChatPage({
               <div className="border-t p-4 bg-muted/50 text-center text-sm text-muted-foreground">
                 {exchange.status === "cancelled"
                   ? "การแลกเปลี่ยนนี้ถูกยกเลิกแล้ว ไม่สามารถส่งข้อความได้"
-                  : "การแลกเปลี่ยนนี้ถูกปฏิเสธแล้ว ไม่สามารถส่งข้อความได้"}
+                  : exchange.status === "rejected"
+                    ? "การแลกเปลี่ยนนี้ถูกปฏิเสธแล้ว ไม่สามารถส่งข้อความได้"
+                    : "การแลกเปลี่ยนเสร็จสมบูรณ์แล้ว ปิดห้องแชท"}
               </div>
             ) : (
               <form onSubmit={handleSendMessage} className="border-t p-3 sm:p-4 bg-background">
                 <div className="flex gap-2 items-end">
-                  <ChatImageUpload
-                    onImageSelected={(file, preview) => {
-                      setSelectedImageFile(file)
-                      setSelectedImagePreview(preview)
-                    }}
-                    onClear={() => {
-                      setSelectedImageFile(null)
-                      setSelectedImagePreview(null)
-                    }}
-                    selectedImage={selectedImagePreview}
-                    disabled={sending}
-                  />
                   <Input
                     value={newMessage}
                     onChange={handleInputChange}
                     placeholder="พิมพ์ข้อความ..."
                     disabled={sending}
-                    className="min-h-[40px] max-h-[120px] py-2"
+                    className="min-h-[40px] max-h-[120px] py-2 flex-1"
                   />
                   <Button 
                     type="submit" 
-                    disabled={sending || (!newMessage.trim() && !selectedImageFile)}
+                    disabled={sending || !newMessage.trim()}
                     className="h-10 w-10 p-0 shrink-0"
                   >
                     {sending ? (

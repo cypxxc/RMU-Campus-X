@@ -238,7 +238,8 @@ export async function notifyItemDeleted(
 // ============ Chat Notifications ============
 
 /**
- * แจ้งเตือนเมื่อมีข้อความแชทใหม่ (ข้อความแจ้งเตือนอย่างเดียว)
+ * แจ้งเตือนเมื่อมีข้อความแชทใหม่
+ * รูปแบบเดียวกับข้อความที่ส่งจาก LINE — แสดงเหมือนแชทโดยตรง พร้อมคำใบ้ตอบกลับ
  */
 export async function notifyNewChatMessage(
   lineUserId: string,
@@ -248,15 +249,11 @@ export async function notifyNewChatMessage(
   _exchangeId: string,
   _baseUrl: string
 ): Promise<LinePushResponse> {
-  const preview = messagePreview ? `\n💬 ข้อความ: ${messagePreview}` : ""
+  const senderShort = senderName.split("@")[0] ?? senderName
+  const content = messagePreview || "(มีข้อความใหม่)"
   const message: LineTextMessage = {
     type: "text",
-    text: `💬 มีข้อความแชทใหม่
-
-👤 จาก: ${senderName}
-📦 รายการ: ${itemTitle}${preview}
-
-(เข้าเว็บแอป RMU-Campus X → การแลกเปลี่ยนของฉัน → เลือกรายการเพื่อเปิดแชท)`,
+    text: `💬 จาก ${senderShort} (รายการ: ${itemTitle})\n\n${content}\n\nพิมพ์ข้อความเพื่อตอบกลับได้`,
   }
   return sendPushMessage(lineUserId, [message])
 }

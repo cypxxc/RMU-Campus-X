@@ -4,20 +4,13 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { authFetchJson } from "@/lib/api-client"
-import type { Announcement, AnnouncementType } from "@/types"
+import type { Announcement } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -37,12 +30,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Megaphone, Plus, Pencil, Trash2 } from "lucide-react"
-
-const TYPE_LABELS: Record<AnnouncementType, string> = {
-  info: "ข้อมูลทั่วไป",
-  warning: "คำเตือน",
-  critical: "สำคัญเร่งด่วน",
-}
 
 function toDateStr(v: unknown): string {
   if (!v) return "—"
@@ -77,7 +64,6 @@ export default function AdminAnnouncementsPage() {
   const [form, setForm] = useState({
     title: "",
     message: "",
-    type: "info" as AnnouncementType,
     isActive: true,
     startAt: "",
     endAt: "",
@@ -123,7 +109,6 @@ export default function AdminAnnouncementsPage() {
     setForm({
       title: "",
       message: "",
-      type: "info",
       isActive: true,
       startAt: "",
       endAt: "",
@@ -136,7 +121,6 @@ export default function AdminAnnouncementsPage() {
     setForm({
       title: a.title,
       message: a.message,
-      type: a.type,
       isActive: a.isActive,
       startAt: toDateTimeLocalValue(a.startAt),
       endAt: toDateTimeLocalValue(a.endAt),
@@ -161,7 +145,6 @@ export default function AdminAnnouncementsPage() {
           body: {
             title: form.title.trim(),
             message: form.message.trim(),
-            type: form.type,
             isActive: form.isActive,
             startAt: form.startAt || null,
             endAt: form.endAt || null,
@@ -176,7 +159,6 @@ export default function AdminAnnouncementsPage() {
           body: {
             title: form.title.trim(),
             message: form.message.trim(),
-            type: form.type,
             isActive: form.isActive,
             startAt: form.startAt || null,
             endAt: form.endAt || null,
@@ -246,9 +228,6 @@ export default function AdminAnnouncementsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">{a.title}</span>
-                        <Badge variant={a.type === "critical" ? "destructive" : a.type === "warning" ? "secondary" : "outline"}>
-                          {TYPE_LABELS[a.type]}
-                        </Badge>
                         {!a.isActive && <Badge variant="secondary">ปิดแสดง</Badge>}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{a.message}</p>
@@ -301,19 +280,6 @@ export default function AdminAnnouncementsPage() {
                   rows={4}
                   className="rounded-lg resize-y min-h-[100px]"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">ประเภท</Label>
-                <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v as AnnouncementType }))}>
-                  <SelectTrigger className="rounded-lg">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="info">ข้อมูลทั่วไป</SelectItem>
-                    <SelectItem value="warning">คำเตือน</SelectItem>
-                    <SelectItem value="critical">สำคัญเร่งด่วน</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
               <div className="flex items-center gap-3 pt-1">
                 <input

@@ -137,29 +137,29 @@ export async function POST(
       return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้น")
     }
 
-    let body: { message?: string; imageUrl?: string; imageType?: string }
+    const status = (exchangeData?.status as string) ?? ""
+    const CHATABLE_STATUSES = ["pending", "accepted", "in_progress"]
+    if (!CHATABLE_STATUSES.includes(status)) {
+      return ApiErrors.badRequest(
+        "ห้องแชทปิดแล้ว — การแลกเปลี่ยนเสร็จสิ้น/ยกเลิก/ปฏิเสธแล้ว ไม่สามารถส่งข้อความได้"
+      )
+    }
+
+    let body: { message?: string }
     try {
       body = await request.json()
     } catch {
       return ApiErrors.badRequest("Invalid JSON body")
     }
 
-    const messageText =
-      typeof body.message === "string"
-        ? body.message.trim()
-        : body.imageUrl
-          ? "ส่งรูปภาพ"
-          : ""
-    const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl : null
-    const imageType = typeof body.imageType === "string" ? body.imageType : null
+    const messageText = typeof body.message === "string" ? body.message.trim() : ""
+    if (!messageText) return ApiErrors.badRequest("กรุณาระบุข้อความ")
 
     const ref = await db.collection("chatMessages").add({
       exchangeId,
       senderId: decoded.uid,
       senderEmail: decoded.email ?? "",
       message: messageText,
-      imageUrl,
-      imageType,
       createdAt: FieldValue.serverTimestamp(),
     })
 

@@ -19,15 +19,39 @@ export const VALID_TRANSITIONS: Record<ExchangeStatus, ExchangeStatus[]> = {
 }
 
 /**
- * Human-readable labels for exchange statuses
+ * Human-readable labels for exchange statuses (ใช้ใน validation, error messages)
  */
 export const STATUS_LABELS: Record<ExchangeStatus, string> = {
-  pending: 'รอการตอบรับ',
+  pending: 'รอเจ้าของตอบรับ',
   accepted: 'ตอบรับแล้ว',
   in_progress: 'กำลังดำเนินการ',
   completed: 'เสร็จสิ้น',
   cancelled: 'ยกเลิกแล้ว',
   rejected: 'ปฏิเสธแล้ว',
+}
+
+/** คำอธิบายสั้นสำหรับแต่ละขั้นตอน (ตาม FLOW-BEST-PRACTICES) */
+export const STATUS_DESCRIPTIONS: Record<ExchangeStatus, string> = {
+  pending: 'รอเจ้าของสิ่งของตอบรับคำขอ',
+  accepted: 'ตอบรับแล้ว — เตรียมพบกันหรือส่งของ',
+  in_progress: 'กำลังดำเนินการ — กำลังส่งมอบ/รับของ',
+  completed: 'แลกเปลี่ยนเสร็จสมบูรณ์',
+  cancelled: 'การแลกเปลี่ยนถูกยกเลิก',
+  rejected: 'เจ้าของปฏิเสธคำขอ',
+}
+
+/** ข้อความปุ่มยืนยันตาม status (accepted → เริ่มดำเนินการ, in_progress → ยืนยันเสร็จ) */
+export function getConfirmButtonLabel(status: ExchangeStatus, role: 'owner' | 'requester'): string {
+  if (status === 'accepted') return 'เริ่มดำเนินการ'
+  if (status === 'in_progress') return role === 'owner' ? 'ยืนยันส่งมอบแล้ว' : 'ยืนยันรับของแล้ว'
+  return 'ยืนยัน'
+}
+
+/** ข้อความเมื่อยืนยันฝ่ายเดียวแล้ว — รออีกฝ่าย */
+export function getWaitingOtherConfirmationMessage(role: 'owner' | 'requester'): string {
+  return role === 'owner'
+    ? 'คุณยืนยันส่งมอบแล้ว — รออีกฝ่ายยืนยันรับของ'
+    : 'คุณยืนยันรับของแล้ว — รออีกฝ่ายยืนยันส่งมอบ'
 }
 
 /**

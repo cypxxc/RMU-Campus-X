@@ -51,14 +51,7 @@ import {
   Mail,
 } from "lucide-react"
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "รอตอบรับ",
-  accepted: "ตอบรับแล้ว",
-  in_progress: "กำลังดำเนินการ",
-  completed: "เสร็จสิ้น",
-  cancelled: "ยกเลิก",
-  rejected: "ปฏิเสธ",
-}
+import { STATUS_LABELS } from "@/lib/exchange-state-machine"
 
 interface ExchangeRow {
   id: string
@@ -238,7 +231,7 @@ export default function AdminExchangesPage() {
         : status === "cancelled" || status === "rejected"
           ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
           : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400"
-    return <Badge className={c}>{STATUS_LABELS[status] ?? status}</Badge>
+    return <Badge className={c}>{STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status}</Badge>
   }
 
   if (!isAdmin) {

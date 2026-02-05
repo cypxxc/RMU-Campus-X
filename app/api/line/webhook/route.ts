@@ -127,13 +127,23 @@ async function getUserIdByLineUserId(lineUserId: string): Promise<string | null>
   return r ? r.id : null
 }
 
+/** สถานะที่ยังแชทได้ — ไม่รวม cancelled, rejected, completed (ตามแนวทาง marketplace: แชทที่ deal เสร็จแล้วไม่แสดงในรายการ) */
+const CHATABLE_STATUSES = ["pending", "accepted", "in_progress"]
+
+async function getExchangeStatus(exchangeId: string): Promise<string | null> {
+  const db = getAdminDb()
+  const doc = await db.collection("exchanges").doc(exchangeId).get()
+  if (!doc.exists) return null
+  return (doc.data()?.status as string) || null
+}
+
 async function getActiveExchangesForUser(userId: string): Promise<Array<{ id: string; itemTitle: string; otherDisplayName: string }>> {
   const db = getAdminDb()
   const [ownerSnap, requesterSnap] = await Promise.all([
     db.collection("exchanges").where("ownerId", "==", userId).get(),
     db.collection("exchanges").where("requesterId", "==", userId).get(),
   ])
-  const statusOk = (s: string) => s !== "cancelled" && s !== "rejected"
+  const statusOk = (s: string) => CHATABLE_STATUSES.includes(s)
   const list: Array<{ id: string; itemTitle: string; ownerId: string; requesterId: string }> = []
   ownerSnap.docs.forEach((d) => {
     const d2 = d.data()
@@ -254,7 +264,7 @@ async function handleTextMessage(event: LineEvent) {
         const exchanges = await getActiveExchangesForUser(userId)
         if (exchanges.length === 0) {
           await sendReplyMessage(event.replyToken, [
-            { type: "text", text: "📭 ไม่มีรายการแลกเปลี่ยนที่กำลังดำเนินการ\n\nเมื่อมีคนขอรับของ หรือคุณขอรับของคนอื่น จะแสดงรายการให้เลือกแชทได้ที่นี่" },
+            { type: "text", text: "📭 ไม่มีรายการแลกเปลี่ยนที่ยังดำเนินการอยู่\n\nรายการที่เสร็จสิ้น/ยกเลิกแล้วจะไม่แสดง — เมื่อมีคนขอรับของ หรือคุณขอรับของคนอื่น จะแสดงรายการให้เลือกแชทได้ที่นี่" },
           ])
           return
         }
@@ -452,6 +462,13 @@ async function handleTextMessage(event: LineEvent) {
           ])
           return
         }
+        const exStatus = await getExchangeStatus(exchangeId)
+        if (!exStatus || !CHATABLE_STATUSES.includes(exStatus)) {
+          await sendReplyMessage(event.replyToken, [
+            { type: "text", text: "📭 รายการนี้เสร็จสิ้นหรือถูกยกเลิกแล้ว\n\nพิมพ์ \"แชท\" เพื่อดูรายการที่ยังดำเนินการอยู่" },
+          ])
+          return
+        }
         const db = getAdminDb()
         await db.collection(LINE_CHAT_SESSIONS).doc(lineUserId).set(
           { exchangeId, updatedAt: FieldValue.serverTimestamp() },
@@ -486,6 +503,14 @@ async function handleTextMessage(event: LineEvent) {
         await sendReplyMessage(event.replyToken, [{ type: "text", text: "❌ ไม่พบบัญชี" }])
         return
       }
+      const exStatus = await getExchangeStatus(session.exchangeId)
+      if (!exStatus || !CHATABLE_STATUSES.includes(exStatus)) {
+        await clearChatSession(lineUserId)
+        await sendReplyMessage(event.replyToken, [
+          { type: "text", text: "📭 การแลกเปลี่ยนนี้เสร็จสิ้นหรือถูกยกเลิกแล้ว ไม่สามารถส่งข้อความได้\n\nพิมพ์ \"แชท\" เพื่อดูรายการที่ยังดำเนินการอยู่" },
+        ])
+        return
+      }
       const other = await getExchangeOtherParty(session.exchangeId, userId)
       if (!other) {
         await sendReplyMessage(event.replyToken, [
@@ -514,7 +539,7 @@ async function handleTextMessage(event: LineEvent) {
         await sendPushMessage(other.lineUserId, [
           {
             type: "text",
-            text: `💬 จาก ${senderNameShort} (รายการ: ${other.itemTitle})\n\n${text}`,
+            text: `💬 จาก ${senderNameShort} (รายการ: ${other.itemTitle})\n\n${text}\n\nพิมพ์ข้อความเพื่อตอบกลับได้`,
           },
         ])
       }

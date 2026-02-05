@@ -16,6 +16,7 @@ import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { ReportModal } from "@/components/report-modal"
 import { CancelExchangeDialog, DeleteExchangeDialog } from "@/components/exchange/exchange-action-dialogs"
+import { STATUS_LABELS } from "@/lib/exchange-state-machine"
 
 export default function MyExchangesPage() {
   const [exchanges, setExchanges] = useState<Exchange[]>([])
@@ -226,15 +227,6 @@ export default function MyExchangesPage() {
     )
   }
 
-  const statusLabels: Record<string, string> = {
-    pending: "รอการตอบรับ",
-    accepted: "ตอบรับแล้ว",
-    in_progress: "กำลังดำเนินการ",
-    completed: "เสร็จสิ้น",
-    cancelled: "ยกเลิก",
-    rejected: "ปฏิเสธ",
-  }
-
   const getStatusBadgeClass = (status: string) => {
     const classes: Record<string, string> = {
       pending: "badge-warning",
@@ -303,7 +295,7 @@ export default function MyExchangesPage() {
                           variant="outline" 
                           className={`shrink-0 ${getStatusBadgeClass(exchange.status)}`}
                         >
-                          {statusLabels[exchange.status]}
+                          {STATUS_LABELS[exchange.status as keyof typeof STATUS_LABELS] ?? exchange.status}
                         </Badge>
                       </div>
                     </CardHeader>

@@ -152,7 +152,7 @@ rmu-campus-x/
 │   │   ├── exchanges/                # Exchange APIs
 │   │   ├── favorites/                # รายการโปรด (list, check, add, delete)
 │   │   ├── items/                    # สิ่งของ (list, create, get, update, delete)
-│   │   ├── line/                     # LINE Integration
+│   │   ├── line/                     # LINE Integration (webhook, notify-chat, notify-exchange, ...)
 │   │   ├── notifications/            # แจ้งเตือน (list, mark read, read-all, delete)
 │   │   ├── reports/                  # Report APIs
 │   │   ├── reviews/                  # รีวิว (list, create)
@@ -174,7 +174,7 @@ rmu-campus-x/
 ├── components/                       # React Components
 │   ├── ui/                           # Base UI Components (Shadcn)
 │   ├── auth-provider.tsx             # Authentication Context
-│   ├── announcement-banner.tsx       # แถบประกาศใต้ Navbar (ปิดได้, แสดงตาม type)
+│   ├── announcement-banner.tsx       # แถบประกาศใต้ Navbar (ปิดได้, เรียลไทม์)
 │   ├── announcement-context.tsx      # Context สถานะประกาศ (ให้ Breadcrumb ปรับ top)
 │   ├── consent-guard.tsx              # ส่งผู้ใช้ที่ยังไม่ยอมรับ terms ไป /consent
 │   ├── breadcrumb-bar.tsx            # Breadcrumb แถบใต้ Navbar (ไม่ซ้อนกับประกาศ)
@@ -183,6 +183,9 @@ rmu-campus-x/
 │   ├── item-card-skeleton.tsx        # Loading Skeleton
 │   ├── post-item-modal.tsx           # Create Item Modal
 │   ├── support-ticket-modal.tsx       # ส่งคำร้องขอความช่วยเหลือ (หัวข้อ + รายละเอียด)
+│   ├── exchange/                     # Exchange-related components
+│   │   ├── exchange-step-indicator.tsx  # Step-by-step progress (รอตอบรับ → เสร็จสิ้น)
+│   │   └── exchange-action-dialogs.tsx  # Cancel / Delete dialogs
 │   └── ...                           # Other Components
 │
 ├── lib/                              # Utility Libraries
@@ -199,6 +202,7 @@ rmu-campus-x/
 │   │   ├── reports.ts                # Reports
 │   │   └── logs.ts                   # Activity Logs
 │   │
+│   ├── exchange-state-machine.ts     # Exchange status transitions, STATUS_LABELS, getConfirmButtonLabel
 │   ├── services/                     # Business Logic Services
 │   │   ├── admin/                    # Admin Services
 │   │   │   └── user-cleanup.ts       # User Deletion Logic
@@ -276,9 +280,9 @@ rmu-campus-x/
 ### 3. ระบบประกาศ (Announcements)
 
 - **แถบประกาศ (Announcement Banner)** - แสดงใต้ Navbar ความกว้างจำกัด (max-w-4xl) จัดกลาง
-- **ประเภทประกาศ** - info, warning, critical (สีและไอคอนต่างกัน)
+- **แสดงผลแบบเรียลไทม์** - โหลดซ้ำตาม `nextCheckInMs` จาก API (เมื่อถึงเวลาเริ่ม/หมดอายุ) ไม่ต้องรีเฟรชหน้า
 - **ปิดประกาศได้** - ผู้ใช้กดปิดได้ (เก็บใน localStorage ต่อ id)
-- **Admin จัดการประกาศ** - หน้า Admin → ประกาศ (CRUD), API `/api/admin/announcements`
+- **Admin จัดการประกาศ** - หน้า Admin → ประกาศ (CRUD), API `/api/admin/announcements` — กำหนดช่วงเวลาแสดง (startAt/endAt), เปิดแสดงทันที (isActive)
 - **Breadcrumb ไม่ซ้อน** - ใช้ `AnnouncementContext` ให้แถบ breadcrumb ปรับ `top` ตามว่ามีประกาศแสดงหรือไม่ (top-28 เมื่อมีประกาศ, top-16 เมื่อไม่มี)
 
 ### 4. ระบบค้นหา (Search System)
@@ -294,7 +298,10 @@ rmu-campus-x/
 - **ขอรับสิ่งของ** - ส่งคำขอพร้อมข้อความ
 - **ยืนยัน/ปฏิเสธ** - เจ้าของเลือกอนุมัติ (ได้ทั้งหน้ารายการและหน้าแชท)
 - **ระบบแชท** - สนทนานัดรับของ ชื่อคู่สนทนากดไปดูโปรไฟล์สาธารณะได้
-- **ติดตามสถานะ** - Pending → Accepted → In Progress → Completed
+- **แชทผ่าน LINE Bot** - พิมพ์ "แชท" ใน LINE เลือกรายการ ส่งข้อความได้แม้อีกฝ่ายยังไม่เชื่อม LINE (ข้อความจะแสดงบนเว็บ)
+- **ติดตามสถานะ** - Step-by-step: รอตอบรับ → ตอบรับแล้ว → กำลังดำเนินการ → เสร็จสิ้น (`ExchangeStepIndicator`)
+- **ปุ่มยืนยันชัดเจน** - accepted → "เริ่มดำเนินการ", in_progress → "ยืนยันส่งมอบ/รับของแล้ว"
+- **รออีกฝ่ายยืนยัน** - แสดงข้อความเมื่อยืนยันฝ่ายเดียวแล้ว (รออีกฝ่ายกดยืนยัน)
 - **ซ่อนจากรายการ** - ผู้ใช้สามารถซ่อนการแลกเปลี่ยนจากรายการของตนได้ (อีกฝ่ายยังเห็นอยู่)
 - **แจ้งเตือนเมื่ออีกฝ่ายยืนยัน** - แจ้งให้อีกฝ่ายทราบเมื่อมีการกดยืนยันการแลกเปลี่ยน
 
@@ -571,7 +578,7 @@ bun start
 
 | กลุ่ม | Method | Endpoint | คำอธิบาย |
 |-------|--------|----------|----------|
-| **Announcements** | GET | `/api/announcements` | list ประกาศสำหรับแบนเนอร์ (ไม่ต้อง auth) |
+| **Announcements** | GET | `/api/announcements` | list ประกาศสำหรับแบนเนอร์ + nextCheckInMs (ไม่ต้อง auth) |
 | **Items** | GET | `/api/items` | list (filter, search, pagination) |
 | | POST | `/api/items` | สร้าง item (ต้อง auth + terms + canPost) |
 | | GET | `/api/items/[id]` | ดึงรายการเดียว |
@@ -679,7 +686,7 @@ bun start
 | **Backups** | `.github/workflows/backup.yml` | Automated daily Firestore backups |
 | **Restore** | `scripts/restore-firestore.ts` | Restore data from backup |
 | **Validation** | `lib/api-validation.ts` | Centralized API validation + requireTermsAccepted |
-| **State Machine** | `lib/exchange-state-machine.ts` | Exchange status transitions |
+| **State Machine** | `lib/exchange-state-machine.ts` | Exchange status transitions, STATUS_LABELS, getConfirmButtonLabel, getWaitingOtherConfirmationMessage |
 | **API Client** | `lib/api-client.ts` | authFetch / authFetchJson (retry + exponential backoff สำหรับ 429/5xx/network), getAuthToken |
 | **Health Check** | `/api/health` | System status monitoring |
 | **App Check** | `lib/app-check.ts` | Firebase App Check (bot protection) |
