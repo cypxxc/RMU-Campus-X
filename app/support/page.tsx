@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, MessageSquare, Clock, CheckCircle2, AlertCircle, Inbox, Send, ChevronRight, ChevronLeft, UserCircle, Headphones, Check } from "lucide-react"
+import { Loader2, MessageSquare, Clock, CheckCircle2, AlertCircle, Inbox, Send, ChevronRight, ChevronLeft, Headphones, Check } from "lucide-react"
 import {
   Dialog,
   DialogContent,
