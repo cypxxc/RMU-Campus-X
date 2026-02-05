@@ -15,13 +15,6 @@ import {
 } from "@/lib/admin-api"
 import type { AnnouncementType } from "@/types"
 
-function toDate(v: unknown): Date | null {
-  if (!v) return null
-  if (typeof (v as { toDate?: () => Date }).toDate === "function") return (v as { toDate: () => Date }).toDate()
-  if (typeof v === "string" || typeof v === "number") return new Date(v)
-  return null
-}
-
 export async function GET(request: NextRequest) {
   const { authorized, error } = await verifyAdminAccess(request)
   if (!authorized) return error!

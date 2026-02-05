@@ -21,7 +21,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { authorized, error, user } = await verifyAdminAccess(request)
+  const { authorized, error } = await verifyAdminAccess(request)
   if (!authorized) return error!
 
   const { id } = await params

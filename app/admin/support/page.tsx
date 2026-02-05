@@ -29,15 +29,6 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, MessageSquare, Send, Pencil, CheckCircle2, Clock, Inbox, Search, Check, UserCircle } from "lucide-react"
 
-// เก็บไว้เพื่อความเข้ากันได้ (ไม่แสดงหมวดหมู่ใน UI แล้ว)
-const ticketCategoryLabels: Record<string, string> = {
-  general: "ปัญหาทั่วไป",
-  bug: "แจ้งข้อผิดพลาด",
-  feature: "เสนอแนะฟังก์ชัน",
-  account: "ปัญหาบัญชี",
-  other: "อื่นๆ",
-}
-
 const ticketStatusLabels: Record<string, string> = {
   new: "ใหม่",
   in_progress: "กำลังดำเนินการ",

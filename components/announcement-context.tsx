@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, type ReactNode } from "react"
 
 type AnnouncementContextValue = {
   hasAnnouncementVisible: boolean
