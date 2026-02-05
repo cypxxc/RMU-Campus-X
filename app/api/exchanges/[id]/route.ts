@@ -5,6 +5,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+
+/** ปิด cache เพื่อให้หน้าแชทได้สถานะล่าสุดหลังเจ้าของกดตอบรับ */
+export const dynamic = "force-dynamic"
 import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { notifyExchangeStatusChange, notifyExchangeCompleted } from "@/lib/line"

@@ -193,32 +193,51 @@ export const respondToExchange = async (
 };
 
 /**
- * Atomically confirm an exchange and check for completion
+ * Atomically confirm an exchange and check for completion.
+ * Uses POST /api/exchanges/confirm (server-side) so both exchange and item
+ * can be updated regardless of who confirms (avoids Firestore permission
+ * error when requester confirms second).
  */
 export const confirmExchange = async (
   exchangeId: string,
   role: "owner" | "requester"
 ): Promise<ApiResponse<{ status: ExchangeStatus }>> => {
+  if (isClient) {
+    return apiCall(
+      async () => {
+        const res = await authFetchJson<{ data?: { status: ExchangeStatus } }>(
+          "/api/exchanges/confirm",
+          { method: "POST", body: { exchangeId, role } }
+        );
+        const status = res.data?.status;
+        if (status === undefined) {
+          throw new Error("ไม่ได้รับสถานะจากเซิร์ฟเวอร์");
+        }
+        return { status };
+      },
+      "confirmExchange",
+      TIMEOUT_CONFIG.STANDARD
+    );
+  }
+
+  // Server/SSR path: keep original Firestore transaction (e.g. server components)
   return apiCall(
     async () => {
       const db = getFirebaseDb();
       const exchangeRef = doc(db, "exchanges", exchangeId);
 
       const result = await runTransaction(db, async (transaction) => {
-        // 1. Read exchange
         const exchangeDoc = await transaction.get(exchangeRef);
         if (!exchangeDoc.exists()) throw new Error("Exchange not found");
 
         const exchange = exchangeDoc.data() as Exchange;
 
-        // Guard: Only allow confirmation if status is acceptable
         if (!["in_progress", "accepted"].includes(exchange.status)) {
           throw new Error(
             `Cannot confirm exchange in status: ${exchange.status}`
           );
         }
 
-        // 2. Update confirmation status
         const updates: Partial<Exchange> = {
           updatedAt: serverTimestamp() as any,
         };
@@ -234,13 +253,11 @@ export const confirmExchange = async (
           requesterConfirmed = true;
         }
 
-        // 3. Check if both confirmed
         let newStatus = exchange.status;
         if (ownerConfirmed && requesterConfirmed) {
           updates.status = "completed";
           newStatus = "completed";
 
-          // Update ITEM status to completed
           const itemRef = doc(db, "items", exchange.itemId);
           transaction.update(itemRef, {
             status: "completed",
@@ -252,9 +269,7 @@ export const confirmExchange = async (
         return { status: newStatus, exchange };
       });
 
-      // 4. Send notifications (outside transaction to avoid complex logic inside)
       if (result.status === "completed") {
-        // ทั้งสองฝ่ายยืนยันแล้ว — แจ้งทั้งคู่
         await createNotification({
           userId: result.exchange.ownerId,
           title: "การแลกเปลี่ยนเสร็จสิ้น",
@@ -270,7 +285,6 @@ export const confirmExchange = async (
           relatedId: exchangeId,
         });
       } else {
-        // ฝั่งใดฝั่งหนึ่งยืนยันแล้ว — แจ้งอีกฝ่ายให้ยืนยัน
         const otherUserId = role === "owner" ? result.exchange.requesterId : result.exchange.ownerId;
         const title = "อีกฝ่ายยืนยันแล้ว";
         const message =

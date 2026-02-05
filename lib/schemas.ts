@@ -102,6 +102,11 @@ export const cancelExchangeSchema = z.object({
   reason: z.string().min(1, "กรุณาระบุเหตุผลการยกเลิก").max(500, "เหตุผลต้องไม่เกิน 500 ตัวอักษร").transform(val => sanitizeText(val)),
 })
 
+export const confirmExchangeSchema = z.object({
+  exchangeId: z.string().min(1, "กรุณาระบุรหัสการแลกเปลี่ยน"),
+  role: z.enum(["owner", "requester"]),
+})
+
 // ============ Report Schemas ============
 
 export const reportTypeSchema = z.enum([

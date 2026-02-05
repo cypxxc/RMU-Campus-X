@@ -162,7 +162,7 @@ export default function ChatPage({
     try {
       const res = await authFetchJson<{ exchange?: Record<string, unknown> }>(
         `/api/exchanges/${exchangeId}`,
-        { method: "GET" }
+        { method: "GET", cache: "no-store" }
       )
       if (!mountedRef.current) return
       const exchangeData = res.data?.exchange as Exchange | undefined
@@ -656,7 +656,9 @@ export default function ChatPage({
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
                                   {exchange.status === "accepted"
-                                    ? "ยืนยันว่าพร้อมเริ่มส่งมอบ/รับของแล้ว (นัดหมายหรือจัดส่ง)"
+                                    ? isOwner
+                                      ? "เจ้าของโพส ยืนยันการส่งมอบ"
+                                      : "ผู้ขอ ยืนยันการรับของ"
                                     : isOwner
                                       ? "ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว"
                                       : "ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว"}
