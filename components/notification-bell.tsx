@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from "@/lib/firestore"
 import { useAuth } from "@/components/auth-provider"
 import type { AppNotification } from "@/types"
-import { Bell, Check, MessageCircle, AlertTriangle, Package, Info, X, Sparkles, Inbox } from "lucide-react"
+import { Bell, Check, MessageCircle, AlertTriangle, Package, Info, X, Sparkles, Inbox, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -13,8 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
@@ -27,6 +25,16 @@ function toCreatedAtMs(n: AppNotification): number {
   if (typeof c._seconds === "number") return c._seconds * 1000
   if (typeof c === "string") return new Date(c).getTime()
   return Date.now()
+}
+
+function formatNotificationTime(n: AppNotification): string {
+  return new Date(toCreatedAtMs(n)).toLocaleString("th-TH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
 export function NotificationBell() {
@@ -54,65 +62,76 @@ export function NotificationBell() {
 
   const handleMarkAsRead = useCallback(async (id: string, relatedId?: string, type?: string) => {
     await markNotificationAsRead(id)
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
+    setUnreadCount((prev) => Math.max(0, prev - 1))
     if (relatedId) {
-      if (type === "chat") {
-        router.push(`/chat/${relatedId}`)
-      } else if (type === "exchange") {
-        router.push("/my-exchanges")
-      } else if (type === "report") {
-        router.push("/profile")
-      }
+      if (type === "chat") router.push(`/chat/${relatedId}`)
+      else if (type === "exchange") router.push("/my-exchanges")
+      else if (type === "report") router.push("/profile")
+      else if (type === "support") router.push(`/support?ticketId=${relatedId}`)
     }
   }, [router])
 
-  // โหลดการแจ้งเตือนผ่าน API + โพลทุก 30 วินาที (ไม่ใช้ onSnapshot เพื่อเลี่ยง Firestore "Unexpected state")
+  // โหลดการแจ้งเตือนผ่าน API (GET /api/notifications) + โพลทุก 15 วินาที + refetch เมื่อเปิด dropdown หรือเมื่อ tab กลับมาที่หน้าจอ
+  const fetchNotifications = useCallback(async (showNewToasts = false) => {
+    if (!user) return
+    try {
+      const { notifications: list } = await getNotifications(user.uid, { pageSize: 20 })
+      const all = (list || []).slice(0, 10)
+
+      if (showNewToasts) {
+        const prevIds = prevNotificationIds.current
+        all.forEach((n) => {
+          if (prevIds.has(n.id)) return
+          const notifTime = toCreatedAtMs(n)
+          const now = Date.now()
+          if (now - notifTime > 30000) return
+          if (shownToasts.current.has(n.id)) return
+          const contentHash = `${n.title}::${n.message}`
+          let contentShownRecently = false
+          shownToasts.current.forEach((ts, key) => {
+            if (key === `content::${contentHash}` && now - ts < 5000) contentShownRecently = true
+          })
+          if (contentShownRecently) return
+          shownToasts.current.set(n.id, now)
+          shownToasts.current.set(`content::${contentHash}`, now)
+          toast({
+            title: n.title,
+            description: n.message,
+            onClick: () => handleMarkAsRead(n.id, n.relatedId, n.type),
+          })
+        })
+      }
+
+      setNotifications(all)
+      setUnreadCount(all.filter((n) => !n.isRead).length)
+      prevNotificationIds.current = new Set(all.map((n) => n.id))
+      lastProcessedTime.current = Date.now()
+    } catch (err) {
+      console.error("[NotificationBell] Fetch error:", err)
+    }
+  }, [user, toast, handleMarkAsRead])
+
   useEffect(() => {
     if (!user) return
 
-    const POLL_MS = 30_000
+    const POLL_MS = 15_000
 
-    const fetchAndApply = async (isFirst: boolean) => {
-      try {
-        const { notifications: list } = await getNotifications(user.uid, { pageSize: 20 })
-        const all = (list || []).slice(0, 10)
+    fetchNotifications(false)
+    const interval = setInterval(() => fetchNotifications(true), POLL_MS)
 
-        if (!isFirst) {
-          const prevIds = prevNotificationIds.current
-          all.forEach((n) => {
-            if (prevIds.has(n.id)) return
-            const notifTime = toCreatedAtMs(n)
-            const now = Date.now()
-            if (now - notifTime > 30000) return
-            if (shownToasts.current.has(n.id)) return
-            const contentHash = `${n.title}::${n.message}`
-            let contentShownRecently = false
-            shownToasts.current.forEach((ts, key) => {
-              if (key === `content::${contentHash}` && now - ts < 5000) contentShownRecently = true
-            })
-            if (contentShownRecently) return
-            shownToasts.current.set(n.id, now)
-            shownToasts.current.set(`content::${contentHash}`, now)
-            toast({
-              title: n.title,
-              description: n.message,
-              onClick: () => handleMarkAsRead(n.id, n.relatedId, n.type),
-            })
-          })
-        }
-
-        setNotifications(all)
-        setUnreadCount(all.filter((n) => !n.isRead).length)
-        prevNotificationIds.current = new Set(all.map((n) => n.id))
-        lastProcessedTime.current = Date.now()
-      } catch (err) {
-        console.error("[NotificationBell] Fetch error:", err)
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchNotifications(true)
       }
     }
+    document.addEventListener("visibilitychange", onVisibilityChange)
 
-    fetchAndApply(true)
-    const interval = setInterval(() => fetchAndApply(false), POLL_MS)
-    return () => clearInterval(interval)
-  }, [user, toast, handleMarkAsRead])
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [user, fetchNotifications])
 
   const handleMarkAllRead = async () => {
     if (!user) return
@@ -193,7 +212,7 @@ export function NotificationBell() {
   if (!user) return null
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => open && fetchNotifications(false)}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative h-9 w-9 group" aria-label="การแจ้งเตือน">
           <Bell className={`h-5 w-5 transition-transform group-hover:scale-110 ${unreadCount > 0 ? "text-primary" : ""}`} />
@@ -242,13 +261,19 @@ export function NotificationBell() {
         <div className="max-h-[400px] overflow-y-auto">
           {notifications.length > 0 ? (
             <div className="divide-y divide-border/50">
-              {notifications.map((n) => (
+              {notifications.map((n) => {
+                const hasLink = !!(n.relatedId && ["chat", "exchange", "report", "support"].includes(n.type ?? ""))
+                return (
                 <DropdownMenuItem
                   key={n.id}
                   className={`group relative px-5 py-4 cursor-pointer flex gap-4 items-start outline-none focus:bg-muted/50 transition-all duration-200 ${
-                    !n.isRead 
-                      ? "bg-gradient-to-r from-primary/5 to-transparent hover:from-primary/10" 
-                      : "hover:bg-muted/50"
+                    hasLink
+                      ? !n.isRead
+                        ? "bg-gradient-to-r from-primary/5 to-transparent hover:from-primary/10 border-l-2 border-l-primary/50"
+                        : "hover:bg-muted/50 border-l-2 border-l-transparent hover:border-l-primary/30"
+                      : !n.isRead
+                        ? "bg-muted/30 hover:bg-muted/50"
+                        : "hover:bg-muted/50"
                   }`}
                   onClick={() => handleMarkAsRead(n.id, n.relatedId, n.type)}
                 >
@@ -269,17 +294,25 @@ export function NotificationBell() {
                       }`}>
                         {n.title}
                       </p>
+                      {hasLink && (
+                        <span className="shrink-0 text-primary flex items-center gap-0.5 text-[11px] font-medium">
+                          ไปที่
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </span>
+                      )}
                     </div>
                     <p className="text-[13px] text-muted-foreground line-clamp-2 leading-relaxed mb-2">
                       {n.message}
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[11px] text-muted-foreground/70">
-                        {formatDistanceToNow(new Date(toCreatedAtMs(n)), {
-                          addSuffix: true,
-                          locale: th,
-                        })}
+                        {formatNotificationTime(n)}
                       </span>
+                      {!hasLink && (
+                        <span className="text-[10px] text-muted-foreground/80 bg-muted/50 px-1.5 py-0.5 rounded">
+                          ข้อความแจ้งเตือน
+                        </span>
+                      )}
                       {!n.isRead && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                           <span className="h-1.5 w-1.5 rounded-full bg-primary" />
@@ -299,7 +332,7 @@ export function NotificationBell() {
                     <X className="h-4 w-4" />
                   </Button>
                 </DropdownMenuItem>
-              ))}
+              )})}
             </div>
           ) : (
             <div className="py-16 text-center">

@@ -35,12 +35,14 @@ import {
   Flag, 
   CheckCircle2, 
   XCircle, 
-  Eye, 
+  Pencil, 
   AlertTriangle,
   Package,
   Clock,
   Search,
-  User as UserIcon
+  User as UserIcon,
+  X,
+  Bell
 } from "lucide-react"
 import Image from "next/image"
 import { Input } from "@/components/ui/input"
@@ -99,9 +101,11 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedReport, setSelectedReport] = useState<ReportWithDetails | null>(null)
+  const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
 
   const [processing, setProcessing] = useState(false)
+  const [notifyOwnerLoading, setNotifyOwnerLoading] = useState(false)
   
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -237,6 +241,31 @@ export default function AdminReportsPage() {
       toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const handleNotifyOwner = async () => {
+    if (!selectedReport || !user) return
+    const reportedUserId = (selectedReport as any).reportedUserId || selectedReport.targetData?.postedBy
+    if (!reportedUserId) {
+      toast({ title: "ไม่พบข้อมูลเจ้าของโพส", variant: "destructive" })
+      return
+    }
+
+    setNotifyOwnerLoading(true)
+    try {
+      const token = await user.getIdToken()
+      const res = await fetch(`/api/admin/reports/${selectedReport.id}/notify-owner`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error?.message || "แจ้งเตือนไม่สำเร็จ")
+      toast({ title: "แจ้งเตือนเจ้าของโพสแล้ว" })
+    } catch (error: any) {
+      toast({ title: "แจ้งเตือนไม่สำเร็จ", description: error.message, variant: "destructive" })
+    } finally {
+      setNotifyOwnerLoading(false)
     }
   }
 
@@ -491,15 +520,24 @@ export default function AdminReportsPage() {
               {/* Evidence Image */}
               {selectedReport.evidenceUrls && selectedReport.evidenceUrls.length > 0 && (
                  <div>
-                    <h3 className="text-sm font-semibold mb-2">หลักฐานรูปภาพ</h3>
-                    <div className="relative aspect-video w-full max-w-md rounded-lg overflow-hidden border bg-muted">
-                       <Image 
-                          src={selectedReport.evidenceUrls?.[0] || ""} 
-                          alt="Report evidence" 
-                          fill  
-                          className="object-contain" 
-                          unoptimized 
-                       />
+                    <h3 className="text-sm font-semibold mb-2">หลักฐานรูปภาพ (คลิกเพื่อขยาย)</h3>
+                    <div className="flex flex-wrap gap-3">
+                       {selectedReport.evidenceUrls.map((url, i) => (
+                          <button
+                             key={url}
+                             type="button"
+                             onClick={() => setEnlargedImageUrl(url)}
+                             className="relative aspect-video w-full max-w-[280px] rounded-lg overflow-hidden border bg-muted cursor-pointer hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                          >
+                             <Image
+                                src={url}
+                                alt={`หลักฐาน ${i + 1}`}
+                                fill
+                                className="object-contain"
+                                unoptimized
+                             />
+                          </button>
+                       ))}
                     </div>
                  </div>
               )}
@@ -508,10 +546,19 @@ export default function AdminReportsPage() {
 
           {/* Footer Actions */}
           <DialogFooter className="p-4 border-t bg-muted/10 shrink-0 gap-2 sm:gap-0">
-             <div className="flex gap-2 w-full justify-end">
-                <Button variant="ghost" onClick={() => setSelectedReport(null)}>
-                   ปิด
-                </Button>
+             <div className="flex gap-2 w-full justify-end flex-wrap">
+                {selectedReport && ((selectedReport as any).reportedUserId || selectedReport.targetData?.postedBy) && (
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     onClick={handleNotifyOwner}
+                     disabled={notifyOwnerLoading || processing}
+                     className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                   >
+                     {notifyOwnerLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bell className="h-4 w-4 mr-2" />}
+                     แจ้งเตือนเจ้าของโพส
+                   </Button>
+                )}
                 {selectedReport && ['new', 'under_review', 'waiting_user'].includes(selectedReport.status) && (
                    <>
                       <Button 
@@ -536,6 +583,33 @@ export default function AdminReportsPage() {
                 )}
              </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox สำหรับขยายรูปหลักฐาน */}
+      <Dialog open={!!enlargedImageUrl} onOpenChange={(open) => !open && setEnlargedImageUrl(null)}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none overflow-hidden" showCloseButton={false}>
+          <div className="relative w-full min-h-[50vh] flex items-center justify-center p-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full"
+              onClick={() => setEnlargedImageUrl(null)}
+              aria-label="ปิด"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+            {enlargedImageUrl && (
+              <Image
+                src={enlargedImageUrl}
+                alt="หลักฐานขยาย"
+                width={1200}
+                height={800}
+                className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
+                unoptimized
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
@@ -618,7 +692,7 @@ function ReportsTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => onView(report)}>
-                      <Eye className="h-4 w-4" />
+                      <Pencil className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>

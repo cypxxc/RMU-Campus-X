@@ -8,6 +8,7 @@ import { QueryProvider } from "@/components/query-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { ConditionalFooter } from "@/components/conditional-footer"
 import { NavigationHistoryProvider } from "@/components/navigation-history-provider"
+import { AnnouncementProvider } from "@/components/announcement-context"
 import { ConsentGuard } from "@/components/consent-guard"
 import "./globals.css"
 
@@ -80,10 +81,12 @@ export default function RootLayout({
               enableSystem
               disableTransitionOnChange
             >
+              <AnnouncementProvider>
               <NavigationHistoryProvider>
                 {children}
                 <ConditionalFooter />
               </NavigationHistoryProvider>
+            </AnnouncementProvider>
               <Toaster />
               <Analytics />
             </ThemeProvider>

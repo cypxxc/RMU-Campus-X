@@ -23,14 +23,13 @@ import { createAdminLog } from "./logs"
 // ============ Support Ticket System ============
 
 export const createSupportTicket = async (
-  ticketData: Omit<SupportTicket, "id" | "createdAt" | "updatedAt" | "status" | "priority">
+  ticketData: Omit<SupportTicket, "id" | "createdAt" | "updatedAt" | "status">
 ) => {
   const db = getFirebaseDb()
   
   const docRef = await addDoc(collection(db, "support_tickets"), {
     ...ticketData,
     status: "new" as const,
-    priority: 2, // Default: medium priority
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -100,6 +99,18 @@ export const getUserSupportTickets = async (userId: string) => {
   
   const snapshot = await getDocs(q)
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SupportTicket)
+}
+
+/** ตรวจว่าผู้ใช้มีคำร้องหรือไม่ (ใช้ใน navbar เพื่อแสดง/ซ่อนปุ่ม คำร้องของฉัน) */
+export const userHasSupportTickets = async (userId: string): Promise<boolean> => {
+  const db = getFirebaseDb()
+  const q = query(
+    collection(db, "support_tickets"),
+    where("userId", "==", userId),
+    limit(1)
+  )
+  const snapshot = await getDocs(q)
+  return !snapshot.empty
 }
 
 export const updateTicketStatus = async (
@@ -180,14 +191,15 @@ export const replyToTicket = async (
     updatedAt: serverTimestamp(),
   })
   
-  // Notify user about the reply
+  // Notify user about the reply (รวมข้อความที่แอดมินตอบกลับใน notification)
   const ticketDoc = await getDoc(doc(db, "support_tickets", ticketId))
   const ticketData = ticketDoc.data() as SupportTicket
-  
+  const replyPreview = reply.length > 300 ? `${reply.slice(0, 300).trim()}...` : reply
+
   await createNotification({
     userId: ticketData.userId,
-    title: "📬 ได้รับการตอบกลับจาก Support",
-    message: `Ticket "${ticketData.subject}" ได้รับการตอบกลับจากทีมงานแล้ว`,
+    title: "ได้รับการตอบกลับจาก Support",
+    message: `[${ticketData.subject}]\n\n${replyPreview}`,
     type: "support",
     relatedId: ticketId,
   })

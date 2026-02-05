@@ -5,7 +5,7 @@ import { SiteFooter } from "@/components/site-footer"
 
 /**
  * แสดง footer เฉพาะหน้าสาธารณะ/ข้อมูล
- * ไม่แสดงในหน้า auth, แดชบอร์ด, แชท, แอดมิน เพื่อไม่รบกวนการใช้งาน
+ * ไม่แสดงในหน้า auth, แดชบอร์ด, แชท, แอดมิน, คำร้องของฉัน (/support) เพื่อไม่รบกวนการใช้งาน
  */
 const FOOTER_PATHS: string[] = [
   "/",
@@ -14,7 +14,6 @@ const FOOTER_PATHS: string[] = [
   "/terms",
   "/privacy",
   "/guidelines",
-  "/support",
   "/api-docs",
 ]
 

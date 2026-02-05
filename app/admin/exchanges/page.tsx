@@ -45,7 +45,10 @@ import {
   Loader2,
   Package,
   Trash2,
-  Eye,
+  Pencil,
+  User,
+  Clock,
+  Mail,
 } from "lucide-react"
 
 const STATUS_LABELS: Record<string, string> = {
@@ -65,6 +68,40 @@ interface ExchangeRow {
   status: string
   createdAt?: string
   updatedAt?: string
+}
+
+function DetailRow({
+  label,
+  value,
+  icon: Icon,
+  valueClassName = "",
+}: {
+  label: string
+  value: React.ReactNode
+  icon?: React.ComponentType<{ className?: string }>
+  valueClassName?: string
+}) {
+  return (
+    <div className="flex items-start gap-4 py-4 first:pt-0 last:pb-0 border-b border-border/50 last:border-0">
+      <div className="flex shrink-0 items-center gap-2 min-w-[100px]">
+        {Icon && (
+          <span className="rounded-lg bg-primary/10 p-1.5 text-primary">
+            <Icon className="h-4 w-4" />
+          </span>
+        )}
+        <span className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
+          {label}
+        </span>
+      </div>
+      <div className={`min-w-0 flex-1 text-foreground text-sm ${valueClassName}`}>
+        {typeof value === "string" ? (
+          <span className="break-words leading-relaxed">{value}</span>
+        ) : (
+          value
+        )}
+      </div>
+    </div>
+  )
 }
 
 export default function AdminExchangesPage() {
@@ -270,7 +307,7 @@ export default function AdminExchangesPage() {
                     <TableHead>ผู้ขอ</TableHead>
                     <TableHead>สถานะ</TableHead>
                     <TableHead>สร้างเมื่อ</TableHead>
-                    <TableHead className="w-[120px]">จัดการ</TableHead>
+                    <TableHead className="w-[80px]">จัดการ</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -288,24 +325,15 @@ export default function AdminExchangesPage() {
                       <TableCell>{getStatusBadge(ex.status)}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{ex.createdAt}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={() => setSelectedExchange(ex)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                            onClick={() => setDeleteDialog({ open: true, id: ex.id })}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => setSelectedExchange(ex)}
+                          title="ดู/แก้ไขรายละเอียด"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -325,31 +353,66 @@ export default function AdminExchangesPage() {
       </div>
 
       <Dialog open={!!selectedExchange} onOpenChange={(open) => !open && setSelectedExchange(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>รายละเอียดการแลกเปลี่ยน</DialogTitle>
+        <DialogContent className="max-w-lg sm:max-w-xl p-6 sm:p-8">
+          <DialogHeader className="pb-4 px-0">
+            <DialogTitle className="text-xl font-semibold flex items-center gap-2">
+              <span className="rounded-lg bg-primary/10 p-2">
+                <Package className="h-5 w-5 text-primary" />
+              </span>
+              รายละเอียดการแลกเปลี่ยน
+            </DialogTitle>
           </DialogHeader>
           {selectedExchange && (
-            <div className="space-y-3 text-sm">
-              <p><span className="text-muted-foreground">สิ่งของ:</span> {selectedExchange.itemTitle ?? "—"}</p>
-              <p><span className="text-muted-foreground">เจ้าของ:</span> {selectedExchange.ownerEmail ?? "—"}</p>
-              <p><span className="text-muted-foreground">ผู้ขอ:</span> {selectedExchange.requesterEmail ?? "—"}</p>
-              <p><span className="text-muted-foreground">สถานะ:</span> {getStatusBadge(selectedExchange.status)}</p>
-              <p><span className="text-muted-foreground">สร้างเมื่อ:</span> {selectedExchange.createdAt}</p>
-              <p><span className="text-muted-foreground">อัปเดตเมื่อ:</span> {selectedExchange.updatedAt}</p>
+            <div className="rounded-xl border border-border/60 bg-gradient-to-b from-muted/30 to-muted/10 px-6 py-5 max-h-[70vh] overflow-y-auto">
+              <DetailRow
+                label="สิ่งของ"
+                value={selectedExchange.itemTitle ?? "—"}
+                icon={Package}
+                valueClassName="font-medium text-base"
+              />
+              <DetailRow
+                label="เจ้าของ"
+                value={selectedExchange.ownerEmail ?? "—"}
+                icon={User}
+              />
+              <DetailRow
+                label="ผู้ขอ"
+                value={selectedExchange.requesterEmail ?? "—"}
+                icon={Mail}
+              />
+              <DetailRow
+                label="สถานะ"
+                value={getStatusBadge(selectedExchange.status)}
+              />
+              <DetailRow
+                label="สร้างเมื่อ"
+                value={selectedExchange.createdAt ?? "—"}
+                icon={Clock}
+                valueClassName="text-muted-foreground"
+              />
+              <DetailRow
+                label="อัปเดตเมื่อ"
+                value={selectedExchange.updatedAt ?? "—"}
+                icon={Clock}
+                valueClassName="text-muted-foreground"
+              />
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedExchange(null)}>ปิด</Button>
+          <DialogFooter className="gap-2 sm:gap-3 pt-6 px-0">
+            <Button variant="outline" onClick={() => setSelectedExchange(null)}>
+              ปิด
+            </Button>
             {selectedExchange && (
               <Button
                 variant="destructive"
+                size="sm"
                 onClick={() => {
                   setDeleteDialog({ open: true, id: selectedExchange.id })
                   setSelectedExchange(null)
                 }}
               >
-                ลบรายการนี้
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                ลบ
               </Button>
             )}
           </DialogFooter>

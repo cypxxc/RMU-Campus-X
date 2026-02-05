@@ -4,16 +4,18 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
-import { LogOut, Shield, Menu, User, Package, Home, Plus, HelpCircle, Heart } from "lucide-react"
+import { LogOut, Shield, Menu, User, Package, Home, Plus, HelpCircle, Heart, MessageSquare } from "lucide-react"
 import { useAuth } from "./auth-provider"
 import { signOut } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
 import { NotificationBell } from "./notification-bell"
 import { AccountStatusBanner } from "./account-status-banner"
+import { AnnouncementBanner } from "./announcement-banner"
 import { ModeToggle } from "./mode-toggle"
 import { Logo } from "./logo"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
+import { userHasSupportTickets } from "@/lib/firestore"
 
 // Lazy load heavy modals - only loaded when opened
 const PostItemModal = dynamic(
@@ -34,6 +36,22 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [postModalOpen, setPostModalOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
+  const [hasSupportTickets, setHasSupportTickets] = useState(false)
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setHasSupportTickets(false)
+      return
+    }
+    userHasSupportTickets(user.uid).then(setHasSupportTickets).catch(() => setHasSupportTickets(false))
+  }, [user?.uid])
+
+  // เมื่อปิดโมดัลช่วยเหลือ (อาจเพิ่งส่งคำร้อง) ให้ตรวจสอบอีกครั้ง
+  useEffect(() => {
+    if (!supportModalOpen && user?.uid) {
+      userHasSupportTickets(user.uid).then(setHasSupportTickets).catch(() => {})
+    }
+  }, [supportModalOpen, user?.uid])
 
   const handleSignOut = async () => {
     try {
@@ -85,6 +103,17 @@ export function Navbar() {
               </li>
             ))}
             
+            {/* คำร้องของฉัน - แสดงเมื่อมีคำร้องเท่านั้น */}
+            {user && hasSupportTickets && (
+              <li>
+                <Button variant="ghost" size="sm" className="gap-2" asChild>
+                  <Link href="/support">
+                    <MessageSquare className="h-4 w-4" />
+                    คำร้องของฉัน
+                  </Link>
+                </Button>
+              </li>
+            )}
             {/* Support Button - Desktop */}
             {user && (
               <li>
@@ -207,6 +236,14 @@ export function Navbar() {
                               <Plus className="h-4 w-4" />
                               โพสต์สิ่งของ
                             </Button>
+                            {hasSupportTickets && (
+                              <Button variant="ghost" className="w-full justify-start gap-3" asChild>
+                                <Link href="/support" onClick={() => setMobileMenuOpen(false)}>
+                                  <MessageSquare className="h-4 w-4" />
+                                  คำร้องของฉัน
+                                </Link>
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               className="w-full justify-start gap-3"
@@ -259,6 +296,8 @@ export function Navbar() {
       {/* Support Ticket Modal */}
       <SupportTicketModal open={supportModalOpen} onOpenChange={setSupportModalOpen} />
 
+      {/* Announcements (แบนเนอร์ประกาศจากแอดมิน) */}
+      <AnnouncementBanner />
       {/* Account Status Banner */}
       <AccountStatusBanner />
     </>

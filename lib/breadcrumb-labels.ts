@@ -8,6 +8,7 @@ export const ROUTE_LABELS: Record<string, string> = {
   profile: "โปรไฟล์",
   settings: "ตั้งค่า",
   admin: "ผู้ดูแลระบบ",
+  announcements: "ประกาศ",
   items: "จัดการสิ่งของ",
   users: "จัดการผู้ใช้",
   reports: "รายงานปัญหา",

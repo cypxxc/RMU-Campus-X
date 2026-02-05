@@ -3,7 +3,7 @@
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTriangle, History, RefreshCw } from "lucide-react"
+import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTriangle, History, RefreshCw, Megaphone } from "lucide-react"
 import { useState } from "react"
 
 import { AuthGuard } from "@/components/auth-guard"
@@ -19,6 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
  
   const navItems = [
     { href: "/admin", label: "ภาพรวม", icon: LayoutDashboard },
+    { href: "/admin/announcements", label: "ประกาศ", icon: Megaphone },
     { href: "/admin/items", label: "จัดการโพส", icon: Package },
     { href: "/admin/users", label: "จัดการผู้ใช้", icon: Users },
     { href: "/admin/exchanges", label: "จัดการการแลกเปลี่ยน", icon: RefreshCw },

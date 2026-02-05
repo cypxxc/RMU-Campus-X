@@ -54,7 +54,6 @@ export default function ProfilePage() {
   const [loadingItems, setLoadingItems] = useState(true)
   const [completedExchanges, setCompletedExchanges] = useState<Exchange[]>([])
   const [loadingExchanges, setLoadingExchanges] = useState(true)
-
   // Edit Item State
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [editTitle, setEditTitle] = useState("")

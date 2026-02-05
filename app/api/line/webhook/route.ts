@@ -156,7 +156,8 @@ async function getActiveExchangesForUser(userId: string): Promise<Array<{ id: st
   })
 }
 
-async function getExchangeOtherParty(exchangeId: string, currentUserId: string): Promise<{ lineUserId: string; displayName: string; itemTitle: string } | null> {
+/** คืนค่าข้อมูลอีกฝ่าย — lineUserId เป็น optional (อีกฝ่ายอาจยังไม่เชื่อม LINE) */
+async function getExchangeOtherParty(exchangeId: string, currentUserId: string): Promise<{ lineUserId?: string; displayName: string; itemTitle: string } | null> {
   const db = getAdminDb()
   const exDoc = await db.collection("exchanges").doc(exchangeId).get()
   if (!exDoc.exists) return null
@@ -169,9 +170,8 @@ async function getExchangeOtherParty(exchangeId: string, currentUserId: string):
   if (!userDoc.exists) return null
   const u = userDoc.data()!
   const lineUserId = u.lineUserId as string | undefined
-  if (!lineUserId) return null
   const displayName = (u.displayName as string) || (u.email as string) || "ผู้ใช้"
-  return { lineUserId: lineUserId as string, displayName: displayName.split("@")[0] ?? "ผู้ใช้", itemTitle }
+  return { lineUserId, displayName: displayName.split("@")[0] ?? "ผู้ใช้", itemTitle }
 }
 
 export async function POST(request: NextRequest) {
@@ -448,7 +448,7 @@ async function handleTextMessage(event: LineEvent) {
         const other = await getExchangeOtherParty(exchangeId, userId)
         if (!other) {
           await sendReplyMessage(event.replyToken, [
-            { type: "text", text: "❌ อีกฝ่ายยังไม่ได้เชื่อม LINE หรือรายการไม่พบ" },
+            { type: "text", text: "❌ ไม่พบรายการแชท กรุณาพิมพ์ \"แชท\" เพื่อดูรายการใหม่" },
           ])
           return
         }
@@ -461,10 +461,13 @@ async function handleTextMessage(event: LineEvent) {
           exchangeIds: FieldValue.delete(),
           listSentAt: FieldValue.delete(),
         })
+        const noLineNote = !other.lineUserId
+          ? "\n\n📌 อีกฝ่ายยังไม่เชื่อม LINE — ข้อความจะแสดงบนเว็บเท่านั้น"
+          : ""
         await sendReplyMessage(event.replyToken, [
           {
             type: "text",
-            text: `💬 กำลังแชทเรื่อง "${other.itemTitle}" กับ ${other.displayName}\n\nพิมพ์ข้อความได้เลย\nพิมพ์ "ออก" เพื่อออกจากแชท`,
+            text: `💬 กำลังแชทเรื่อง "${other.itemTitle}" กับ ${other.displayName}\n\nพิมพ์ข้อความได้เลย\nพิมพ์ "ออก" เพื่อออกจากแชท${noLineNote}`,
           },
         ])
         return
@@ -486,7 +489,7 @@ async function handleTextMessage(event: LineEvent) {
       const other = await getExchangeOtherParty(session.exchangeId, userId)
       if (!other) {
         await sendReplyMessage(event.replyToken, [
-          { type: "text", text: "❌ อีกฝ่ายยังไม่ได้เชื่อม LINE หรือรายการไม่พบ" },
+          { type: "text", text: "❌ ไม่พบรายการแชท กรุณาพิมพ์ \"แชท\" เพื่อดูรายการใหม่" },
         ])
         return
       }
@@ -506,15 +509,18 @@ async function handleTextMessage(event: LineEvent) {
         createdAt: FieldValue.serverTimestamp(),
       })
 
-      // แจ้งอีกฝ่ายผ่าน LINE (ถ้าเชื่อม LINE อยู่)
-      await sendPushMessage(other.lineUserId, [
-        {
-          type: "text",
-          text: `💬 จาก ${senderNameShort} (รายการ: ${other.itemTitle})\n\n${text}`,
-        },
-      ])
+      // แจ้งอีกฝ่ายผ่าน LINE (ถ้าเชื่อม LINE อยู่เท่านั้น)
+      if (other.lineUserId) {
+        await sendPushMessage(other.lineUserId, [
+          {
+            type: "text",
+            text: `💬 จาก ${senderNameShort} (รายการ: ${other.itemTitle})\n\n${text}`,
+          },
+        ])
+      }
       await setChatSession(lineUserId, { exchangeId: session.exchangeId })
-      await sendReplyMessage(event.replyToken, [{ type: "text", text: "✓ ส่งแล้ว (แสดงในแชทบนเว็บด้วย)" }])
+      const sentNote = other.lineUserId ? "✓ ส่งแล้ว (แสดงในแชทบนเว็บ + แจ้งอีกฝ่ายผ่าน LINE)" : "✓ ส่งแล้ว (แสดงในแชทบนเว็บ — อีกฝ่ายยังไม่เชื่อม LINE จะไม่ได้รับแจ้ง)"
+      await sendReplyMessage(event.replyToken, [{ type: "text", text: sentNote }])
       return
     }
 

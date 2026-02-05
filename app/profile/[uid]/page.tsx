@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
 import { 
   Package, 
   Star,
@@ -369,7 +367,15 @@ export default function PublicProfilePage() {
                            </div>
                         </div>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {toDate(review.createdAt) ? formatDistanceToNow(toDate(review.createdAt)!, { addSuffix: true, locale: th }) : ''}
+                          {toDate(review.createdAt)
+                            ? toDate(review.createdAt)!.toLocaleString("th-TH", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : ""}
                         </span>
                       </div>
                     </CardContent>

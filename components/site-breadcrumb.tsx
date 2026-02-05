@@ -22,8 +22,20 @@ export function SiteBreadcrumb() {
 
   if (pathname === "/") return null
 
-  const history = ctx?.history ?? (pathname ? pathToHistoryEntries(pathname) : [])
+  const rawHistory = ctx?.history ?? (pathname ? pathToHistoryEntries(pathname) : [])
   const navigateToBreadcrumb = ctx?.navigateToBreadcrumb
+
+  // รวมรายการที่ label ซ้ำติดกัน (เก็บ path และ originalIndex ตัวล่าสุดของแต่ละชุด)
+  type EntryWithIndex = { path: string; label: string; originalIndex: number }
+  const history = rawHistory.reduce<EntryWithIndex[]>((acc, entry, i) => {
+    const last = acc[acc.length - 1]
+    if (last && last.label === entry.label) {
+      acc[acc.length - 1] = { path: entry.path, label: entry.label, originalIndex: i }
+      return acc
+    }
+    acc.push({ path: entry.path, label: entry.label, originalIndex: i })
+    return acc
+  }, [])
 
   if (history.length <= 1) return null
 
@@ -46,7 +58,7 @@ export function SiteBreadcrumb() {
                       <BreadcrumbLink asChild>
                         <button
                           type="button"
-                          onClick={() => navigateToBreadcrumb(index)}
+                          onClick={() => navigateToBreadcrumb(entry.originalIndex)}
                           className="flex items-center gap-1 bg-transparent border-0 cursor-pointer p-0 text-inherit font-inherit hover:text-foreground transition-colors"
                         >
                           {isFirst && <Home className="h-4 w-4" />}

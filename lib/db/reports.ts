@@ -78,11 +78,12 @@ export const updateReportStatus = async (
   // Notify the reporter
   const reportDoc = await getDoc(doc(db, "reports", reportId))
   const reportData = reportDoc.data() as Report
-  
+  const statusText = status === "resolved" ? "ดำเนินการแล้ว" : status === "action_taken" ? "ลงโทษผู้กระทำผิดแล้ว" : status === "closed" ? "ปิดเคส" : "กำลังตรวจสอบ"
+
   await createNotification({
     userId: reportData.reporterId,
-    title: "อัปเดตสถานะการแจ้งรายงาน",
-    message: `รายงานสำหรับ "${reportData.reportType}" ของคุณถูกเปลี่ยนสถานะเป็น: ${status === 'resolved' ? 'ดำเนินการแล้ว' : status === 'action_taken' ? 'ลงโทษผู้กระทำผิดแล้ว' : status === 'closed' ? 'ปิดเคส' : 'กำลังตรวจสอบ'}`,
+    title: "อัปเดตสถานะรายงาน",
+    message: `รายงานที่คุณแจ้งได้รับการดำเนินการแล้ว สถานะล่าสุด: ${statusText}`,
     type: "report",
     relatedId: reportId
   })

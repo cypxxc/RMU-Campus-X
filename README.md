@@ -33,7 +33,7 @@
 ├─────────────────────────────────────────────────────────────────┤
 │  /api/items/*     │  /api/users/me     │  /api/favorites/*     │
 │  /api/exchanges/* │  /api/notifications│  /api/reviews         │
-│  /api/admin/*     │  /api/reports      │  /api/support          │
+│  /api/admin/*     │  /api/announcements│  /api/reports         │
 │  /api/line/*      │  /api/upload       │  /api/health           │
 │  ────────────────────────────────────────────────────────────── │
 │  • Client เรียก API เป็นหลัก (lib/api-client, authFetchJson)   │
@@ -142,10 +142,13 @@ rmu-campus-x/
 │   │   ├── users/                    # จัดการผู้ใช้
 │   │   ├── reports/                  # จัดการรายงาน
 │   │   ├── support/                  # จัดการ Support Tickets
+│   │   ├── announcements/            # จัดการประกาศ (แบนเนอร์)
+│   │   ├── exchanges/                # จัดการการแลกเปลี่ยน
 │   │   └── logs/                     # Activity Logs
 │   │
 │   ├── api/                          # API Routes
-│   │   ├── admin/                    # Admin APIs
+│   │   ├── admin/                    # Admin APIs (รวม announcements CRUD)
+│   │   ├── announcements/            # ประกาศ (GET สำหรับแบนเนอร์)
 │   │   ├── exchanges/                # Exchange APIs
 │   │   ├── favorites/                # รายการโปรด (list, check, add, delete)
 │   │   ├── items/                    # สิ่งของ (list, create, get, update, delete)
@@ -171,8 +174,10 @@ rmu-campus-x/
 ├── components/                       # React Components
 │   ├── ui/                           # Base UI Components (Shadcn)
 │   ├── auth-provider.tsx             # Authentication Context
-│   ├── consent-guard.tsx             # ส่งผู้ใช้ที่ยังไม่ยอมรับ terms ไป /consent
-│   ├── breadcrumb-bar.tsx            # Breadcrumb แถบใต้ Navbar
+│   ├── announcement-banner.tsx       # แถบประกาศใต้ Navbar (ปิดได้, แสดงตาม type)
+│   ├── announcement-context.tsx      # Context สถานะประกาศ (ให้ Breadcrumb ปรับ top)
+│   ├── consent-guard.tsx              # ส่งผู้ใช้ที่ยังไม่ยอมรับ terms ไป /consent
+│   ├── breadcrumb-bar.tsx            # Breadcrumb แถบใต้ Navbar (ไม่ซ้อนกับประกาศ)
 │   ├── filter-sidebar.tsx            # Category Filters
 │   ├── item-card.tsx                 # Item Display Card
 │   ├── item-card-skeleton.tsx        # Loading Skeleton
@@ -268,7 +273,15 @@ rmu-campus-x/
 - **สถานะ** - พร้อมให้, รอดำเนินการ, เสร็จสิ้น
 - **โปรไฟล์สาธารณะ** - หน้า `/profile/[uid]` แสดงโพสและรีวิว; คลิกที่ใดก็ได้บนการ์ดสิ่งของเพื่อเปิด modal รายละเอียด
 
-### 3. ระบบค้นหา (Search System)
+### 3. ระบบประกาศ (Announcements)
+
+- **แถบประกาศ (Announcement Banner)** - แสดงใต้ Navbar ความกว้างจำกัด (max-w-4xl) จัดกลาง
+- **ประเภทประกาศ** - info, warning, critical (สีและไอคอนต่างกัน)
+- **ปิดประกาศได้** - ผู้ใช้กดปิดได้ (เก็บใน localStorage ต่อ id)
+- **Admin จัดการประกาศ** - หน้า Admin → ประกาศ (CRUD), API `/api/admin/announcements`
+- **Breadcrumb ไม่ซ้อน** - ใช้ `AnnouncementContext` ให้แถบ breadcrumb ปรับ `top` ตามว่ามีประกาศแสดงหรือไม่ (top-28 เมื่อมีประกาศ, top-16 เมื่อไม่มี)
+
+### 4. ระบบค้นหา (Search System)
 
 - **Server-Side Search** - ค้นหาจากฐานข้อมูลโดยตรง
 - **Multi-Category Filter** - เลือกหลายหมวดหมู่พร้อมกัน
@@ -276,7 +289,7 @@ rmu-campus-x/
 - **Pagination** - โหลดข้อมูลเป็นหน้า (lastId-based)
 - **Breadcrumb Navigation** - แสดงเส้นทางจากประวัติการนำทาง (ใต้ Navbar)
 
-### 4. ระบบแลกเปลี่ยน (Exchange System)
+### 5. ระบบแลกเปลี่ยน (Exchange System)
 
 - **ขอรับสิ่งของ** - ส่งคำขอพร้อมข้อความ
 - **ยืนยัน/ปฏิเสธ** - เจ้าของเลือกอนุมัติ (ได้ทั้งหน้ารายการและหน้าแชท)
@@ -285,22 +298,23 @@ rmu-campus-x/
 - **ซ่อนจากรายการ** - ผู้ใช้สามารถซ่อนการแลกเปลี่ยนจากรายการของตนได้ (อีกฝ่ายยังเห็นอยู่)
 - **แจ้งเตือนเมื่ออีกฝ่ายยืนยัน** - แจ้งให้อีกฝ่ายทราบเมื่อมีการกดยืนยันการแลกเปลี่ยน
 
-### 5. ระบบแจ้งเตือน (Notification System)
+### 6. ระบบแจ้งเตือน (Notification System)
 
 - **In-App Notifications** - แจ้งเตือนในระบบ (list, mark read, mark all read, delete ผ่าน API)
 - **อัปเดตทันที** - กด "อ่านทั้งหมด" แล้ว UI (dropdown รูประฆัง + หน้าแจ้งเตือน) อัปเดตทันที ไม่ต้องรอโพล
 - **LINE Push Notifications** - แจ้งเตือนผ่าน LINE
 - **Admin Alerts** - แจ้ง Admin เมื่อมีรายงานใหม่
 
-### 6. ระบบผู้ดูแล (Admin Panel)
+### 7. ระบบผู้ดูแล (Admin Panel)
 
 - **Dashboard สถิติ** - ภาพรวมระบบ (โหลดผ่าน `/api/admin/stats`, `/api/admin/items`, `/api/admin/reports`, `/api/admin/users`, `/api/admin/support`)
 - **ตรวจสิทธิ์ Admin** - ใช้ `isAdmin` จาก context (GET /api/users/me) ไม่อ่าน Firestore โดยตรง
 - **จัดการผู้ใช้** - Suspend/Unsuspend, คำเตือน, ลบผู้ใช้
-- **จัดการสิ่งของ / รายงาน / Support** - โหลดข้อมูลผ่าน Admin API
+- **จัดการสิ่งของ / รายงาน / Support / ประกาศ** - โหลดและจัดการผ่าน Admin API
+- **จัดการประกาศ** - หน้า Admin → ประกาศ (สร้าง/แก้ไข/ลบ แบนเนอร์ประกาศ)
 - **Activity Logs** - ประวัติการดำเนินการ
 
-### 7. ความปลอดภัย (Security)
+### 8. ความปลอดภัย (Security)
 
 - **Distributed Rate Limiting** - Upstash Redis backing (100 req/min)
 - **termsAccepted** - API ที่เกี่ยวกับการโพสต์/รายงาน/support ตรวจยอมรับข้อกำหนดแล้ว
@@ -310,14 +324,14 @@ rmu-campus-x/
 - **Request ID Tracking** - Traceable requests for debugging
 - **Firebase Security Rules** - Defenses in depth for DB & Storage
 
-### 8. Progressive Web App (PWA)
+### 9. Progressive Web App (PWA)
 
 - **Installable** - ติดตั้งเป็น App บนมือถือ/เดสก์ท็อป
 - **Offline Support** - ใช้งานได้แม้ไม่มีอินเทอร์เน็ต (cached pages)
 - **App Shortcuts** - ทางลัดไปยังหน้าหลักๆ
 - **Background Sync** - อัพเดทข้อมูลเมื่อกลับมาออนไลน์
 
-### 9. Performance Optimization
+### 10. Performance Optimization
 
 | การปรับปรุง | รายละเอียด |
 |-------------|------------|
@@ -335,7 +349,7 @@ rmu-campus-x/
 | **API Retry & Backoff** | Client (`lib/api-client`) retry สูงสุด 3 ครั้ง พร้อม exponential backoff และเคารพ `Retry-After` เมื่อได้ 429 |
 | **Client Data via API Only** | Dashboard, โปรไฟล์, แจ้งเตือน, การแลกเปลี่ยน, รีวิว, รายงาน, Admin โหลดข้อมูลผ่าน API เท่านั้น (ไม่ใช้ Firestore SDK บน client) — ลดปัญหา Firestore "Unexpected state" และความสอดคล้องของ cache |
 
-### 10. Testing & Quality Assurance
+### 11. Testing & Quality Assurance
 
 - **Unit Tests** - Vitest ~119 tests (API validation, security, exchange state machine, db, reports, auth, rate-limit, item-deletion, utils)
 - **E2E Tests** - Playwright 84 tests (API security, dashboard, navigation, auth pages) — รัน 4 browsers; ชุด Basic Navigation / Landing / Auth Pages ข้ามบน WebKit เนื่องจาก Next.js hydration ใน Playwright
@@ -353,7 +367,7 @@ npm run test:e2e
 npm run check-all
 ```
 
-### 11. Monitoring & Error Tracking (`lib/monitoring.ts`)
+### 12. Monitoring & Error Tracking (`lib/monitoring.ts`)
 
 - **Error Logging** - บันทึก errors แบบศูนย์กลาง
 - **Performance Tracking** - จับเวลา operations
@@ -372,7 +386,7 @@ const endTimer = startTimer('fetchUsers')
 endTimer() // logs duration
 ```
 
-### 12. Security Utilities (`lib/security.ts`)
+### 13. Security Utilities (`lib/security.ts`)
 
 | Function | Description |
 |----------|-------------|
@@ -383,7 +397,7 @@ endTimer() // logs duration
 | `hasSuspiciousPatterns()` | ตรวจจับ SQL injection |
 | `sanitizeFilename()` | ทำความสะอาดชื่อไฟล์ |
 
-### 13. Accessibility (`lib/a11y.ts`)
+### 14. Accessibility (`lib/a11y.ts`)
 
 - **Keyboard Navigation** - รองรับ Arrow keys, Tab, Enter
 - **Focus Management** - Focus trap สำหรับ modals
@@ -557,6 +571,7 @@ bun start
 
 | กลุ่ม | Method | Endpoint | คำอธิบาย |
 |-------|--------|----------|----------|
+| **Announcements** | GET | `/api/announcements` | list ประกาศสำหรับแบนเนอร์ (ไม่ต้อง auth) |
 | **Items** | GET | `/api/items` | list (filter, search, pagination) |
 | | POST | `/api/items` | สร้าง item (ต้อง auth + terms + canPost) |
 | | GET | `/api/items/[id]` | ดึงรายการเดียว |
@@ -582,6 +597,8 @@ bun start
 | | PATCH | `/api/exchanges/[id]` | อัปเดตสถานะ |
 | | POST | `/api/exchanges/[id]/hide` | ซ่อนจากรายการของฉัน |
 | **Reports / Support** | POST | `/api/reports`, `/api/support` | สร้างรายงาน / ticket (ต้อง terms) |
+| **Admin Announcements** | GET/POST | `/api/admin/announcements` | list / สร้างประกาศ |
+| | GET/PATCH/DELETE | `/api/admin/announcements/[id]` | ดึง / แก้ไข / ลบประกาศ |
 | **Admin / LINE / Upload** | - | `/api/admin/*`, `/api/line/*`, `/api/upload` | ดู docs/API.md |
 
 ### Rate Limiting
@@ -666,6 +683,7 @@ bun start
 | **API Client** | `lib/api-client.ts` | authFetch / authFetchJson (retry + exponential backoff สำหรับ 429/5xx/network), getAuthToken |
 | **Health Check** | `/api/health` | System status monitoring |
 | **App Check** | `lib/app-check.ts` | Firebase App Check (bot protection) |
+| **Announcement Context** | `components/announcement-context.tsx` | สถานะแถบประกาศ (ให้ Breadcrumb ปรับ top-16/top-28) |
 | **System Analysis** | `docs/SYSTEM-ANALYSIS.md` | รายงานวิเคราะห์ระบบและจุดที่แก้แล้ว |
 
 ---

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Logo } from "@/components/logo"
-import { Mail, MapPin, Phone } from "lucide-react"
+import { Mail, MapPin } from "lucide-react"
 
 export function SiteFooter() {
   const currentYear = new Date().getFullYear()
@@ -63,10 +63,6 @@ export function SiteFooter() {
                 <span className="text-muted-foreground">
                   80 ถ.นครสวรรค์ ต.ตลาด อ.เมือง จ.มหาสารคาม 44000
                 </span>
-              </li>
-              <li className="flex items-center gap-3">
-                <Phone className="h-5 w-5 text-primary shrink-0" />
-                <span className="text-muted-foreground">043-711-408</span>
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="h-5 w-5 text-primary shrink-0" />

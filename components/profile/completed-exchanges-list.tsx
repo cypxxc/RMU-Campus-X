@@ -6,8 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, History, CheckCircle } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
+
+function formatExchangeTime(date: Date): string {
+  return date.toLocaleString("th-TH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
 
 interface CompletedExchangesListProps {
   exchanges: Exchange[]
@@ -79,7 +87,7 @@ export function CompletedExchangesList({ exchanges, loading, currentUserId }: Co
                       สำเร็จ
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {formatDistanceToNow(createdAt, { addSuffix: true, locale: th })}
+                      {formatExchangeTime(createdAt instanceof Date ? createdAt : new Date(createdAt))}
                     </p>
                   </div>
                 </div>

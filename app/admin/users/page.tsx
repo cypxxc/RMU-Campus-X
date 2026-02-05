@@ -24,7 +24,7 @@ import {
   Ban, 
   ShieldAlert, 
   CheckCircle2, 
-  Eye, 
+  Pencil, 
   User as UserIcon, 
   Search
 } from "lucide-react"
@@ -505,11 +505,11 @@ export default function AdminReportedUsersPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                           onClick={() => handleViewUser(u)}
-                          className="hover:bg-primary/10 hover:text-primary"
+                          title="ดูข้อมูล"
                         >
-                          <Eye className="h-4 w-4 mr-2" />
-                          ดูข้อมูล
+                          <Pencil className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>

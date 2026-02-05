@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -28,8 +27,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, MessageSquare, Send, Eye, CheckCircle2, Clock, Inbox, Search } from "lucide-react"
+import { Loader2, MessageSquare, Send, Pencil, CheckCircle2, Clock, Inbox, Search, Check, UserCircle } from "lucide-react"
 
+// เก็บไว้เพื่อความเข้ากันได้ (ไม่แสดงหมวดหมู่ใน UI แล้ว)
 const ticketCategoryLabels: Record<string, string> = {
   general: "ปัญหาทั่วไป",
   bug: "แจ้งข้อผิดพลาด",
@@ -189,28 +189,17 @@ export default function AdminSupportPage() {
     setProcessing(true)
     try {
       await replyToTicket(selectedTicket.id, ticketReply.trim(), user.uid, user.email || "")
-
-      toast({ title: "ตอบกลับสำเร็จ" })
       setTicketReply("")
-      
-      // Update local state locally for immediate feedback
-      // Note: This won't refresh the list, but updates the opened modal if we re-fetch ticket
-      // Usually we might want to refresh the specific ticket
-      
+
       const db = getFirebaseDb()
       const { doc, getDoc } = await import("firebase/firestore")
       const ticketDoc = await getDoc(doc(db, "support_tickets", selectedTicket.id))
-      
       if (ticketDoc.exists()) {
         const newData = { id: ticketDoc.id, ...ticketDoc.data() } as SupportTicket
         setSelectedTicket(newData)
-        
-        // Update in list
-        const updateInList = (list: SupportTicket[]) => list.map(t => t.id === newData.id ? newData : t)
-        setPendingState(prev => ({ ...prev, data: updateInList(prev.data) }))
-        setHistoryState(prev => ({ ...prev, data: updateInList(prev.data) }))
       }
-      
+      refreshAll()
+      toast({ title: "ตอบกลับสำเร็จ" })
     } catch (error: any) {
       toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
     } finally {
@@ -406,192 +395,170 @@ export default function AdminSupportPage() {
         </CardContent>
       </Card>
 
-      {/* Ticket Detail Dialog */}
+      {/* Ticket Detail Dialog – รูปแบบเดียวกับแชทฝั่งผู้ใช้ */}
       <Dialog open={!!selectedTicket} onOpenChange={(open) => !open && setSelectedTicket(null)}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[85vh]">
-          <DialogHeader className="p-6 pb-4 pr-24 border-b bg-muted/10 shrink-0">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <DialogTitle className="text-xl font-bold tracking-tight">{selectedTicket?.subject}</DialogTitle>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5 bg-background px-2 py-0.5 rounded-md border shadow-sm">
-                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                    {selectedTicket?.userEmail}
-                  </span>
-                  <span className="text-border">•</span>
-                  <Badge variant="outline" className="font-normal">
-                    {ticketCategoryLabels[selectedTicket?.category || 'general']}
-                  </Badge>
-                </div>
-              </div>
-              {selectedTicket && getStatusBadge(selectedTicket.status)}
+        <DialogContent className="w-[95vw] max-w-3xl h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl">
+          <DialogHeader className="px-5 py-4 border-b shrink-0 space-y-0">
+            <DialogTitle className="text-xl font-semibold truncate pr-8">
+              {selectedTicket?.subject}
+            </DialogTitle>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {selectedTicket && (
+                <div className="shrink-0">{getStatusBadge(selectedTicket.status)}</div>
+              )}
+              <span className="text-xs text-muted-foreground truncate max-w-[180px] ml-auto sm:ml-0" title={selectedTicket?.userEmail}>
+                {selectedTicket?.userEmail}
+              </span>
+              <span className="text-xs text-muted-foreground truncate max-w-[140px]" title={selectedTicket?.id}>
+                {selectedTicket?.id}
+              </span>
             </div>
           </DialogHeader>
 
-          {selectedTicket && (
-            <div className="flex-1 overflow-y-auto p-6 bg-muted/5 space-y-8">
-              <div className="space-y-6">
-                 {/* User Initial Message */}
-                 <div className="flex gap-4 group">
-                    {ticketUser?.photoURL ? (
-                       <img 
-                          src={ticketUser.photoURL} 
-                          alt={ticketUser.displayName || 'User'}
-                          className="h-10 w-10 rounded-full border object-cover shrink-0"
-                       />
-                    ) : (
-                       <div className="h-10 w-10 rounded-full bg-gray-100 border flex items-center justify-center shrink-0">
-                          <span className="font-bold text-gray-500 text-sm uppercase">
-                             {(ticketUser?.displayName || selectedTicket?.userEmail || 'U').charAt(0)}
-                          </span>
-                       </div>
-                    )}
-                    <div className="flex-1 space-y-2">
-                       <div className="flex items-baseline justify-between">
-                          <span className="text-sm font-semibold text-foreground/80">
-                             {ticketUser?.displayName || selectedTicket?.userEmail?.split('@')[0] || 'ผู้ใช้งาน'}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                             {((selectedTicket.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                       </div>
-                       <div className="bg-white dark:bg-card border p-4 rounded-2xl rounded-tl-none shadow-sm text-sm leading-relaxed whitespace-pre-wrap">
-                          {selectedTicket.description}
-                       </div>
-                    </div>
-                 </div>
+          {selectedTicket && (() => {
+            const initialMsg = {
+              sender: "user",
+              content: selectedTicket.description,
+              createdAt: selectedTicket.createdAt,
+            }
+            const history = (selectedTicket.messages || []).concat(
+              !selectedTicket.messages?.length && selectedTicket.adminReply
+                ? [{
+                    sender: "admin",
+                    content: selectedTicket.adminReply,
+                    senderEmail: selectedTicket.repliedByEmail || "",
+                    createdAt: selectedTicket.repliedAt || new Date(),
+                  } as any]
+                : []
+            )
+            const allMessages = [initialMsg, ...history]
+            const formatTime = (d: any) =>
+              (d?.toDate?.() || (d instanceof Date ? d : new Date())).toLocaleString("th-TH", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
 
-                 {/* Chat History */}
-                 {(selectedTicket.messages || [])
-                    .concat(
-                       // If no messages but legacy adminReply exists, treat as one message
-                       (!selectedTicket.messages?.length && selectedTicket.adminReply) 
-                       ? [{
-                           id: 'legacy', 
-                           sender: 'admin', 
-                           content: selectedTicket.adminReply, 
-                           senderEmail: selectedTicket.repliedByEmail || '', 
-                           createdAt: selectedTicket.repliedAt || new Date()
-                       } as any] 
-                       : []
-                    )
-                    .map((msg: any, idx: number) => (
-                    <div key={idx} className={`flex gap-4 group ${msg.sender === 'admin' ? 'flex-row-reverse' : ''}`}>
-                       {msg.sender === 'admin' ? (
-                          <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 border bg-primary/10 border-primary/20 text-primary">
-                             <span className="font-bold text-sm">ADM</span>
-                          </div>
-                       ) : ticketUser?.photoURL ? (
-                          <img 
-                             src={ticketUser.photoURL} 
-                             alt={ticketUser.displayName || 'User'}
-                             className="h-10 w-10 rounded-full border object-cover shrink-0"
-                          />
-                       ) : (
-                          <div className="h-10 w-10 rounded-full bg-gray-100 border flex items-center justify-center shrink-0 text-gray-500">
-                             <span className="font-bold text-sm uppercase">
-                                {(ticketUser?.displayName || selectedTicket?.userEmail || 'U').charAt(0)}
-                             </span>
-                          </div>
-                       )}
-                       <div className="flex-1 space-y-2">
-                          <div className={`flex items-baseline justify-between ${msg.sender === 'admin' ? 'flex-row-reverse' : ''}`}>
-                             <span className={`text-sm font-semibold ${msg.sender === 'admin' ? 'text-primary' : 'text-foreground/80'}`}>
-                                {msg.sender === 'admin' ? 'คำตอบจากทีมงาน' : (ticketUser?.displayName || selectedTicket?.userEmail?.split('@')[0] || 'ผู้ใช้งาน')}
-                             </span>
-                             <span className="text-xs text-muted-foreground">
-                                {((msg.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                             </span>
-                          </div>
-                          <div className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap border shadow-sm ${
-                             msg.sender === 'admin' 
-                             ? 'bg-primary/5 border-primary/10 rounded-tr-none' 
-                             : 'bg-white dark:bg-card rounded-tl-none'
-                          }`}>
-                             {msg.content}
-                             {msg.sender === 'admin' && msg.senderEmail && (
-                                <div className="mt-3 pt-3 border-t border-primary/10 text-xs text-muted-foreground flex items-center gap-1.5">
-                                   <div className="h-4 w-4 rounded-full bg-primary/20 flex items-center justify-center text-[8px] font-bold text-primary">A</div>
-                                   ตอบโดย {msg.senderEmail}
+            return (
+              <>
+                <div className="flex-1 overflow-y-auto min-h-0 bg-background">
+                  <div className="p-4 sm:p-5 space-y-6">
+                    {allMessages.map((msg: any, idx: number) => {
+                      const isMe = msg.sender === "admin"
+                      const timeStr = formatTime(msg.createdAt)
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex w-full gap-3 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                        >
+                          {!isMe && (
+                            <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-muted text-muted-foreground border overflow-hidden">
+                              {ticketUser?.photoURL ? (
+                                <img
+                                  src={ticketUser.photoURL}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <UserCircle className="h-4 w-4" />
+                              )}
+                            </div>
+                          )}
+                          <div className={`flex flex-col min-w-0 max-w-[85%] ${isMe ? "items-end" : "items-start"}`}>
+                            <div
+                              className={`w-fit max-w-full rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                                isMe
+                                  ? "bg-primary text-primary-foreground rounded-br-md"
+                                  : "bg-muted/80 text-foreground border rounded-bl-md"
+                              }`}
+                            >
+                              {msg.content}
+                              {isMe && msg.senderEmail && (
+                                <div className="mt-2 pt-2 border-t border-primary/20 text-[11px] opacity-90">
+                                  ตอบโดย {msg.senderEmail}
                                 </div>
-                             )}
+                              )}
+                            </div>
+                            <div className={`flex items-center gap-1.5 mt-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                              <span className="text-[11px] text-muted-foreground">{timeStr}</span>
+                              {!isMe && <span className="text-[11px] text-muted-foreground">- ผู้ใช้งาน</span>}
+                              {isMe && (
+                                <span className="w-3.5 h-3.5 rounded-full bg-primary/30 flex items-center justify-center">
+                                  <Check className="h-2.5 w-2.5 text-primary" strokeWidth={3} />
+                                </span>
+                              )}
+                            </div>
                           </div>
-                       </div>
-                    </div>
-                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Footer / Reply Area */}
-          <div className="p-4 border-t bg-background shrink-0">
-             {selectedTicket && selectedTicket.status !== 'closed' ? (
-               <div className="space-y-4">
-                 {/* Status Actions */}
-                 <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-muted-foreground">การดำเนินการ</p>
-                    <div className="flex gap-2">
-                       {selectedTicket.status !== 'resolved' && (
-                          <Button
-                             size="sm"
-                             variant="outline"
-                             onClick={async () => {
-                                if (!user) return
-                                setProcessing(true)
-                                try {
-                                   await updateTicketStatus(selectedTicket.id, 'resolved', user.uid, user.email || "")
-                                   toast({ title: "เปลี่ยนสถานะเป็น แก้ไขแล้ว" })
-                                   setSelectedTicket(null)
-                                } catch {
-                                   toast({ title: "เกิดข้อผิดพลาด", variant: "destructive" })
-                                } finally {
-                                   setProcessing(false)
-                                }
-                             }}
-                             disabled={processing}
-                             className="border-green-200 hover:bg-green-50 text-green-700 dark:border-green-900 dark:hover:bg-green-950/50 dark:text-green-400"
-                          >
-                             <CheckCircle2 className="h-4 w-4 mr-2" />
-                             ทำเครื่องหมายว่าแก้ไขแล้ว
-                          </Button>
-                       )}
-                    </div>
-                 </div>
-
-                 {/* Reply Input */}
-                 <div className="flex gap-3 items-start">
-                    <Textarea
-                       value={ticketReply}
-                       onChange={(e) => setTicketReply(e.target.value)}
-                       placeholder="พิมพ์ข้อความตอบกลับผู้ใช้งาน..."
-                       rows={1}
-                       className="min-h-[44px] max-h-[120px] resize-none py-3"
-                       onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                             e.preventDefault()
-                             handleSendReply()
-                          }
-                       }}
-                    />
-                    <Button 
-                       onClick={handleSendReply} 
-                       disabled={processing || !ticketReply.trim()}
-                       className="shrink-0 h-[44px] px-4"
-                    >
-                       {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    </Button>
-                 </div>
-                 <p className="text-[10px] text-muted-foreground text-center">
-                    กด Enter เพื่อส่ง หรือ Shift + Enter เพื่อขึ้นบรรทัดใหม่
-                 </p>
-               </div>
-             ) : (
-                <div className="text-center py-2 text-muted-foreground text-sm flex items-center justify-center gap-2">
-                   <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-                   คำร้องนี้ถูกปิดแล้ว ไม่สามารถตอบกลับได้
+                          {isMe && <div className="w-9 shrink-0" />}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-             )}
-          </div>
+
+                <div className="shrink-0 border-t bg-muted/30 rounded-b-xl">
+                  {selectedTicket.status !== "closed" ? (
+                    <div className="p-4 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          handleSendReply()
+                        }}
+                        className="flex gap-2 items-center flex-1 min-w-0"
+                      >
+                        <Input
+                          value={ticketReply}
+                          onChange={(e) => setTicketReply(e.target.value)}
+                          placeholder="ตอบกลับ..."
+                          disabled={processing}
+                          className="flex-1 rounded-full border-2 bg-background focus-visible:ring-2"
+                        />
+                        <Button
+                          type="submit"
+                          size="icon"
+                          disabled={processing || !ticketReply.trim()}
+                          className="shrink-0 rounded-full h-10 w-10 bg-primary hover:bg-primary/90"
+                        >
+                          {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </Button>
+                      </form>
+                      {selectedTicket.status !== "resolved" && (
+                        <Button
+                          variant="outline"
+                          size="default"
+                          onClick={async () => {
+                            if (!user) return
+                            setProcessing(true)
+                            try {
+                              await updateTicketStatus(selectedTicket.id, "resolved", user.uid, user.email || "")
+                              setSelectedTicket(null)
+                              refreshAll()
+                              toast({ title: "ปิดคำร้องแล้ว" })
+                            } catch {
+                              toast({ title: "เกิดข้อผิดพลาด", variant: "destructive" })
+                            } finally {
+                              setProcessing(false)
+                            }
+                          }}
+                          disabled={processing}
+                          className="shrink-0 border-green-200 hover:bg-green-50 text-green-700 dark:border-green-900 dark:hover:bg-green-950/50 dark:text-green-400"
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                          แก้ไขแล้ว
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center">
+                      <p className="text-sm text-muted-foreground">คำร้องนี้ปิดแล้ว ไม่สามารถตอบกลับได้</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
     </div>
@@ -622,7 +589,6 @@ function TicketsList({
             <TableHeader>
               <TableRow className="bg-muted hover:bg-muted">
                 <TableHead className="font-semibold">หัวข้อ</TableHead>
-                <TableHead className="font-semibold">หมวดหมู่</TableHead>
                 <TableHead className="font-semibold">สถานะ</TableHead>
                 <TableHead className="font-semibold">วันที่</TableHead>
                 <TableHead className="text-right font-semibold">จัดการ</TableHead>
@@ -631,7 +597,7 @@ function TicketsList({
             <TableBody>
               {data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-16 px-4">
+                  <TableCell colSpan={4} className="text-center py-16 px-4">
                     <div className="p-4 rounded-full bg-muted w-fit mx-auto mb-4">
                       <MessageSquare className="h-12 w-12 text-muted-foreground" />
                     </div>
@@ -652,19 +618,19 @@ function TicketsList({
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="font-normal bg-background/50">{ticketCategoryLabels[ticket.category]}</Badge>
-                    </TableCell>
                     <TableCell>{getStatusBadge(ticket.status)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {((ticket.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => onView(ticket)}
-                      className="hover:bg-primary/10 hover:text-primary"
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
+                        onClick={() => onView(ticket)}
+                        title="ดูรายละเอียด"
                       >
-                        <Eye className="h-4 w-4 mr-1" />
-                        ดูรายละเอียด
+                        <Pencil className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>

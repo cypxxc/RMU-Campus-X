@@ -55,7 +55,6 @@ export const POST = withValidation(
         userId: ctx.userId,
         userEmail: ctx.email || "",
         status: "new" as const,
-        priority: 2,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }

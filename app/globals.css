@@ -292,73 +292,20 @@
     visibility: hidden !important;
   }
 
-  /* Interactive Hover Animations - GPU Accelerated */
-  button:not(:disabled),
-  a:not([aria-disabled="true"]),
-  [role="button"]:not([aria-disabled="true"]) {
-    @apply transition-transform duration-150;
-    will-change: transform;
-    transform: translateZ(0);
-  }
-
-  button:not(:disabled):hover,
-  a:not([aria-disabled="true"]):hover {
-    transform: scale(1.02) translateZ(0);
-  }
-
-  button:not(:disabled):active,
-  a:not([aria-disabled="true"]):active {
-    transform: scale(0.98) translateZ(0);
-  }
-
-  /* Filter buttons and badges hover effects */
-  [role="radio"]:hover,
-  [role="checkbox"]:hover,
-  .filter-option:hover {
-    @apply scale-105 transition-transform duration-200;
-  }
-
-  /* Card hover effects */
-  .group:hover {
-    @apply shadow-lg transition-shadow duration-300;
-  }
-
-  /* Icon hover animations */
-  svg {
-    @apply transition-transform duration-200;
+  /* No animations on buttons - per user preference */
+  button,
+  [role="button"],
+  [type="button"],
+  [type="submit"],
+  [type="reset"] {
+    transition: none !important;
   }
 
   button:hover svg,
-  a:hover svg {
-    @apply scale-110;
+  button:active svg {
+    transform: none !important;
   }
 
-  /* Input focus animations */
-  input:focus,
-  textarea:focus,
-  select:focus {
-    @apply scale-[1.01] transition-transform duration-200;
-  }
-
-  /* Badge hover effects */
-  .badge:hover {
-    @apply brightness-110 transition-all duration-200;
-  }
-
-  /* Tab hover effects */
-  [role="tab"]:hover {
-    @apply bg-muted/50 transition-colors duration-200;
-  }
-
-  /* Selective color transitions - NOT applied to * (performance) */
-  button,
-  a,
-  input,
-  select,
-  textarea,
-  .badge {
-    @apply transition-colors duration-150;
-  }
   input[type="url"],
   textarea {
     cursor: text;
@@ -539,13 +486,9 @@
   animation: bounce-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Card hover effects */
+/* Card hover effects - animations disabled */
 .card-hover {
-  @apply transition-all duration-200 ease-out;
-}
-
-.card-hover:hover {
-  @apply shadow-lg -translate-y-0.5;
+  /* no transition */
 }
 
 /* Subtle shadows */

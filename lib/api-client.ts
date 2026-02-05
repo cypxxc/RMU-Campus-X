@@ -45,6 +45,13 @@ function isRetryable(status: number, error: unknown): boolean {
   return false
 }
 
+/** สร้าง URL เต็มสำหรับ request (กัน 404 เมื่อ relative path ถูก resolve ผิด) */
+function getFetchUrl(url: string): string {
+  if (typeof window === "undefined") return url
+  if (url.startsWith("http://") || url.startsWith("https://")) return url
+  return `${window.location.origin}${url.startsWith("/") ? url : `/${url}`}`
+}
+
 export async function authFetch(
   url: string,
   options: AuthFetchOptions = {}
@@ -62,12 +69,14 @@ export async function authFetch(
   const bodyPayload =
     body !== undefined ? (typeof body === "string" ? body : JSON.stringify(body)) : undefined
 
+  const fetchUrl = getFetchUrl(url)
+
   let lastRes: Response | null = null
   let lastError: unknown = null
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const res = await fetch(url, { ...rest, headers, body: bodyPayload })
+      const res = await fetch(fetchUrl, { ...rest, headers, body: bodyPayload })
       lastRes = res
       if (res.ok) return res
       if (!isRetryable(res.status, null) || attempt === MAX_RETRIES - 1) return res
@@ -90,7 +99,11 @@ export async function authFetchJson<T = unknown>(
   const res = await authFetch(url, options)
   const json = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new Error(json.error || res.statusText || "Request failed")
+    const message = json.error || res.statusText || "Request failed"
+    if (res.status === 404) {
+      throw new Error(`${message} (404: ${url}). ตรวจสอบว่า API route มีอยู่และ dev server รันอยู่`)
+    }
+    throw new Error(message)
   }
   return json
 }

@@ -173,6 +173,25 @@ export interface Report {
 
 export type NotificationType = "exchange" | "chat" | "report" | "system" | "warning" | "support"
 
+/** ประเภทประกาศ: info = ทั่วไป, warning = เตือน, critical = สำคัญเร่งด่วน */
+export type AnnouncementType = "info" | "warning" | "critical"
+
+export interface Announcement {
+  id: string
+  title: string
+  message: string
+  type: AnnouncementType
+  isActive: boolean
+  startAt?: Timestamp | FieldValue | null
+  endAt?: Timestamp | FieldValue | null
+  linkUrl?: string | null
+  linkLabel?: string | null
+  createdBy: string
+  createdByEmail?: string
+  createdAt: Timestamp | FieldValue
+  updatedAt: Timestamp | FieldValue
+}
+
 export interface AppNotification {
   id: string
   userId: string // ผู้รับการแจ้งเตือน
@@ -283,9 +302,10 @@ export interface SupportTicket {
   userId: string
   userEmail: string
   status: SupportTicketStatus
-  priority: number // 1 = low, 2 = medium, 3 = high
-  
-// Admin response (Legacy)
+  /** @deprecated ระดับความสำคัญไม่ใช้แล้ว */
+  priority?: number
+
+  // Admin response (Legacy)
   adminReply?: string
   repliedBy?: string
   repliedByEmail?: string

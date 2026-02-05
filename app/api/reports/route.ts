@@ -71,7 +71,7 @@ export const POST = withValidation(
         },
         deps,
         baseUrl: BASE_URL,
-        adminNotificationTitle: "📢 มีรายงานใหม่",
+        adminNotificationTitle: "มีรายงานใหม่",
       })
 
       return NextResponse.json({

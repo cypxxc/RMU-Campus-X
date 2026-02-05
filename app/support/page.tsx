@@ -1,25 +1,41 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { getUserSupportTickets, userReplyToTicket } from "@/lib/firestore"
 import type { SupportTicket, SupportTicketStatus } from "@/types"
-import { Navbar } from "@/components/navbar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, MessageSquare, Clock, CheckCircle2, AlertCircle, Inbox, Send } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { th } from "date-fns/locale"
+import { Loader2, MessageSquare, Clock, CheckCircle2, AlertCircle, Inbox, Send, ChevronRight, ChevronLeft, UserCircle, Headphones, Check } from "lucide-react"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+
+function formatTicketTime(date: Date): string {
+  return date.toLocaleString("th-TH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+function getLatestReplyPreview(ticket: SupportTicket): string | null {
+  if (ticket.messages && ticket.messages.length > 0) {
+    const last = ticket.messages[ticket.messages.length - 1] as { sender?: string; content?: string }
+    if (last?.sender === "admin" && last?.content) return last.content
+  }
+  if (ticket.adminReply) return ticket.adminReply
+  return null
+}
 
 export default function SupportPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([])
@@ -28,9 +44,32 @@ export default function SupportPage() {
   const [replyText, setReplyText] = useState("")
   const [replying, setReplying] = useState(false)
   const [ticketMessages, setTicketMessages] = useState<any[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
   const { user, loading: authLoading } = useAuth()
+
+  const PAGE_SIZE = 10
+
+  // เรียง: คำร้องที่รอดำเนินการ (new, in_progress) บนสุด แล้วตามด้วยวันที่สร้างล่าสุด
+  const sortedTickets = useMemo(() => {
+    return [...tickets].sort((a, b) => {
+      const pending = (s: SupportTicketStatus) => s === "new" || s === "in_progress"
+      const aPending = pending(a.status)
+      const bPending = pending(b.status)
+      if (aPending !== bPending) return aPending ? -1 : 1
+      const timeA = (a.createdAt as any)?.toMillis?.() ?? (a.createdAt as any)?.toDate?.()?.getTime?.() ?? (a.createdAt instanceof Date ? a.createdAt.getTime() : 0)
+      const timeB = (b.createdAt as any)?.toMillis?.() ?? (b.createdAt as any)?.toDate?.()?.getTime?.() ?? (b.createdAt instanceof Date ? b.createdAt.getTime() : 0)
+      return timeB - timeA
+    })
+  }, [tickets])
+
+  const totalPages = Math.max(1, Math.ceil(sortedTickets.length / PAGE_SIZE))
+  const paginatedTickets = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return sortedTickets.slice(start, start + PAGE_SIZE)
+  }, [sortedTickets, currentPage])
   const { toast } = useToast()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     if (authLoading) return
@@ -40,6 +79,19 @@ export default function SupportPage() {
     }
     loadTickets()
   }, [user, authLoading])
+
+  // เปิด ticket จากลิงก์ (เช่น จากหน้าโปรไฟล์ /support?ticketId=xxx)
+  useEffect(() => {
+    const ticketId = searchParams.get("ticketId")
+    if (!ticketId || tickets.length === 0) return
+    const ticket = tickets.find((t) => t.id === ticketId)
+    if (ticket) setSelectedTicket(ticket)
+  }, [searchParams, tickets])
+
+  // คงหน้าให้อยู่ในช่วงเมื่อจำนวน ticket ลดลง
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [totalPages, currentPage])
 
   const loadTickets = async () => {
     if (!user) return
@@ -135,14 +187,6 @@ export default function SupportPage() {
     }
   }, [tickets])
 
-  const categoryLabels: Record<string, string> = {
-    general: "ปัญหาทั่วไป",
-    bug: "แจ้งข้อผิดพลาด",
-    feature: "เสนอแนะฟังก์ชัน",
-    account: "ปัญหาบัญชี",
-    other: "อื่นๆ",
-  }
-
   const statusConfig: Record<SupportTicketStatus, { label: string; color: string; icon: any }> = {
     new: { label: "รอดำเนินการ", color: "bg-blue-100 text-blue-800 border-blue-200", icon: Clock },
     in_progress: { label: "กำลังดำเนินการ", color: "bg-amber-100 text-amber-800 border-amber-200", icon: AlertCircle },
@@ -152,19 +196,14 @@ export default function SupportPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="flex items-center justify-center py-32">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      
+    <>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -194,134 +233,203 @@ export default function SupportPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {tickets.map((ticket) => {
+            {paginatedTickets.map((ticket) => {
               const status = statusConfig[ticket.status]
               const StatusIcon = status.icon
               const createdAt = (ticket.createdAt as any)?.toDate?.() || new Date()
+              const replyPreview = getLatestReplyPreview(ticket)
 
               return (
-                <Card 
-                  key={ticket.id} 
-                  className="cursor-pointer hover:border-primary/50 transition-colors"
+                <Card
+                  key={ticket.id}
+                  className="cursor-pointer hover:border-primary/50 hover:bg-muted/20 transition-colors overflow-hidden"
                   onClick={() => setSelectedTicket(ticket)}
                 >
-                  <CardContent className="p-4 sm:p-6">
+                  <CardContent className="p-4 sm:p-5">
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <h3 className="font-semibold truncate">{ticket.subject}</h3>
-                          <Badge variant="outline" className="text-[10px]">
-                            {categoryLabels[ticket.category] || ticket.category}
-                          </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
                           {ticket.description}
                         </p>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {replyPreview && (
+                          <div className="text-xs bg-primary/10 text-primary rounded-md px-2 py-1.5 mb-2 line-clamp-2 border border-primary/20">
+                            <span className="font-medium">ทีมงาน: </span>
+                            {replyPreview.length > 80 ? `${replyPreview.slice(0, 80)}...` : replyPreview}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {formatDistanceToNow(createdAt, { locale: th, addSuffix: true })}
+                            {formatTicketTime(createdAt)}
                           </span>
-                          {ticket.adminReply && (
-                            <span className="flex items-center gap-1 text-primary">
+                          {(ticket.adminReply || (ticket.messages && ticket.messages.some((m: any) => m.sender === "admin"))) && (
+                            <span className="flex items-center gap-1 text-primary font-medium">
                               <MessageSquare className="h-3 w-3" />
                               มีการตอบกลับ
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {ticket.priority && (
-                          <Badge variant="outline" className={`text-[10px] ${
-                            ticket.priority === 3 ? 'bg-red-50 text-red-600 border-red-200' :
-                            ticket.priority === 2 ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                            'bg-gray-50 text-gray-600 border-gray-200'
-                          }`}>
-                            {ticket.priority === 3 ? 'ด่วน' : ticket.priority === 2 ? 'ปานกลาง' : 'ปกติ'}
-                          </Badge>
-                        )}
+                      <div className="flex flex-col items-end gap-2 shrink-0">
                         <Badge className={`${status.color} gap-1`}>
                           <StatusIcon className="h-3 w-3" />
                           {status.label}
                         </Badge>
+                        <span className="text-xs font-medium text-primary flex items-center gap-1">
+                          ดูและตอบกลับ
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </span>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               )
             })}
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-6 pb-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="ml-1">หน้าก่อน</span>
+                </Button>
+                <span className="text-sm text-muted-foreground px-2">
+                  หน้า {currentPage} จาก {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  <span className="mr-1">ถัดไป</span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <Dialog open={!!selectedTicket} onOpenChange={(open) => !open && setSelectedTicket(null)}>
-        <DialogContent className="max-w-xl h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
-          <DialogHeader className="p-4 border-b bg-muted/10 shrink-0">
-             <div className="flex items-center justify-between">
-                <DialogTitle className="flex items-center gap-2 text-base">
-                  <MessageSquare className="h-5 w-5 text-primary" />
-                  {selectedTicket?.subject}
-                </DialogTitle>
-                {selectedTicket && (
-                  <Badge className={statusConfig[selectedTicket.status].color}>
-                    {statusConfig[selectedTicket.status].label}
-                  </Badge>
-                )}
-             </div>
-             <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                <Badge variant="outline" className="font-normal text-[10px]">
-                   {categoryLabels[selectedTicket?.category || 'general'] || selectedTicket?.category}
+        <DialogContent className="w-[95vw] max-w-3xl h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl">
+          {/* หัวข้อ: ชื่อคำร้อง + สถานะ + ID */}
+          <DialogHeader className="px-5 py-4 border-b shrink-0 space-y-0">
+            <DialogTitle className="text-xl font-semibold truncate pr-8">
+              {selectedTicket?.subject}
+            </DialogTitle>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {selectedTicket && (
+                <Badge variant="outline" className={`font-normal text-xs rounded-full ${statusConfig[selectedTicket.status].color}`}>
+                  {statusConfig[selectedTicket.status].label}
                 </Badge>
-                <span>•</span>
-                <span>{selectedTicket?.id}</span>
-             </div>
+              )}
+              <span className="text-xs text-muted-foreground truncate max-w-[180px] ml-auto sm:ml-0" title={selectedTicket?.id}>
+                {selectedTicket?.id}
+              </span>
+            </div>
           </DialogHeader>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/5">
-             {ticketMessages.map((msg, idx) => {
-               const isMe = msg.sender === 'user'
-               return (
-                 <div key={idx} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
-                   <div className={`flex flex-col max-w-[80%] ${isMe ? 'items-end' : 'items-start'}`}>
-                      <div className={`px-4 py-2 rounded-2xl text-sm ${
-                        isMe 
-                          ? 'bg-primary text-primary-foreground rounded-tr-none' 
-                          : 'bg-white border shadow-sm rounded-tl-none'
-                      }`}>
-                         {msg.content}
+
+          {/* พื้นที่แชท - ฟองข้อความกว้างตามเนื้อหา */}
+          <div className="flex-1 overflow-y-auto min-h-0 bg-background">
+            <div className="p-4 sm:p-5 space-y-6">
+              {ticketMessages.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-12">ยังไม่มีข้อความในคำร้องนี้</p>
+              ) : (
+                ticketMessages.map((msg, idx) => {
+                  const isMe = msg.sender === "user"
+                  const timeStr = formatTicketTime(
+                    (msg.createdAt as any)?.toDate
+                      ? (msg.createdAt as any).toDate()
+                      : msg.createdAt instanceof Date
+                        ? msg.createdAt
+                        : new Date()
+                  )
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex w-full gap-3 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                    >
+                      {/* Avatar: ทีมงาน = Headphones, ผู้ใช้ = ไม่แสดง (แสดงไอคอนใต้ข้อความแทน) */}
+                      {!isMe && (
+                        <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-muted text-muted-foreground border">
+                          <Headphones className="h-4 w-4" />
+                        </div>
+                      )}
+                      <div className={`flex flex-col min-w-0 max-w-[85%] ${isMe ? "items-end" : "items-start"}`}>
+                        <div
+                          className={`w-fit max-w-full rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                            isMe
+                              ? "bg-primary text-primary-foreground rounded-br-md"
+                              : "bg-muted/80 text-foreground border rounded-bl-md"
+                          }`}
+                        >
+                          {msg.content}
+                        </div>
+                        <div className={`flex items-center gap-1.5 mt-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                          <span className="text-[11px] text-muted-foreground">{timeStr}</span>
+                          {!isMe && <span className="text-[11px] text-muted-foreground">- ทีมงาน</span>}
+                          {isMe && (
+                            <span className="w-3.5 h-3.5 rounded-full bg-primary/30 flex items-center justify-center">
+                              <Check className="h-2.5 w-2.5 text-primary" strokeWidth={3} />
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-[10px] text-muted-foreground mt-1 px-1">
-                        {formatDistanceToNow((msg.createdAt as any)?.toDate ? (msg.createdAt as any).toDate() : (msg.createdAt instanceof Date ? msg.createdAt : new Date()), { addSuffix: true, locale: th })}
-                         {!isMe && msg.senderEmail && ` • ${msg.senderEmail === 'Admin' ? 'ทีมงาน' : 'ทีมงาน'}`}
-                      </span>
-                   </div>
-                 </div>
-               )
-             })}
+                      {isMe && <div className="w-9 shrink-0" />}
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
 
-          <div className="p-4 bg-background border-t shrink-0">
-             <form 
-               onSubmit={(e: React.FormEvent) => {
-                 e.preventDefault()
-                 handleSendReply()
-               }}
-               className="flex gap-2"
-             >
-                <Input 
+          {/* ช่องตอบกลับ */}
+          <div className="shrink-0 border-t bg-muted/30 rounded-b-xl">
+            {selectedTicket &&
+            (selectedTicket.status === "new" || selectedTicket.status === "in_progress") ? (
+              <form
+                onSubmit={(e: React.FormEvent) => {
+                  e.preventDefault()
+                  handleSendReply()
+                }}
+                className="p-4 flex gap-2 items-center"
+              >
+                <Input
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="พิมพ์ข้อความ..."
+                  placeholder="ตอบกลับทีมงาน..."
                   disabled={replying}
-                  className="flex-1"
+                  className="flex-1 rounded-full border-2 bg-background focus-visible:ring-2"
                 />
-                <Button type="submit" size="icon" disabled={!replyText.trim() || replying}>
-                   {replying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!replyText.trim() || replying}
+                  className="shrink-0 rounded-full h-10 w-10 bg-primary hover:bg-primary/90"
+                >
+                  {replying ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                 </Button>
-             </form>
+              </form>
+            ) : (
+              <div className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">คำร้องนี้ปิดแล้ว ไม่สามารถส่งข้อความเพิ่มได้</p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }
