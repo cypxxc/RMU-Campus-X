@@ -205,11 +205,12 @@ export const confirmExchange = async (
   if (isClient) {
     return apiCall(
       async () => {
-        const res = await authFetchJson<{ data?: { status: ExchangeStatus } }>(
+        const res = await authFetchJson<{ status: ExchangeStatus }>(
           "/api/exchanges/confirm",
           { method: "POST", body: { exchangeId, role } }
         );
-        const status = res.data?.status;
+        const data = res.data;
+        const status = data !== undefined ? data.status : undefined;
         if (status === undefined) {
           throw new Error("ไม่ได้รับสถานะจากเซิร์ฟเวอร์");
         }

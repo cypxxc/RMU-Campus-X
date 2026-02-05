@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { registerUser } from "@/lib/auth"
@@ -14,13 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Info, Eye, EyeOff } from "lucide-react"
 import { Logo } from "@/components/logo"
-import dynamic from "next/dynamic"
-
-// Dynamic import for Three.js - loads only when needed
-const ThreeBackground = dynamic(
-  () => import("@/components/three-background").then((mod) => mod.ThreeBackground),
-  { ssr: false, loading: () => null }
-)
+import { CursorReactiveBackground } from "@/components/cursor-reactive-background"
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("")
@@ -29,15 +23,8 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [show3D, setShow3D] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
-
-  // Lazy load 3D background
-  useEffect(() => {
-    const timer = setTimeout(() => setShow3D(true), 800)
-    return () => clearTimeout(timer)
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,10 +72,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-b from-primary/5 via-background to-background p-4 relative overflow-hidden">
-      {/* 3D Background - lazy loaded */}
-      {show3D && <ThreeBackground />}
-      
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      <CursorReactiveBackground />
       <div className="w-full max-w-md relative z-10">
         <Card className="shadow-soft border-border/60">
           <CardHeader className="text-center space-y-4 pb-2">
