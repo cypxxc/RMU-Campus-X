@@ -61,10 +61,8 @@ function DialogContent({
         data-slot="dialog-content"
         aria-describedby={undefined}
         className={cn(
-          'bg-background fixed top-[50%] left-[50%] z-50 flex h-auto max-h-[90vh] w-[95vw] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-2xl border shadow-2xl',
-          // Tablet: Centered & Large
+          'bg-background fixed top-[50%] left-[50%] z-50 flex h-auto max-h-[min(90vh,calc(100dvh-2rem))] w-[95vw] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-2xl border shadow-2xl',
           'sm:w-[90vw] sm:max-w-lg',
-          // Desktop adjustments
           'sm:w-[90vw] sm:max-w-3xl lg:w-[80vw] lg:max-w-[1280px]',
           className,
         )}
@@ -74,7 +72,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 z-50 rounded-full bg-background/80 p-2 text-foreground/70 backdrop-blur-sm transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5"
+            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-3 right-3 z-50 rounded-full bg-background/80 p-2 text-foreground/70 backdrop-blur-sm transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none min-h-[44px] min-w-[44px] flex items-center justify-center [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5"
           >
             <XIcon />
             <span className="sr-only">Close</span>

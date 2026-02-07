@@ -80,8 +80,8 @@ export function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 border-b glass">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+      <nav className="sticky top-0 z-50 border-b glass pt-safe">
+        <div className="container mx-auto px-4 pl-safe pr-safe h-14 sm:h-16 flex items-center justify-between">
           {/* Logo */}
           <Logo size="md" href="/dashboard" className="shrink-0" />
 

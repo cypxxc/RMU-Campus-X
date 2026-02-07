@@ -6,7 +6,7 @@ import type { Item, ItemCategory, ItemStatus } from "@/types"
 import { ItemCard } from "@/components/item-card"
 import { FilterSidebar } from "@/components/filter-sidebar"
 import { Button } from "@/components/ui/button"
-import { Search, Loader2, Package, Sparkles, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, Loader2, Package, Sparkles, X, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { Input } from "@/components/ui/input"
 import {
@@ -43,6 +43,8 @@ export default function DashboardPage() {
   const [totalCount, setTotalCount] = useState(0)
   const paginationLastIds = useRef<Map<number, string | null>>(new Map([[1, null]]))
   const [totalPages, setTotalPages] = useState(1)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -98,6 +100,7 @@ export default function DashboardPage() {
         setItems(result.data.items)
         const count = result.data.totalCount || 0
         setTotalCount(count)
+        setHasMore(result.data.hasMore ?? false)
         setTotalPages(count > 0 ? Math.ceil(count / PAGE_SIZE) : (result.data.hasMore ? page + 1 : page))
         if (result.data.lastId != null && result.data.hasMore) {
           paginationLastIds.current.set(page + 1, result.data.lastId)
@@ -153,6 +156,35 @@ export default function DashboardPage() {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
+
+  const handleLoadMore = useCallback(async () => {
+    const nextPage = currentPage + 1
+    const lastId = paginationLastIds.current.get(nextPage) ?? undefined
+    if (!lastId && nextPage > 1) return
+    setLoadingMore(true)
+    try {
+      const result = await getItems({
+        pageSize: PAGE_SIZE,
+        lastId: lastId ?? undefined,
+        categories: categories.length > 0 ? categories : undefined,
+        status: status !== "all" ? status : undefined,
+        searchQuery: debouncedSearchQuery.trim() || undefined,
+      })
+      if (!mountedRef.current) return
+      if (result.success && result.data && result.data.items.length > 0) {
+        setItems((prev) => [...prev, ...result.data!.items])
+        setCurrentPage(nextPage)
+        setHasMore(result.data.hasMore ?? false)
+        if (result.data.lastId != null && result.data.hasMore) {
+          paginationLastIds.current.set(nextPage + 1, result.data.lastId)
+        }
+      }
+    } catch (error) {
+      if (mountedRef.current) toast.error("โหลดเพิ่มไม่สำเร็จ")
+    } finally {
+      if (mountedRef.current) setLoadingMore(false)
+    }
+  }, [currentPage, categories, status, debouncedSearchQuery])
 
   return (
     <div className="min-h-screen bg-background">
@@ -303,9 +335,27 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {/* Pagination Controls */}
+                {/* โหลดเพิ่ม หรือ Pagination */}
+                {hasMore && (
+                  <div className="mt-8 flex justify-center">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="gap-2 min-w-[160px]"
+                    >
+                      {loadingMore ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                      {loadingMore ? "กำลังโหลด..." : "โหลดเพิ่ม"}
+                    </Button>
+                  </div>
+                )}
                 {totalPages > 1 && (
-                  <div className="mt-8 flex items-center justify-between border-t pt-4">
+                  <div className="mt-6 flex items-center justify-between border-t pt-4">
                     <p className="text-sm text-muted-foreground hidden sm:block">
                       หน้า {currentPage} จาก {totalPages}
                     </p>

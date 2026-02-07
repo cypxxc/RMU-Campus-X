@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { Loader2, LayoutDashboard } from "lucide-react"
@@ -8,11 +8,23 @@ import { useToast } from "@/hooks/use-toast"
 import { DashboardOverview } from "@/components/admin/dashboard-overview"
 import { useAdminDashboardData } from "@/hooks/use-admin-dashboard"
 
+function toDate(v: unknown): Date {
+  if (v && typeof v === "object" && "toDate" in v && typeof (v as { toDate: () => Date }).toDate === "function") {
+    return (v as { toDate: () => Date }).toDate()
+  }
+  return v instanceof Date ? v : new Date()
+}
+
 export default function AdminDashboardPage() {
   const { user, loading: authLoading, isAdmin } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const { items, tickets, totalUsersCount, isLoading } = useAdminDashboardData()
+  const [now, setNow] = useState<number | null>(null)
+
+  useEffect(() => {
+    setNow(Date.now())
+  }, [items.length, tickets.length])
 
   useEffect(() => {
     if (authLoading) return
@@ -42,19 +54,19 @@ export default function AdminDashboardPage() {
     return null
   }
 
-  // Calculate counts
-  const newItemsCount = items.filter(item => {
-    const postedAt = (item.postedAt as any)?.toDate?.() || new Date()
-    const hoursAgo = (Date.now() - postedAt.getTime()) / (1000 * 60 * 60)
-    return hoursAgo <= 24 || item.status === 'pending'
-  }).length
+  const nowMs = now ?? 0
+  const newItemsCount = useMemo(() => items.filter(item => {
+    const postedAt = toDate(item.postedAt)
+    const hoursAgo = (nowMs - postedAt.getTime()) / (1000 * 60 * 60)
+    return hoursAgo <= 24 || item.status === "pending"
+  }).length, [items, nowMs])
 
-  const newTicketsCount = tickets.filter(t => {
-    if (t.status === 'new') return true
-    const createdAt = (t.createdAt as any)?.toDate?.() || new Date()
-    const hoursAgo = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60)
+  const newTicketsCount = useMemo(() => tickets.filter(t => {
+    if (t.status === "new") return true
+    const createdAt = toDate(t.createdAt)
+    const hoursAgo = (nowMs - createdAt.getTime()) / (1000 * 60 * 60)
     return hoursAgo <= 24
-  }).length
+  }).length, [tickets, nowMs])
 
   const handleTabChange = (tab: string) => {
     switch (tab) {

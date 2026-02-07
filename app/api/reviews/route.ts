@@ -1,7 +1,15 @@
+/**
+ * Reviews API
+ * GET: list รีวิวที่ user ได้รับ
+ * POST: สร้างรีวิว (auth + termsAccepted, withValidation)
+ */
+
 import { NextRequest, NextResponse } from "next/server"
-import { getAdminAuth, getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
+import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
+import { withValidation, type ValidationContext } from "@/lib/api-validation"
 import { getAuthToken, successResponse } from "@/lib/api-response"
+import { createReviewSchema } from "@/lib/schemas"
 
 /** GET /api/reviews?targetUserId=xxx – list รีวิวที่ user ได้รับ */
 export async function GET(req: NextRequest) {
@@ -26,18 +34,19 @@ export async function GET(req: NextRequest) {
       .limit(limitCount)
       .get()
 
-    const rawReviews = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
-    // ไม่แสดงรีวิวจากผู้ใช้ที่ถูกลบแล้ว (ป้องกันข้อมูลค้าง / รูปโปรไฟล์เสีย)
-    const reviewerIds = [...new Set(rawReviews.map((r: any) => r.reviewerId).filter(Boolean))]
+    type RawReview = { id: string; reviewerId?: string; [key: string]: unknown }
+    const rawReviews: RawReview[] = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as RawReview))
+    const reviewerIds = [...new Set(rawReviews.map((r) => r.reviewerId).filter((id): id is string => Boolean(id)))]
     const existingReviewerIds = new Set<string>()
     if (reviewerIds.length > 0) {
       const refs = reviewerIds.map((uid) => adminDb.collection("users").doc(uid))
       const userSnaps = await adminDb.getAll(...refs)
       userSnaps.forEach((snap, i) => {
-        if (snap.exists && reviewerIds[i]) existingReviewerIds.add(reviewerIds[i])
+        const id = reviewerIds[i]
+        if (snap.exists && id) existingReviewerIds.add(id)
       })
     }
-    const reviews = rawReviews.filter((r: any) => existingReviewerIds.has(r.reviewerId))
+    const reviews = rawReviews.filter((r) => existingReviewerIds.has(r.reviewerId ?? ""))
     return successResponse({ reviews })
   } catch (e) {
     console.error("[Reviews API] GET Error:", e)
@@ -45,115 +54,91 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: Request) {
-  try {
-    const authHeader = req.headers.get("Authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+/** POST /api/reviews – สร้างรีวิว (ต้องยอมรับ terms แล้ว) */
+export const POST = withValidation(
+  createReviewSchema,
+  async (_req, data, ctx: ValidationContext | null) => {
+    if (!ctx) {
+      return NextResponse.json({ error: "Authentication required", code: "AUTH_ERROR" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized: Missing token" }, { status: 401 })
-    }
-
-    const adminAuth = getAdminAuth()
-    const decodedToken = await adminAuth.verifyIdToken(token)
-    const reviewerId = decodedToken.uid
-
-    const body = await req.json()
-    const { exchangeId, targetUserId, rating, comment, itemTitle, reviewerName, reviewerAvatar } = body
-
-    if (!exchangeId || !targetUserId || !rating || !itemTitle) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    const numericRating = Number(rating)
-    if (isNaN(numericRating) || numericRating < 1 || numericRating > 5) {
-      return NextResponse.json({ error: "Rating must be a number between 1 and 5" }, { status: 400 })
-    }
-
+    const reviewerId = ctx.userId
+    const { exchangeId, targetUserId, rating, itemTitle, comment, reviewerName, reviewerAvatar } = data
     const adminDb = getAdminDb()
-    
-    // Use a transaction for atomic operations
-    await adminDb.runTransaction(async (transaction) => {
-      // 1. Check for existing review (Deduplication)
-      const reviewId = `${exchangeId}_${reviewerId}`
-      const reviewRef = adminDb.collection("reviews").doc(reviewId)
-      const reviewDoc = await transaction.get(reviewRef)
 
-      if (reviewDoc.exists) {
-        throw new Error("You have already reviewed this exchange")
-      }
+    try {
+      await adminDb.runTransaction(async (transaction) => {
+        const reviewId = `${exchangeId}_${reviewerId}`
+        const reviewRef = adminDb.collection("reviews").doc(reviewId)
+        const reviewDoc = await transaction.get(reviewRef)
 
-      // 2. Validate Exchange Existence & Participation (Security)
-      const exchangeRef = adminDb.collection("exchanges").doc(exchangeId)
-      const exchangeDoc = await transaction.get(exchangeRef)
-      
-      if (!exchangeDoc.exists) {
-        throw new Error("Exchange not found")
-      }
-
-      const exchangeData = exchangeDoc.data()
-      // Ensure the reviewer was actually part of this exchange
-      if (exchangeData?.ownerId !== reviewerId && exchangeData?.requesterId !== reviewerId) {
-        throw new Error("You were not a participant in this exchange")
-      }
-
-      // 3. Get Target User Data (For Incremental Update)
-      const userRef = adminDb.collection("users").doc(targetUserId)
-      const userDoc = await transaction.get(userRef)
-
-      if (!userDoc.exists) {
-        throw new Error("Target user not found")
-      }
-
-      const userData = userDoc.data()
-      const currentRating = userData?.rating?.average || 0
-      const currentCount = userData?.rating?.count || 0
-
-      // 4. Calculate New Rating (Incremental)
-      // New Average = ((Current * Count) + New) / (Count + 1)
-      const newCount = currentCount + 1
-      const newAverage = Number(
-        (((currentRating * currentCount) + numericRating) / newCount).toFixed(1)
-      )
-
-      // 5. Perform Writes
-      // Create Review
-      transaction.set(reviewRef, {
-        exchangeId,
-        reviewerId,
-        targetUserId,
-        rating: numericRating,
-        comment: comment || "",
-        itemTitle,
-        reviewerName,
-        reviewerAvatar: reviewerAvatar || null,
-        createdAt: FieldValue.serverTimestamp()
-      })
-
-      // Update User
-      transaction.update(userRef, {
-        rating: {
-          average: newAverage,
-          count: newCount
+        if (reviewDoc.exists) {
+          throw new Error("You have already reviewed this exchange")
         }
+
+        const exchangeRef = adminDb.collection("exchanges").doc(exchangeId)
+        const exchangeDoc = await transaction.get(exchangeRef)
+        if (!exchangeDoc.exists) {
+          throw new Error("Exchange not found")
+        }
+
+        const exchangeData = exchangeDoc.data()
+        if (exchangeData?.ownerId !== reviewerId && exchangeData?.requesterId !== reviewerId) {
+          throw new Error("You were not a participant in this exchange")
+        }
+
+        const userRef = adminDb.collection("users").doc(targetUserId)
+        const userDoc = await transaction.get(userRef)
+        if (!userDoc.exists) {
+          throw new Error("Target user not found")
+        }
+
+        const userData = userDoc.data()
+        const currentRating = userData?.rating?.average || 0
+        const currentCount = userData?.rating?.count || 0
+        const newCount = currentCount + 1
+        const newAverage = Number(
+          (((currentRating * currentCount) + rating) / newCount).toFixed(1)
+        )
+
+        transaction.set(reviewRef, {
+          exchangeId,
+          reviewerId,
+          targetUserId,
+          rating,
+          comment: comment ?? "",
+          itemTitle,
+          reviewerName: reviewerName ?? null,
+          reviewerAvatar: reviewerAvatar && reviewerAvatar !== "" ? reviewerAvatar : null,
+          createdAt: FieldValue.serverTimestamp(),
+        })
+
+        transaction.update(userRef, {
+          rating: { average: newAverage, count: newCount },
+        })
       })
-    })
 
-    return NextResponse.json({ success: true, data: { reviewId: `${exchangeId}_${reviewerId}` } })
-
-  } catch (error: any) {
-    console.error("Review API Error:", error)
-    // Handle specific transaction errors or custom errors
-    const errorMessage = error.message === "You have already reviewed this exchange" 
-      ? error.message 
-      : "Internal Server Error"
-      
-    // Return 400 for bad requests (like duplicates), 500 for system errors
-    const status = error.message === "You have already reviewed this exchange" ? 400 : 500
-    
-    return NextResponse.json({ error: errorMessage }, { status })
-  }
-}
+      return NextResponse.json({
+        success: true,
+        data: { reviewId: `${exchangeId}_${reviewerId}` },
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      if (
+        message === "You have already reviewed this exchange" ||
+        message.includes("already reviewed")
+      ) {
+        return NextResponse.json({ error: message, code: "DUPLICATE_REVIEW" }, { status: 400 })
+      }
+      if (message === "Exchange not found" || message === "Target user not found") {
+        return NextResponse.json({ error: message, code: "NOT_FOUND" }, { status: 404 })
+      }
+      if (message.includes("not a participant")) {
+        return NextResponse.json({ error: message, code: "FORBIDDEN" }, { status: 403 })
+      }
+      console.error("[Reviews API] POST Error:", error)
+      return NextResponse.json({ error: "Internal Server Error", code: "INTERNAL_ERROR" }, { status: 500 })
+    }
+  },
+  { requireAuth: true, requireTermsAccepted: true }
+)

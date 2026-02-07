@@ -36,7 +36,7 @@ Authorization: Bearer <firebase_id_token>
 | DELETE | `/api/items/[id]` | ลบ (เจ้าของเท่านั้น) | ✅ |
 | **Exchanges** | | | |
 | POST | `/api/exchanges` | สร้างคำขอแลกเปลี่ยน | ✅ + terms |
-| POST | `/api/exchanges/respond` | ตอบรับ/ปฏิเสธ | ✅ |
+| POST | `/api/exchanges/respond` | ตอบรับ/ปฏิเสธ | ✅ + terms |
 | POST | `/api/exchanges/cancel` | ยกเลิก | ✅ |
 | GET | `/api/exchanges/[id]` | ดึงรายละเอียด (participant เท่านั้น) | ✅ |
 | PATCH | `/api/exchanges/[id]` | อัปเดตสถานะ (participant + state machine) | ✅ |
@@ -55,10 +55,11 @@ Authorization: Bearer <firebase_id_token>
 | DELETE | `/api/users/me/delete` | ลบบัญชี | ✅ |
 | **Reviews** | | | |
 | GET | `/api/reviews?targetUserId=xxx` | list รีวิวที่ user ได้รับ | ✅ |
-| POST | `/api/reviews` | สร้างรีวิว | ✅ |
+| POST | `/api/reviews` | สร้างรีวิว | ✅ + terms |
 | **Reports** | | | |
 | POST | `/api/reports` | สร้างรายงาน | ✅ + terms |
 | **Support** | | | |
+| GET | `/api/support` | รายการคำร้องของฉัน | ✅ |
 | POST | `/api/support` | สร้าง ticket | ✅ + terms |
 | **Admin, LINE, Upload, Health** | (ดูรายละเอียดในเอกสารด้านล่าง) | | |
 
@@ -125,6 +126,7 @@ POST /api/exchanges
 ```http
 POST /api/exchanges/respond
 ```
+*Requires auth + terms accepted.*
 
 **Body:**
 ```json
@@ -224,15 +226,18 @@ GET /api/reviews?userId=xxx
 ```http
 POST /api/reviews
 ```
-*Requires authentication*
+*Requires auth + terms accepted.*
 
 **Body:**
 ```json
 {
-  "revieweeId": "string",
   "exchangeId": "string",
+  "targetUserId": "string",
   "rating": 1-5,
-  "comment": "string"
+  "itemTitle": "string",
+  "comment": "string (optional)",
+  "reviewerName": "string (optional)",
+  "reviewerAvatar": "string URL (optional)"
 }
 ```
 

@@ -1,20 +1,74 @@
 /**
  * Support Tickets API Route
- * สร้าง Support Ticket พร้อมส่ง LINE Notification ไปยัง Admin
- * 
+ * GET: รายการคำร้องของฉัน (auth)
+ * POST: สร้าง Support Ticket พร้อมส่ง LINE Notification ไปยัง Admin
+ *
  * ✅ Uses withValidation wrapper for consistent validation and auth
  */
 
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { withValidation, type ValidationContext } from "@/lib/api-validation"
-import { getAdminDb } from "@/lib/firebase-admin"
+import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { notifyAdminsNewSupportTicket } from "@/lib/line"
 import type { User } from "@/types"
 import { sanitizeText } from "@/lib/security"
+import { getAuthToken } from "@/lib/api-response"
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+
+function toISO(v: unknown): string | null {
+  if (!v) return null
+  if (typeof (v as { toDate?: () => Date }).toDate === "function") return (v as { toDate: () => Date }).toDate().toISOString()
+  if (typeof (v as { toMillis?: () => number }).toMillis === "function") return new Date((v as { toMillis: () => number }).toMillis()).toISOString()
+  if (typeof v === "string") return v
+  if (typeof v === "number") return new Date(v).toISOString()
+  return null
+}
+
+/** GET /api/support – รายการคำร้องของฉัน (ต้อง auth) */
+export async function GET(request: NextRequest) {
+  try {
+    const token = getAuthToken(request) ?? extractBearerToken(request.headers.get("Authorization"))
+    if (!token) return NextResponse.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 })
+    const decoded = await verifyIdToken(token, true)
+    if (!decoded) return NextResponse.json({ error: "Invalid or expired token", code: "INVALID_TOKEN" }, { status: 401 })
+
+    const db = getAdminDb()
+    const snapshot = await db
+      .collection("support_tickets")
+      .where("userId", "==", decoded.uid)
+      .orderBy("createdAt", "desc")
+      .limit(100)
+      .get()
+
+    const tickets = snapshot.docs.map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        subject: data.subject,
+        category: data.category,
+        description: data.description,
+        userId: data.userId,
+        userEmail: data.userEmail,
+        status: data.status,
+        adminReply: data.adminReply,
+        messages: data.messages ?? [],
+        repliedBy: data.repliedBy,
+        repliedAt: data.repliedAt ? toISO(data.repliedAt) : null,
+        resolvedAt: data.resolvedAt ? toISO(data.resolvedAt) : null,
+        createdAt: data.createdAt ? toISO(data.createdAt) : null,
+        updatedAt: data.updatedAt ? toISO(data.updatedAt) : null,
+      }
+    })
+
+    return NextResponse.json({ success: true, data: { tickets } })
+  } catch (error) {
+    console.error("[Support API] GET Error:", error)
+    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 })
+  }
+}
 
 /**
  * Zod schema for support ticket creation

@@ -5,12 +5,14 @@ import { useAuth } from "@/components/auth-provider"
 import { getFavoriteItems } from "@/lib/db/favorites"
 import { ItemCard } from "@/components/item-card"
 import { ItemDetailView } from "@/components/item-detail-view"
+import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
 import {
   Dialog,
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, Heart, AlertCircle } from "lucide-react"
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia } from "@/components/ui/empty"
+import { Heart, AlertCircle, Package } from "lucide-react"
 import type { Item } from "@/types"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -46,8 +48,17 @@ export default function FavoritesPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-3 bg-red-50 text-red-500 rounded-2xl dark:bg-red-950/30 dark:text-red-400">
+            <Heart className="h-8 w-8 fill-current" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold">รายการโปรด</h1>
+            <p className="text-muted-foreground">กำลังโหลด...</p>
+          </div>
+        </div>
+        <ItemCardSkeletonGrid count={6} />
       </div>
     )
   }
@@ -109,16 +120,27 @@ export default function FavoritesPage() {
           </Dialog>
         </>
       ) : (
-        <div className="py-24 text-center bg-muted/20 rounded-2xl border border-dashed">
-          <Heart className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-          <h2 className="text-xl font-medium mb-2">ยังไม่มีรายการโปรด</h2>
-          <p className="text-muted-foreground mb-6">
-            กดปุ่มหัวใจที่รายการสิ่งของเพื่อบันทึกไว้ดูภายหลัง
-          </p>
-          <Button asChild>
-            <Link href="/dashboard">ค้นหาสิ่งของ</Link>
-          </Button>
-        </div>
+        <Empty className="py-16 bg-muted/10 border border-dashed rounded-2xl">
+          <EmptyHeader>
+            <EmptyMedia variant="icon" className="rounded-2xl size-14 [&_svg]:size-8">
+              <Heart className="text-muted-foreground" />
+            </EmptyMedia>
+            <EmptyTitle>ยังไม่มีรายการโปรด</EmptyTitle>
+            <EmptyDescription>
+              กดปุ่มหัวใจที่รายการสิ่งของในหน้าหลักเพื่อบันทึกไว้ดูภายหลัง
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button asChild>
+                <Link href="/dashboard">
+                  <Package className="mr-2 h-4 w-4" />
+                  ค้นหาสิ่งของ
+                </Link>
+              </Button>
+            </div>
+          </EmptyContent>
+        </Empty>
       )}
     </div>
   )

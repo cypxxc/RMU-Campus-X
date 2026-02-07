@@ -11,6 +11,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia } from "@/components/ui/empty"
+import Link from "next/link"
 
 const PAGE_SIZE = 10
 
@@ -181,8 +184,25 @@ export default function NotificationsPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-6 sm:py-8 max-w-3xl">
+          <div className="flex items-center gap-4 mb-6">
+            <Skeleton className="h-8 w-48" />
+          </div>
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Card key={i}>
+                <CardContent className="p-4 flex gap-4">
+                  <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
@@ -328,20 +348,46 @@ export default function NotificationsPage() {
                   </div>
                 )}
               </>
-            ) : (
-              /* Empty State */
-              <div className="text-center py-16">
-                <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-                  <Bell className="h-8 w-8 text-muted-foreground/50" />
-                </div>
-                <h3 className="text-lg font-semibold mb-1">ไม่มีการแจ้งเตือน</h3>
-                <p className="text-sm text-muted-foreground">
-                  {activeTab === "unread" 
-                    ? "คุณอ่านการแจ้งเตือนทั้งหมดแล้ว" 
-                    : "คุณยังไม่มีการแจ้งเตือนในขณะนี้"
-                  }
-                </p>
+            ) : loading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <Card key={i}>
+                    <CardContent className="p-4 flex gap-4">
+                      <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-full" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
+            ) : (
+              <Empty className="py-16 bg-muted/10 border border-dashed rounded-2xl">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon" className="rounded-2xl size-14 [&_svg]:size-8">
+                    <Bell className="text-muted-foreground" />
+                  </EmptyMedia>
+                  <EmptyTitle>
+                    {activeTab === "unread" ? "อ่านครบแล้ว" : "ไม่มีการแจ้งเตือน"}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {activeTab === "unread"
+                      ? "คุณอ่านการแจ้งเตือนทั้งหมดแล้ว"
+                      : "เมื่อมีการแจ้งเตือนใหม่จะแสดงที่นี่"}
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button asChild variant="outline">
+                      <Link href="/dashboard">ไปหน้าหลัก</Link>
+                    </Button>
+                    <Button asChild>
+                      <Link href="/my-exchanges">ดูการแลกเปลี่ยน</Link>
+                    </Button>
+                  </div>
+                </EmptyContent>
+              </Empty>
             )}
           </TabsContent>
         </Tabs>

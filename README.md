@@ -34,7 +34,7 @@
 │  /api/items/*     │  /api/users/me     │  /api/favorites/*     │
 │  /api/exchanges/* │  /api/notifications│  /api/reviews         │
 │  /api/admin/*     │  /api/announcements│  /api/reports         │
-│  /api/line/*      │  /api/upload       │  /api/health           │
+│  /api/support     │  /api/line/*       │  /api/upload, health  │
 │  ────────────────────────────────────────────────────────────── │
 │  • Client เรียก API เป็นหลัก (lib/api-client, authFetchJson)   │
 │  • Retry + Exponential Backoff (429/5xx/network), Retry-After  │
@@ -57,7 +57,7 @@
 
 ### Data Flow Diagram
 
-- **Client → API:** ฟีเจอร์หลักโหลดผ่าน API ทั้งหมด (ไม่ใช้ Firestore SDK บน client สำหรับ dashboard/profile/admin/notifications/exchanges/reviews/reports) — เรียกผ่าน `lib/api-client` (`authFetch` / `authFetchJson`) มี retry + exponential backoff เมื่อได้ 429, 5xx หรือ network error และเคารพ header `Retry-After`
+- **Client → API:** ฟีเจอร์หลักโหลดผ่าน API ทั้งหมด (dashboard, profile, admin, notifications, exchanges, reviews, reports, **support**) — เรียกผ่าน `lib/api-client` (`authFetch` / `authFetchJson`) มี retry + exponential backoff เมื่อได้ 429, 5xx หรือ network error และเคารพ header `Retry-After`
 - **API → Firestore:** API Routes ใช้ Firebase Admin SDK อ่าน/เขียน Firestore และตรวจ auth, termsAccepted, สิทธิ์
 
 ```
@@ -155,8 +155,8 @@ rmu-campus-x/
 │   │   ├── line/                     # LINE Integration (webhook, notify-chat, notify-exchange, ...)
 │   │   ├── notifications/            # แจ้งเตือน (list, mark read, read-all, delete)
 │   │   ├── reports/                  # Report APIs
-│   │   ├── reviews/                  # รีวิว (list, create)
-│   │   ├── support/                  # Support APIs
+│   │   ├── reviews/                  # รีวิว (list, create — ต้อง terms)
+│   │   ├── support/                  # Support (GET รายการคำร้องของฉัน, POST สร้าง ticket — ต้อง terms)
 │   │   ├── upload/                   # Image Upload API
 │   │   ├── users/me/                 # โปรไฟล์ + accept-terms
 │   │   ├── users/[id]/               # โปรไฟล์สาธารณะ (ไม่ต้อง auth)
@@ -199,7 +199,8 @@ rmu-campus-x/
 │   │   ├── users.ts, users-profile.ts # Users (เรียก /api/users/me, /api/users/[id])
 │   │   ├── notifications.ts          # แจ้งเตือน (เรียก /api/notifications)
 │   │   ├── reviews.ts                # รีวิว (เรียก /api/reviews)
-│   │   ├── reports.ts                # Reports
+│   │   ├── reports.ts                # Reports (เรียก /api/reports, /api/admin/reports)
+│   │   ├── support.ts                # Support (client ใช้ GET/POST /api/support)
 │   │   └── logs.ts                   # Activity Logs
 │   │
 │   ├── exchange-state-machine.ts     # Exchange status transitions, STATUS_LABELS, getConfirmButtonLabel
@@ -324,19 +325,20 @@ rmu-campus-x/
 ### 8. ความปลอดภัย (Security)
 
 - **Distributed Rate Limiting** - Upstash Redis backing (100 req/min)
-- **termsAccepted** - API ที่เกี่ยวกับการโพสต์/รายงาน/support ตรวจยอมรับข้อกำหนดแล้ว
+- **termsAccepted** - API ที่เกี่ยวกับการโพสต์/รายงาน/support/รีวิว/ตอบรับคำขอแลกเปลี่ยน ตรวจยอมรับข้อกำหนดแล้ว
 - **Image Magic Byte Validation** - ตรวจสอบไฟล์จริง (JPEG, PNG, GIF, WebP)
 - **API Validation Wrapper** - Server-side Zod validation ทุก request
 - **Exchange State Machine** - ป้องกันสถานะเปลี่ยนผิดปกติ
 - **Request ID Tracking** - Traceable requests for debugging
 - **Firebase Security Rules** - Defenses in depth for DB & Storage
 
-### 9. Progressive Web App (PWA)
+### 9. Progressive Web App (PWA) & Mobile
 
 - **Installable** - ติดตั้งเป็น App บนมือถือ/เดสก์ท็อป
 - **Offline Support** - ใช้งานได้แม้ไม่มีอินเทอร์เน็ต (cached pages)
 - **App Shortcuts** - ทางลัดไปยังหน้าหลักๆ
 - **Background Sync** - อัพเดทข้อมูลเมื่อกลับมาออนไลน์
+- **Mobile-first** - Viewport `viewportFit: cover`, safe-area padding (notch/home indicator), touch targets ≥44px, input font-size 16px บนมือถือ (ลด iOS zoom), Help bot และ Dialog/Sheet ปรับขนาดตามจอ
 
 ### 10. Performance Optimization
 
@@ -354,7 +356,7 @@ rmu-campus-x/
 | **Vercel Best Practices** | ปฏิบัติตามมาตรฐาน Vercel Labs (Core Web Vitals) |
 | **Memory Leak Prevention** | ใช้ `mountedRef` / `cancelled` ใน async effects (dashboard, profile, chat, notifications, favorites, item detail) เพื่อไม่ให้ setState หลัง component unmount |
 | **API Retry & Backoff** | Client (`lib/api-client`) retry สูงสุด 3 ครั้ง พร้อม exponential backoff และเคารพ `Retry-After` เมื่อได้ 429 |
-| **Client Data via API Only** | Dashboard, โปรไฟล์, แจ้งเตือน, การแลกเปลี่ยน, รีวิว, รายงาน, Admin โหลดข้อมูลผ่าน API เท่านั้น (ไม่ใช้ Firestore SDK บน client) — ลดปัญหา Firestore "Unexpected state" และความสอดคล้องของ cache |
+| **Client Data via API Only** | Dashboard, โปรไฟล์, แจ้งเตือน, การแลกเปลี่ยน, รีวิว, รายงาน, **Support (รายการคำร้อง)**, Admin โหลดข้อมูลผ่าน API เท่านั้น (ไม่ใช้ Firestore SDK บน client) — ลดปัญหา Firestore permission และความสอดคล้องของ cache |
 
 ### 11. Testing & Quality Assurance
 
@@ -597,13 +599,15 @@ bun start
 | | POST | `/api/notifications/read-all` | mark all as read |
 | | DELETE | `/api/notifications/[id]` | ลบการแจ้งเตือน |
 | **Reviews** | GET | `/api/reviews?targetUserId=&limit=` | list รีวิวที่ user ได้รับ (กรองผู้รีวิวที่ถูกลบแล้ว) |
-| | POST | `/api/reviews` | สร้างรีวิว (ตรวจผู้ร่วมแลกเปลี่ยน, อัปเดต rating) |
+| | POST | `/api/reviews` | สร้างรีวิว (ต้อง auth + terms; ตรวจผู้ร่วมแลกเปลี่ยน, อัปเดต rating) |
 | **Exchanges** | GET | `/api/exchanges` | list การแลกเปลี่ยน (ไม่รวมที่ผู้ใช้ซ่อนแล้ว) |
 | | POST | `/api/exchanges` | สร้างคำขอแลกเปลี่ยน (ต้อง terms) |
-| | POST | `/api/exchanges/respond` | ตอบรับ/ปฏิเสธ |
+| | POST | `/api/exchanges/respond` | ตอบรับ/ปฏิเสธ (ต้อง auth + terms) |
+| **Support** | GET | `/api/support` | รายการคำร้องของฉัน (ต้อง auth) |
+| | POST | `/api/support` | สร้าง ticket (ต้อง auth + terms) |
 | | PATCH | `/api/exchanges/[id]` | อัปเดตสถานะ |
 | | POST | `/api/exchanges/[id]/hide` | ซ่อนจากรายการของฉัน |
-| **Reports / Support** | POST | `/api/reports`, `/api/support` | สร้างรายงาน / ticket (ต้อง terms) |
+| **Reports** | POST | `/api/reports` | สร้างรายงาน (ต้อง terms) |
 | **Admin Announcements** | GET/POST | `/api/admin/announcements` | list / สร้างประกาศ |
 | | GET/PATCH/DELETE | `/api/admin/announcements/[id]` | ดึง / แก้ไข / ลบประกาศ |
 | **Admin / LINE / Upload** | - | `/api/admin/*`, `/api/line/*`, `/api/upload` | ดู docs/API.md |

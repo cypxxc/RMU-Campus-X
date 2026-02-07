@@ -10,7 +10,7 @@ export default function ChatLayout({
 }) {
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pb-safe">
          <Navbar />
          <BreadcrumbBar />
         {children}
