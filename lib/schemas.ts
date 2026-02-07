@@ -124,6 +124,18 @@ export const createReportSchema = z.object({
   evidenceUrls: z.array(z.string().url()).max(5, "อัปโหลดหลักฐานได้สูงสุด 5 รูป").optional(),
 })
 
+// ============ Review Schemas ============
+
+export const createReviewSchema = z.object({
+  exchangeId: z.string().min(1, "กรุณาระบุรหัสการแลกเปลี่ยน"),
+  targetUserId: z.string().min(1, "กรุณาระบุผู้ถูกรีวิว"),
+  rating: z.coerce.number().int().min(1, "คะแนนต้องอยู่ระหว่าง 1–5").max(5),
+  itemTitle: z.string().min(1, "กรุณาระบุชื่อสิ่งของ").max(200).transform(sanitizeText),
+  comment: z.string().max(500, "ความคิดเห็นต้องไม่เกิน 500 ตัวอักษร").optional().transform(val => val ? sanitizeText(val) : val),
+  reviewerName: z.string().max(100).optional().transform(val => val ? sanitizeText(val) : val),
+  reviewerAvatar: z.string().url().optional().nullable().or(z.literal("")),
+})
+
 // ============ Admin Schemas ============
 
 export const updateUserStatusSchema = z.object({
@@ -213,6 +225,7 @@ export type CreateExchangeInput = z.infer<typeof createExchangeSchema>
 export type RespondExchangeInput = z.infer<typeof respondExchangeSchema>
 export type CancelExchangeInput = z.infer<typeof cancelExchangeSchema>
 export type CreateReportInput = z.infer<typeof createReportSchema>
+export type CreateReviewInput = z.infer<typeof createReviewSchema>
 export type UpdateUserStatusInput = z.infer<typeof updateUserStatusSchema>
 export type IssueWarningInput = z.infer<typeof issueWarningSchema>
 export type SendMessageInput = z.infer<typeof sendMessageSchema>

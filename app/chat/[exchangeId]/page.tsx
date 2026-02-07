@@ -654,14 +654,19 @@ export default function ChatPage({
                                 <AlertDialogTitle>
                                   {getConfirmButtonLabel(exchange.status, isOwner ? "owner" : "requester")}
                                 </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  {exchange.status === "accepted"
-                                    ? isOwner
-                                      ? "เจ้าของโพส ยืนยันการส่งมอบ"
-                                      : "ผู้ขอ ยืนยันการรับของ"
-                                    : isOwner
-                                      ? "ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว"
-                                      : "ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว"}
+                                <AlertDialogDescription className="space-y-1">
+                                  <span>
+                                    {exchange.status === "accepted"
+                                      ? isOwner
+                                        ? "เจ้าของโพส ยืนยันการส่งมอบ"
+                                        : "ผู้ขอ ยืนยันการรับของ"
+                                      : isOwner
+                                        ? "ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว"
+                                        : "ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว"}
+                                  </span>
+                                  <span className="block text-amber-600 dark:text-amber-400 font-medium">
+                                    การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                  </span>
                                 </AlertDialogDescription>
                               </div>
                             </div>

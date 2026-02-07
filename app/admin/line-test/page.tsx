@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { authFetchJson } from "@/lib/api-client"
@@ -148,7 +149,7 @@ export default function AdminLineTestPage() {
             </CardHeader>
             <CardContent>
               <Button asChild variant="outline">
-                <a href="/profile">ไปที่โปรไฟล์</a>
+                <Link href="/profile">ไปที่โปรไฟล์</Link>
               </Button>
             </CardContent>
           </Card>

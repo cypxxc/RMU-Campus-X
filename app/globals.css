@@ -268,6 +268,18 @@
     cursor: text;
   }
 
+  /* Prevent iOS zoom on focus: use at least 16px on touch devices */
+  @media (max-width: 767px) {
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="search"],
+    input[type="number"],
+    textarea {
+      font-size: 16px;
+    }
+  }
+
   /* Hide browser default password reveal button - ALL browsers */
   /* Edge/IE */
   input::-ms-reveal,
@@ -716,4 +728,46 @@ nextjs-portal {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============ Mobile & safe area ============ */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+}
+
+/* Safe area padding utilities (notched devices, home indicator) */
+.pt-safe {
+  padding-top: max(0.25rem, var(--safe-area-inset-top));
+}
+.pb-safe {
+  padding-bottom: max(0.25rem, var(--safe-area-inset-bottom));
+}
+.pl-safe {
+  padding-left: max(0.25rem, var(--safe-area-inset-left));
+}
+.pr-safe {
+  padding-right: max(0.25rem, var(--safe-area-inset-right));
+}
+
+/* Touch-friendly: remove tap delay and tap highlight on interactive elements */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  [role="button"],
+  [type="button"],
+  [type="submit"],
+  [type="reset"],
+  select,
+  label[for] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+/* Prevent horizontal overflow on mobile */
+body {
+  overflow-x: hidden;
 }

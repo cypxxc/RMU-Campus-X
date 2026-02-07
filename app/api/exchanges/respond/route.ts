@@ -121,7 +121,7 @@ export const POST = withValidation(
       )
     }
   },
-  { requireAuth: true }
+  { requireAuth: true, requireTermsAccepted: true }
 )
 
 // Helper: Notify requester about the response

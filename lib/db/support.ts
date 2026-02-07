@@ -25,18 +25,28 @@ import { createAdminLog } from "./logs"
 export const createSupportTicket = async (
   ticketData: Omit<SupportTicket, "id" | "createdAt" | "updatedAt" | "status">
 ) => {
+  if (typeof window !== "undefined") {
+    const { authFetchJson } = await import("@/lib/api-client")
+    const res = await authFetchJson<{ ticketId?: string }>("/api/support", {
+      method: "POST",
+      body: {
+        subject: ticketData.subject,
+        category: ticketData.category,
+        description: ticketData.description,
+      },
+    })
+    const ticketId = res?.data?.ticketId
+    if (!ticketId) throw new Error(res?.error || "ไม่สามารถสร้างคำร้องได้")
+    return ticketId
+  }
+
   const db = getFirebaseDb()
-  
   const docRef = await addDoc(collection(db, "support_tickets"), {
     ...ticketData,
     status: "new" as const,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
-
-  // Note: New flows should create tickets via `/api/support` (Admin SDK),
-  // so admin notifications and LINE alerts happen server-side.
-  
   return docRef.id
 }
 
@@ -90,19 +100,33 @@ export const getSupportTickets = async (
 }
 
 export const getUserSupportTickets = async (userId: string) => {
+  if (typeof window !== "undefined") {
+    const { authFetchJson } = await import("@/lib/api-client")
+    const res = await authFetchJson<{ tickets?: SupportTicket[] }>("/api/support", { method: "GET" })
+    return res?.data?.tickets ?? []
+  }
   const db = getFirebaseDb()
   const q = query(
     collection(db, "support_tickets"),
     where("userId", "==", userId),
     orderBy("createdAt", "desc")
   )
-  
   const snapshot = await getDocs(q)
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SupportTicket)
 }
 
 /** ตรวจว่าผู้ใช้มีคำร้องหรือไม่ (ใช้ใน navbar เพื่อแสดง/ซ่อนปุ่ม คำร้องของฉัน) */
 export const userHasSupportTickets = async (userId: string): Promise<boolean> => {
+  if (typeof window !== "undefined") {
+    try {
+      const { authFetchJson } = await import("@/lib/api-client")
+      const res = await authFetchJson<{ tickets?: unknown[] }>("/api/support", { method: "GET" })
+      const tickets = res?.data?.tickets
+      return Array.isArray(tickets) && tickets.length > 0
+    } catch {
+      return false
+    }
+  }
   const db = getFirebaseDb()
   const q = query(
     collection(db, "support_tickets"),

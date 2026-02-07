@@ -67,8 +67,8 @@ export function useAccountStatus() {
 
   useEffect(() => {
     if (!user) {
-      setLoading(false)
-      return
+      const t = setTimeout(() => setLoading(false), 0)
+      return () => clearTimeout(t)
     }
     let cancelled = false
     fetchMeProfile().then((profile) => {

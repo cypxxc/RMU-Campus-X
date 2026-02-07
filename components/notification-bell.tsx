@@ -116,8 +116,7 @@ export function NotificationBell() {
     if (!user) return
 
     const POLL_MS = 15_000
-
-    fetchNotifications(false)
+    const t = setTimeout(() => fetchNotifications(false), 0)
     const interval = setInterval(() => fetchNotifications(true), POLL_MS)
 
     const onVisibilityChange = () => {
@@ -128,6 +127,7 @@ export function NotificationBell() {
     document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
+      clearTimeout(t)
       clearInterval(interval)
       document.removeEventListener("visibilitychange", onVisibilityChange)
     }

@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
-import { getUserSupportTickets, userReplyToTicket } from "@/lib/firestore"
+import { userReplyToTicket } from "@/lib/firestore"
+import { authFetchJson } from "@/lib/api-client"
+import { safeToDate } from "@/lib/utils"
 import type { SupportTicket, SupportTicketStatus } from "@/types"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -56,8 +58,8 @@ export default function SupportPage() {
       const aPending = pending(a.status)
       const bPending = pending(b.status)
       if (aPending !== bPending) return aPending ? -1 : 1
-      const timeA = (a.createdAt as any)?.toMillis?.() ?? (a.createdAt as any)?.toDate?.()?.getTime?.() ?? (a.createdAt instanceof Date ? a.createdAt.getTime() : 0)
-      const timeB = (b.createdAt as any)?.toMillis?.() ?? (b.createdAt as any)?.toDate?.()?.getTime?.() ?? (b.createdAt instanceof Date ? b.createdAt.getTime() : 0)
+      const timeA = safeToDate(a.createdAt).getTime()
+      const timeB = safeToDate(b.createdAt).getTime()
       return timeB - timeA
     })
   }, [tickets])
@@ -97,10 +99,12 @@ export default function SupportPage() {
     if (!user) return
     setLoading(true)
     try {
-      const data = await getUserSupportTickets(user.uid)
-      setTickets(data)
+      const res = await authFetchJson<{ tickets?: SupportTicket[] }>("/api/support", { method: "GET" })
+      const list = res?.data?.tickets ?? []
+      setTickets(list)
     } catch (error) {
       console.error("[Support] Error loading tickets:", error)
+      setTickets([])
     } finally {
       setLoading(false)
     }
@@ -138,8 +142,8 @@ export default function SupportPage() {
       // Sort by date
       // Note: createdAt might be Timestamp or Date or Object. Handle carefully.
       msgs.sort((a, b) => {
-        const timeA = (a.createdAt as any)?.toMillis ? (a.createdAt as any).toMillis() : (a.createdAt instanceof Date ? a.createdAt.getTime() : 0)
-        const timeB = (b.createdAt as any)?.toMillis ? (b.createdAt as any).toMillis() : (b.createdAt instanceof Date ? b.createdAt.getTime() : 0)
+        const timeA = safeToDate((a as { createdAt?: unknown }).createdAt).getTime()
+        const timeB = safeToDate((b as { createdAt?: unknown }).createdAt).getTime()
         return timeA - timeB
       })
       
@@ -236,7 +240,7 @@ export default function SupportPage() {
             {paginatedTickets.map((ticket) => {
               const status = statusConfig[ticket.status]
               const StatusIcon = status.icon
-              const createdAt = (ticket.createdAt as any)?.toDate?.() || new Date()
+              const createdAt = safeToDate(ticket.createdAt)
               const replyPreview = getLatestReplyPreview(ticket)
 
               return (
@@ -345,13 +349,7 @@ export default function SupportPage() {
               ) : (
                 ticketMessages.map((msg, idx) => {
                   const isMe = msg.sender === "user"
-                  const timeStr = formatTicketTime(
-                    (msg.createdAt as any)?.toDate
-                      ? (msg.createdAt as any).toDate()
-                      : msg.createdAt instanceof Date
-                        ? msg.createdAt
-                        : new Date()
-                  )
+                  const timeStr = formatTicketTime(safeToDate((msg as { createdAt?: unknown }).createdAt))
                   return (
                     <div
                       key={idx}

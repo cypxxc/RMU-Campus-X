@@ -17,6 +17,9 @@ import { useToast } from "@/hooks/use-toast"
 import { ReportModal } from "@/components/report-modal"
 import { CancelExchangeDialog, DeleteExchangeDialog } from "@/components/exchange/exchange-action-dialogs"
 import { STATUS_LABELS } from "@/lib/exchange-state-machine"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia } from "@/components/ui/empty"
+import { Package } from "lucide-react"
 
 export default function MyExchangesPage() {
   const [exchanges, setExchanges] = useState<Exchange[]>([])
@@ -252,20 +255,45 @@ export default function MyExchangesPage() {
           </div>
         </div>
 
-        {exchanges.length === 0 ? (
-          /* Empty State */
-          <div className="text-center py-16">
-            <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-              <RefreshCw className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">ยังไม่มีการแลกเปลี่ยน</h3>
-            <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-6">
-              เริ่มการแลกเปลี่ยนโดยการขอรับสิ่งของจากหน้า Dashboard
-            </p>
-            <Button asChild>
-              <Link href="/dashboard">ไปที่ Dashboard</Link>
-            </Button>
+        {loading ? (
+          /* Loading Skeleton */
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="border-border/60 p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-1/2 mb-4" />
+                <div className="flex flex-wrap gap-2">
+                  <Skeleton className="h-9 w-24" />
+                  <Skeleton className="h-9 w-24" />
+                </div>
+              </Card>
+            ))}
           </div>
+        ) : exchanges.length === 0 ? (
+          <Empty className="py-16 bg-muted/10 border border-dashed rounded-2xl">
+            <EmptyHeader>
+              <EmptyMedia variant="icon" className="rounded-2xl size-14 [&_svg]:size-8">
+                <RefreshCw className="text-muted-foreground" />
+              </EmptyMedia>
+              <EmptyTitle>ยังไม่มีการแลกเปลี่ยน</EmptyTitle>
+              <EmptyDescription>
+                เริ่มการแลกเปลี่ยนโดยการขอรับสิ่งของจากหน้าหลัก
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button asChild>
+                  <Link href="/dashboard">
+                    <Package className="mr-2 h-4 w-4" />
+                    ไปที่หน้าหลัก
+                  </Link>
+                </Button>
+              </div>
+            </EmptyContent>
+          </Empty>
         ) : (
           /* Exchange List */
           <>

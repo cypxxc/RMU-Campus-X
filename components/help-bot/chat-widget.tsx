@@ -90,22 +90,28 @@ export function HelpBotWidget() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-100 flex flex-col items-end gap-2">
-      {/* Toggle Button */}
+    <div
+      className="fixed z-[100] flex flex-col items-end gap-2 pb-safe pr-safe"
+      style={{
+        bottom: "max(1rem, var(--safe-area-inset-bottom))",
+        right: "max(1rem, var(--safe-area-inset-right))",
+      }}
+    >
+      {/* Toggle Button - 48px+ for touch */}
       {!isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
-          size="lg"
-          className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 bg-linear-to-r from-blue-600 to-cyan-500"
+          size="icon-lg"
+          className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 bg-linear-to-r from-blue-600 to-cyan-500"
         >
           <MessageCircle className="h-8 w-8 text-white" />
           <span className="sr-only">เปิดแชทผู้ช่วย</span>
         </Button>
       )}
 
-      {/* Chat Window */}
+      {/* Chat Window - full width on small mobile, max height with safe area */}
       {isOpen && (
-        <Card className="w-[400px] sm:w-[450px] h-[600px] shadow-2xl border-none flex flex-col overflow-hidden ring-1 ring-border/50">
+        <Card className="w-[min(calc(100vw-2rem),400px)] sm:w-[450px] h-[min(85dvh,600px)] max-h-[calc(100dvh-2rem)] shadow-2xl border-none flex flex-col overflow-hidden ring-1 ring-border/50">
           {/* Header */}
           <CardHeader className="p-4 bg-linear-to-r from-blue-600 to-cyan-500 text-white shrink-0">
             <div className="flex items-center justify-between">
