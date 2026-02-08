@@ -1,8 +1,6 @@
-/** หน้าเกี่ยวกับเรา - ปิดใช้งานชั่วคราว (ไม่ลบ) */
+import { redirect } from "next/navigation"
+
+/** Redirect ไปหน้าหลัก — หน้ารายละเอียดเกี่ยวกับเราปิดไว้ก่อน (ลดประเด็นกรรมการถาม) */
 export default function AboutPage() {
-  return (
-    <div className="container mx-auto px-4 py-16 max-w-md text-center">
-      <p className="text-muted-foreground mb-6">หน้านี้ปิดใช้งานชั่วคราว</p>
-    </div>
-  )
+  redirect("/")
 }
