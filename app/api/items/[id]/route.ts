@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
-import { getAdminDb } from "@/lib/firebase-admin"
+import { itemsCollection } from "@/lib/db/collections"
 import { deleteItemAsOwner } from "@/lib/services/items/item-deletion"
 import { createFirebaseAdminItemDeps, createItemUpdateAdminDeps } from "@/lib/services/items/firebase-admin-deps"
 import { isItemDeletionError } from "@/lib/services/items/errors"
@@ -37,15 +37,15 @@ export async function GET(
     const { id: itemId } = await params
     if (!itemId) return NextResponse.json({ error: "Missing item ID" }, { status: 400 })
 
-    const db = getAdminDb()
-    const snap = await db.collection("items").doc(itemId).get()
+    const snap = await itemsCollection().doc(itemId).get()
     if (!snap.exists) {
       return NextResponse.json({ success: true, item: null })
     }
 
+    const item = snap.data()
     return NextResponse.json({
       success: true,
-      item: { id: snap.id, ...snap.data() },
+      item: item ?? null,
     })
   } catch (e) {
     console.error("[Items API] GET Error:", e)

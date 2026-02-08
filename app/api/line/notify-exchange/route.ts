@@ -93,8 +93,12 @@ export async function POST(request: NextRequest) {
     const itemId = exchange?.itemId as string | undefined
     if (itemId) {
       const itemSnap = await db.collection("items").doc(itemId).get()
-      const itemData = itemSnap.data() as { imageUrls?: string[]; imageUrl?: string } | undefined
-      itemImage = itemData?.imageUrls?.[0] ?? itemData?.imageUrl
+      const itemData = itemSnap.data() as { imagePublicIds?: string[]; imageUrls?: string[]; imageUrl?: string } | undefined
+      const ref = itemData?.imagePublicIds?.[0] ?? itemData?.imageUrls?.[0] ?? itemData?.imageUrl
+      if (ref) {
+        const { resolveImageUrl } = await import("@/lib/cloudinary-url")
+        itemImage = resolveImageUrl(ref)
+      }
     }
 
     await notifyExchangeRequest(

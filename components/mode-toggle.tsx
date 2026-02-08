@@ -1,7 +1,7 @@
 "use client"
 
 // React import not needed in Next.js 13+
-import { Moon, Sun, Monitor } from "lucide-react"
+import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
@@ -38,13 +38,6 @@ export function ModeToggle() {
         >
           <Moon className="h-4 w-4" />
           <span>Dark (มืด)</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={() => setTheme("system")}
-          className={`gap-2 cursor-pointer transition-colors ${theme === 'system' ? 'bg-accent font-bold text-primary' : ''}`}
-        >
-          <Monitor className="h-4 w-4" />
-          <span>System (ระบบ)</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

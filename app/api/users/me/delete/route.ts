@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb, getAdminAuth, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 import { cloudinary } from "@/lib/cloudinary"
 import { recalculateUserRating } from "@/lib/services/admin/user-cleanup"
+import { extractItemImagePublicIds } from "@/lib/services/items/cloudinary-utils"
 
 export const runtime = 'nodejs'
 
@@ -51,15 +52,7 @@ export async function DELETE(request: NextRequest) {
     const itemsSnapshot = await db.collection("items").where("postedBy", "==", userId).get()
     itemsSnapshot.docs.forEach(doc => {
         refsToDelete.push(doc.ref)
-        const data = doc.data()
-        if (Array.isArray(data.imageUrls)) {
-            data.imageUrls.forEach((url: string) => {
-                if (url.includes("cloudinary")) {
-                    const matches = url.match(/\/rmu-exchange\/items\/([^/.]+)/)
-                    if (matches?.[1]) cloudinaryPublicIds.push(`rmu-exchange/items/${matches[1]}`)
-                }
-            })
-        }
+        extractItemImagePublicIds(doc.data() ?? {}).forEach(id => cloudinaryPublicIds.push(id))
     })
 
     // 2.3 Exchanges

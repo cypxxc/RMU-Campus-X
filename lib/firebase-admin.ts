@@ -153,7 +153,7 @@ export async function verifyIdToken(token: string, checkStatus: boolean = false)
  */
 export async function getAdminUserDoc(uid: string) {
   const db = getAdminDb()
-  const snap = await db.collection('users').doc(uid).get()
+  const snap = await db.collection("users").doc(uid).get()
   return snap.exists ? snap.data() : null
 }
 

@@ -1,26 +1,29 @@
 /**
  * Image Upload Utilities
- * - Cloudinary CDN upload
+ * - Cloudinary CDN upload (Signed Upload - direct to Cloudinary)
  * - File validation
  * - Client-side compression
  */
 
 import { compressImage, shouldCompress, blobToFile, formatFileSize } from './image-utils'
 
+const CLOUDINARY_UPLOAD_URL = 'https://api.cloudinary.com/v1_1'
+
 /**
- * Upload image to Cloudinary via API
- * Automatically compresses large images before upload
+ * Upload image directly to Cloudinary using Signed Upload
+ * 1. Call /api/upload/sign to get credentials
+ * 2. POST file + signature directly to Cloudinary
  * @param file - Image file to upload
  * @param preset - Upload preset ('item' | 'avatar')
- * @returns Cloudinary secure URL
+ * @returns Cloudinary public_id (store this in Firestore for transform flexibility)
  */
 export const uploadToCloudinary = async (
-  file: File, 
+  file: File,
   preset: 'item' | 'avatar' = 'item',
   token?: string
 ): Promise<string> => {
   let fileToUpload: File = file
-  
+
   // Compress image if it's larger than 500KB
   if (shouldCompress(file)) {
     try {
@@ -29,42 +32,59 @@ export const uploadToCloudinary = async (
         maxWidth: preset === 'avatar' ? 400 : 1200,
         maxHeight: preset === 'avatar' ? 400 : 1200,
         quality: 0.8,
-        format: 'image/webp'
+        format: 'image/webp',
       })
-      
-      // Only use compressed version if it's actually smaller
+
       if (compressedBlob.size < originalSize) {
         fileToUpload = blobToFile(compressedBlob, file.name.replace(/\.[^.]+$/, '.webp'))
         console.log(`[Upload] Compressed: ${formatFileSize(originalSize)} → ${formatFileSize(compressedBlob.size)}`)
       }
     } catch (error) {
-      // If compression fails, use original file
       console.warn('[Upload] Compression failed, using original file:', error)
     }
   }
 
-  const formData = new FormData()
-  formData.append('file', fileToUpload)
-  formData.append('preset', preset)
-
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await fetch('/api/upload', {
+  const signRes = await fetch('/api/upload/sign', {
     method: 'POST',
-    body: formData,
     headers,
+    body: JSON.stringify({ preset }),
   })
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'อัปโหลดรูปภาพไม่สำเร็จ')
+  if (!signRes.ok) {
+    const err = await signRes.json().catch(() => ({}))
+    throw new Error(err.error || 'ไม่สามารถรับลายเซ็นอัปโหลดได้')
   }
 
-  const data = await response.json()
-  return data.url
+  const { signature, timestamp, api_key, cloud_name, folder } = await signRes.json()
+
+  const formData = new FormData()
+  formData.append('file', fileToUpload)
+  formData.append('signature', signature)
+  formData.append('timestamp', String(timestamp))
+  formData.append('api_key', api_key)
+  formData.append('folder', folder)
+
+  const uploadUrl = `${CLOUDINARY_UPLOAD_URL}/${cloud_name}/image/upload`
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!uploadRes.ok) {
+    const errData = await uploadRes.json().catch(() => ({}))
+    const errMsg = errData?.error?.message || errData?.error || 'อัปโหลดรูปภาพไม่สำเร็จ'
+    throw new Error(errMsg)
+  }
+
+  const data = await uploadRes.json()
+  return data.public_id
 }
 
 /**

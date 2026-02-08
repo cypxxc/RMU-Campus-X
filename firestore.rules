@@ -110,13 +110,15 @@ service cloud.firestore {
       function isValidItemData(data) {
         let location = data.get('location', null);
         let imageUrls = data.get('imageUrls', null);
+        let imagePublicIds = data.get('imagePublicIds', null);
 
         return data.title is string && data.title.size() >= 1 && data.title.size() <= 100
             && data.description is string && data.description.size() <= 2000
             && data.category in ['electronics', 'books', 'furniture', 'clothing', 'sports', 'other']
             && data.status in ['available', 'pending', 'completed']
             && (location == null || (location is string && location.size() <= 100))
-            && (imageUrls == null || (imageUrls is list && imageUrls.size() <= 5));
+            && (imageUrls == null || (imageUrls is list && imageUrls.size() <= 5))
+            && (imagePublicIds == null || (imagePublicIds is list && imagePublicIds.size() <= 5));
       }
 
       // ✅ student-only browsing

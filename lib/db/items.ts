@@ -35,6 +35,7 @@ export const createItem = async (
           category: itemData.category,
           location: itemData.location ?? "",
           locationDetail: itemData.locationDetail,
+          imagePublicIds: itemData.imagePublicIds,
           imageUrls: itemData.imageUrls,
         },
       })
@@ -100,7 +101,7 @@ export const getItemById = async (id: string): Promise<ApiResponse<Item | null>>
 
 export const updateItem = async (
   id: string,
-  data: Partial<Pick<Item, "title" | "description" | "category" | "location" | "locationDetail" | "status" | "imageUrls">>
+  data: Partial<Pick<Item, "title" | "description" | "category" | "location" | "locationDetail" | "status" | "imagePublicIds" | "imageUrls">>
 ): Promise<ApiResponse<void>> => {
   return apiCall(
     async () => {
@@ -111,6 +112,7 @@ export const updateItem = async (
       if (data.location !== undefined) body.location = data.location
       if (data.locationDetail !== undefined) body.locationDetail = data.locationDetail
       if (data.status !== undefined) body.status = data.status
+      if (data.imagePublicIds !== undefined) body.imagePublicIds = data.imagePublicIds
       if (data.imageUrls !== undefined) body.imageUrls = data.imageUrls
 
       const json = await authFetchJson(`/api/items/${id}`, {

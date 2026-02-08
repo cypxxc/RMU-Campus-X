@@ -22,7 +22,7 @@ export const ROUTE_LABELS: Record<string, string> = {
   "verify-email": "ยืนยันอีเมล",
   consent: "ยินยอมข้อกำหนด",
   notifications: "การแจ้งเตือน",
-  faq: "FAQ",
+  guide: "คู่มือการใช้งาน",
   about: "เกี่ยวกับเรา",
   terms: "ข้อกำหนดและเงื่อนไข",
   privacy: "นโยบายความเป็นส่วนตัว",

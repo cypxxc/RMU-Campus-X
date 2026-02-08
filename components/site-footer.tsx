@@ -1,15 +1,20 @@
 "use client"
 
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Logo } from "@/components/logo"
+import { SUPPORT_MAILTO } from "@/lib/constants"
 
 export function SiteFooter() {
   const currentYear = new Date().getFullYear()
+  const pathname = usePathname()
+  const fromLanding = pathname === "/"
 
-  const legalLinks = [
-    { href: "/terms", label: "ข้อกำหนดการใช้งาน" },
-    { href: "/privacy", label: "นโยบายความเป็นส่วนตัว" },
-    { href: "/guidelines", label: "แนวทางชุมชน" },
+  const footerLinks = [
+    { href: "/guide", label: "คู่มือการใช้งาน", fromLanding: true },
+    { href: "/terms", label: "ข้อกำหนดการใช้งาน", fromLanding: false },
+    { href: "/privacy", label: "นโยบายความเป็นส่วนตัว", fromLanding: false },
+    { href: "/guidelines", label: "แนวทางชุมชน", fromLanding: false },
   ]
 
   return (
@@ -21,17 +26,22 @@ export function SiteFooter() {
             <Logo size="lg" className="inline-block" />
             <p className="text-muted-foreground text-sm leading-relaxed">
               แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษาและบุคลากร
-              มหาวิทยาลัยราชภัฏมหาสารคาม — สร้างสังคมแห่งการแบ่งปันที่ยั่งยืน
+              มหาวิทยาลัยราชภัฏมหาสารคาม
+            </p>
+            <p className="text-muted-foreground text-sm">
+              ติดต่อทีมสนับสนุน:{" "}
+              <a href={SUPPORT_MAILTO} className="text-primary hover:underline">
+                Support
+              </a>
             </p>
           </div>
 
           <nav aria-label="นโยบายและความปลอดภัย" className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">นโยบายและความปลอดภัย</p>
             <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm">
-              {legalLinks.map(({ href, label }) => (
+              {footerLinks.map(({ href, label, fromLanding: useFromLanding }) => (
                 <li key={href}>
                   <Link
-                    href={href}
+                    href={fromLanding && useFromLanding ? `${href}?from=landing` : href}
                     className="text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
                   >
                     {label}

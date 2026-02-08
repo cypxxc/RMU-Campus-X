@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import type { Item } from "@/types"
 import { Package, MapPin, Calendar, Trash2 } from 'lucide-react'
 import { formatPostedAt, safeToDate } from "@/lib/utils"
+import { getItemImageUrls, getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
 import Image from "next/image"
 import Link from "next/link"
 import { FavoriteButton } from "@/components/favorite-button"
@@ -38,6 +39,8 @@ const statusColors: Record<string, string> = {
 export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showRequestButton = true, onViewDetails, onDelete, priority = false, variant = 'default' }: ItemCardProps) {
   const postedDate = safeToDate(item.postedAt, new Date(0))
   const isAdmin = variant === 'admin'
+  const imageUrls = getItemImageUrls(item)
+  const primaryImage = getItemPrimaryImageUrl(item)
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (onViewDetails) {
@@ -59,20 +62,21 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
     >
       <CardHeader className="p-0">
         <div className="block">
-          {(item.imageUrls?.[0] || item.imageUrl) ? (
+          {primaryImage ? (
             <div className="relative aspect-4/3 w-full bg-muted overflow-hidden">
               <Image 
-                src={item.imageUrls?.[0] || item.imageUrl || "/images/placeholder-item.svg"} 
+                src={primaryImage} 
                 alt={item.title} 
                 fill 
                 className="object-cover transition-transform duration-300 group-hover:scale-105"
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 priority={priority}
+                loading={priority ? "eager" : "lazy"}
               />
               {/* Image count badge */}
-              {item.imageUrls && item.imageUrls.length > 1 && (
-                <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`มีรูปภาพเพิ่มเติมอีก ${item.imageUrls.length - 1} รูป`}>
-                  <span aria-hidden="true">+{item.imageUrls.length - 1}</span>
+              {imageUrls.length > 1 && (
+                <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`มีรูปภาพเพิ่มเติมอีก ${imageUrls.length - 1} รูป`}>
+                  <span aria-hidden="true">+{imageUrls.length - 1}</span>
                 </div>
               )}
               {/* Favorite Button (ซ่อนในโหมด admin) */}

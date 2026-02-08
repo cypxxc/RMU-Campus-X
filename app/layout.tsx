@@ -12,7 +12,6 @@ import { AnnouncementProvider } from "@/components/announcement-context"
 import { ConsentGuard } from "@/components/consent-guard"
 import { TopLoadingBar } from "@/components/top-loading-bar"
 import { SmoothScrollProvider } from "@/components/smooth-scroll-provider"
-import { CustomCursor } from "@/components/custom-cursor"
 import { CookieConsentBanner } from "@/components/cookie-consent-banner"
 import "./globals.css"
 
@@ -52,7 +51,7 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา มรม.",
+        alt: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา RMU",
       },
     ],
   },
@@ -93,14 +92,13 @@ export default function RootLayout({
             <ConsentGuard>
             <ThemeProvider
               attribute="class"
-              defaultTheme="system"
-              enableSystem
+              defaultTheme="light"
+              enableSystem={false}
               disableTransitionOnChange
             >
               <AnnouncementProvider>
               <NavigationHistoryProvider>
                 <SmoothScrollProvider>
-                  <CustomCursor />
                   <TopLoadingBar />
                   {children}
                   <ConditionalFooter />

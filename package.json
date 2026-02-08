@@ -19,6 +19,7 @@
   "dependencies": {
     "@ai-sdk/google": "^3.0.6",
     "@ai-sdk/react": "^3.0.30",
+    "@cloudinary/url-gen": "^1.22.0",
     "@dataconnect/generated": "file:src/dataconnect-generated",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@google/generative-ai": "^0.24.1",

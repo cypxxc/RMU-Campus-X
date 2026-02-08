@@ -1,17 +1,14 @@
 "use client"
 
 import { SiteBreadcrumb } from "@/components/site-breadcrumb"
-import { useAnnouncement } from "@/components/announcement-context"
 
 /**
- * แถบ breadcrumb อยู่ใต้ Navbar (+ แบนเนอร์ประกาศถ้ามี)
- * top-28 เมื่อมีประกาศ, top-16 เมื่อไม่มี เพื่อไม่ให้มีช่องว่าง
+ * แถบ breadcrumb ติดใต้ navbar (sticky) ค่า top คงที่ ไม่ขยับเมื่อเลื่อนหรือเมื่อปิดประกาศ
  */
 export function BreadcrumbBar() {
-  const { hasAnnouncementVisible } = useAnnouncement()
   return (
-    <div className={`sticky z-30 bg-background border-b ${hasAnnouncementVisible ? "top-28" : "top-16"}`}>
-      <div className="container mx-auto px-4">
+    <div className="sticky top-16 z-30 bg-background border-b min-h-10 flex items-center">
+      <div className="container mx-auto px-4 w-full">
         <SiteBreadcrumb />
       </div>
     </div>

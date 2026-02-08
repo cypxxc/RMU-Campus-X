@@ -160,8 +160,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
         category,
         location,
         locationDetail: locationDetail.trim() || undefined,
-        imageUrl: images[0] || "", // First image for backward compatibility
-        imageUrls: images,
+        imagePublicIds: images,
         status: "available",
         postedBy: user.uid,
         postedByEmail: user.email || "",

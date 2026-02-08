@@ -1,5 +1,7 @@
 import type { Timestamp, FieldValue } from "firebase/firestore"
 
+export type { CloudinaryImage, CloudinaryImageRef } from "./cloudinary"
+
 export type ItemCategory = "electronics" | "books" | "furniture" | "clothing" | "sports" | "other"
 
 export type ItemStatus = "available" | "pending" | "completed"
@@ -65,8 +67,9 @@ export interface Item {
   title: string
   description: string
   category: ItemCategory
-  imageUrl?: string // @deprecated - use imageUrls instead. Kept for backward compatibility
-  imageUrls?: string[] // Array of image URLs (Cloudinary CDN or legacy Base64)
+  imagePublicIds?: string[] // Preferred: Cloudinary public_id for transform flexibility
+  imageUrl?: string // @deprecated - use imagePublicIds/imageUrls. Kept for backward compatibility
+  imageUrls?: string[] // Legacy: full Cloudinary URLs
   location?: string
   locationDetail?: string
   status: ItemStatus

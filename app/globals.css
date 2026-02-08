@@ -268,7 +268,11 @@
     @apply border-border;
   }
 
-  /* Cursor pointer for interactive elements */
+  /* Cursor: ปกติทั่วไป, ชี้ปุ่ม/ลิงก์เป็นมือ */
+  body {
+    cursor: default;
+  }
+
   button,
   a,
   [role="button"],
@@ -821,17 +825,4 @@ body {
   overflow-x: hidden;
 }
 
-/* Custom cursor active: hide default cursor on desktop (cursor component adds its own) */
-body.custom-cursor-active {
-  cursor: none;
-}
-
-body.custom-cursor-active button,
-body.custom-cursor-active a,
-body.custom-cursor-active [role="button"],
-body.custom-cursor-active [type="button"],
-body.custom-cursor-active [type="submit"],
-body.custom-cursor-active [type="reset"],
-body.custom-cursor-active [tabindex]:not([tabindex="-1"]) {
-  cursor: none;
-}
+/* Custom cursor ปิดใช้แล้ว — ใช้ cursor ระบบ (default + pointer บนปุ่ม/ลิงก์) */

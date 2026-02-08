@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
-import { getItems } from "@/lib/firestore"
+import { useEffect, useState } from "react"
 import type { Item, ItemCategory, ItemStatus } from "@/types"
+import { useItems } from "@/hooks/use-items"
 import { ItemCard } from "@/components/item-card"
 import { FilterSidebar } from "@/components/filter-sidebar"
 import { Button } from "@/components/ui/button"
@@ -28,8 +28,6 @@ const MemoizedItemCard = memo(ItemCard)
 const PAGE_SIZE = 12
 
 export default function DashboardPage() {
-  const [items, setItems] = useState<Item[]>([])
-  const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState<ItemCategory[]>([])
   const [status, setStatus] = useState<ItemStatus | "all">("available")
   const [searchQuery, setSearchQuery] = useState("")
@@ -38,153 +36,52 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
 
-  // Pagination states (lastId สำหรับ API)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
-  const paginationLastIds = useRef<Map<number, string | null>>(new Map([[1, null]]))
-  const [totalPages, setTotalPages] = useState(1)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(false)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false }
-  }, [])
-
   // Debounce search query
   useEffect(() => {
-    if (searchQuery !== debouncedSearchQuery) {
-      setIsSearching(true)
-    }
-    
+    if (searchQuery !== debouncedSearchQuery) setIsSearching(true)
     const handler = debounce(() => {
       setDebouncedSearchQuery(searchQuery)
       setIsSearching(false)
-      setCurrentPage(1) // Reset to first page on search
     }, 500)
-
     handler()
-
-    return () => {
-      handler.cancel()
-    }
+    return () => handler.cancel()
   }, [searchQuery])
 
-  // Reset pagination when filters change
+  const {
+    items,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    currentPage,
+    totalPages,
+    totalCount,
+    hasMore,
+    goToPage,
+  } = useItems({
+    categories,
+    status,
+    searchQuery: debouncedSearchQuery,
+    pageSize: PAGE_SIZE,
+  })
+
   useEffect(() => {
-    setCurrentPage(1)
-    paginationLastIds.current = new Map([[1, null]])
-  }, [categories, status])
-
-  // Load items logic (ใช้ API – lastId สำหรับ pagination)
-  const loadItems = useCallback(async (page: number, options?: { silent?: boolean }) => {
-    const silent = options?.silent ?? false
-    try {
-      if (!silent) setLoading(true)
-
-      const lastId = page === 1 ? null : paginationLastIds.current.get(page) ?? undefined
-
-      const filters = {
-        pageSize: PAGE_SIZE,
-        lastId: lastId ?? undefined,
-        categories: categories.length > 0 ? categories : undefined,
-        status: status !== "all" ? status : undefined,
-        searchQuery: debouncedSearchQuery.trim() || undefined,
-      }
-
-      const result = await getItems(filters)
-      if (!mountedRef.current) return
-
-      if (result.success && result.data) {
-        setItems(result.data.items)
-        const count = result.data.totalCount || 0
-        setTotalCount(count)
-        setHasMore(result.data.hasMore ?? false)
-        setTotalPages(count > 0 ? Math.ceil(count / PAGE_SIZE) : (result.data.hasMore ? page + 1 : page))
-        if (result.data.lastId != null && result.data.hasMore) {
-          paginationLastIds.current.set(page + 1, result.data.lastId)
-        }
-      } else {
-        if (!silent) {
-          console.error("[Dashboard] Error:", result.error)
-          toast.error("ไม่สามารถโหลดข้อมูลได้")
-        }
-        setItems([])
-        setTotalCount(0)
-      }
-    } catch (error) {
-      if (!mountedRef.current) return
-      if (!silent) {
-        console.error("[Dashboard] Error:", error)
-        toast.error("เกิดข้อผิดพลาดในการโหลดข้อมูล")
-      }
-      setItems([])
-    } finally {
-      if (mountedRef.current && !silent) setLoading(false)
+    if (isError && error) {
+      toast.error("ไม่สามารถโหลดข้อมูลได้")
     }
-  }, [categories, status, debouncedSearchQuery])
-
-  // Load items when page or dependencies change
-  useEffect(() => {
-    loadItems(currentPage)
-  }, [loadItems, currentPage])
-
-  // อัปเดตอัตโนมัติเมื่อเปิดแท็บอยู่ (ไม่ต้องกดรีเฟรช)
-  const POLL_INTERVAL_MS = 25_000 // 25 วินาที
-  useEffect(() => {
-    if (typeof document === "undefined") return
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return
-      loadItems(currentPage, { silent: true })
-    }
-    document.addEventListener("visibilitychange", onVisibilityChange)
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadItems(currentPage, { silent: true })
-      }
-    }, POLL_INTERVAL_MS)
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange)
-      clearInterval(interval)
-    }
-  }, [loadItems, currentPage])
+  }, [isError, error])
 
   const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setCurrentPage(newPage)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
+    goToPage(newPage)
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  const handleLoadMore = useCallback(async () => {
-    const nextPage = currentPage + 1
-    const lastId = paginationLastIds.current.get(nextPage) ?? undefined
-    if (!lastId && nextPage > 1) return
-    setLoadingMore(true)
-    try {
-      const result = await getItems({
-        pageSize: PAGE_SIZE,
-        lastId: lastId ?? undefined,
-        categories: categories.length > 0 ? categories : undefined,
-        status: status !== "all" ? status : undefined,
-        searchQuery: debouncedSearchQuery.trim() || undefined,
-      })
-      if (!mountedRef.current) return
-      if (result.success && result.data && result.data.items.length > 0) {
-        setItems((prev) => [...prev, ...result.data!.items])
-        setCurrentPage(nextPage)
-        setHasMore(result.data.hasMore ?? false)
-        if (result.data.lastId != null && result.data.hasMore) {
-          paginationLastIds.current.set(nextPage + 1, result.data.lastId)
-        }
-      }
-    } catch (error) {
-      if (mountedRef.current) toast.error("โหลดเพิ่มไม่สำเร็จ")
-    } finally {
-      if (mountedRef.current) setLoadingMore(false)
-    }
-  }, [currentPage, categories, status, debouncedSearchQuery])
+  const handleLoadMore = () => {
+    goToPage(currentPage + 1)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const loading = isLoading
 
   return (
     <div className="min-h-screen bg-background">
@@ -330,7 +227,7 @@ export default function DashboardPage() {
                       item={item}
                       showRequestButton={!!user}
                       onViewDetails={(item) => setSelectedItem(item)}
-                      priority={index < 4}
+                      priority={index < 6}
                     />
                   ))}
                 </div>
@@ -342,15 +239,15 @@ export default function DashboardPage() {
                       variant="outline"
                       size="lg"
                       onClick={handleLoadMore}
-                      disabled={loadingMore}
+                      disabled={isFetching}
                       className="gap-2 min-w-[160px]"
                     >
-                      {loadingMore ? (
+                      {isFetching ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <ChevronDown className="h-4 w-4" />
                       )}
-                      {loadingMore ? "กำลังโหลด..." : "โหลดเพิ่ม"}
+                      {isFetching ? "กำลังโหลด..." : "โหลดเพิ่ม"}
                     </Button>
                   </div>
                 )}

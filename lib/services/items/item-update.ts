@@ -13,6 +13,7 @@ export interface ItemData {
   description?: string
   status?: string
   postedBy?: string
+  imagePublicIds?: string[]
   imageUrls?: string[]
   searchKeywords?: string[]
   [key: string]: unknown

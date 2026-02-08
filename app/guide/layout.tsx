@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-export default function GuidelinesLayout({
+export default function GuideLayout({
   children,
 }: {
   children: React.ReactNode

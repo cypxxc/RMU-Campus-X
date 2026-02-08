@@ -19,6 +19,7 @@ import { generateKeywords } from '@/lib/db/items-helpers'
 import { z } from 'zod'
 
 const adminItemPatchSchema = itemUpdateSchema.extend({
+  imagePublicIds: z.array(z.string().min(1).max(500)).max(5).optional().nullable(),
   imageUrls: z.array(z.string().url()).max(5).optional().nullable(),
 }).partial()
 
@@ -99,6 +100,7 @@ export async function PATCH(
     if (data.category !== undefined) updates.category = data.category
     if (data.location !== undefined) updates.location = data.location
     if (data.locationDetail !== undefined) updates.locationDetail = data.locationDetail
+    if (data.imagePublicIds !== undefined) updates.imagePublicIds = data.imagePublicIds
     if (data.imageUrls !== undefined) updates.imageUrls = data.imageUrls
 
     if (data.title || data.description) {

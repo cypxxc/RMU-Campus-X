@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
+import Link from "next/link"
 import { 
   Loader2, 
   AlertTriangle, 
@@ -485,10 +486,18 @@ export default function AdminReportedUsersPage() {
                         </div>
                       </TableCell>
                       <TableCell>{getStatusBadge(u)}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={u.reportsReceived > 0 ? "destructive" : "outline"} className="min-w-[30px] justify-center">
-                          {u.reportsReceived}
-                        </Badge>
+                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                        {u.reportsReceived > 0 ? (
+                          <Link href={`/admin/reports?reportedUserId=${u.uid}`}>
+                            <Badge variant="destructive" className="min-w-[30px] justify-center cursor-pointer hover:opacity-90">
+                              {u.reportsReceived}
+                            </Badge>
+                          </Link>
+                        ) : (
+                          <Badge variant="outline" className="min-w-[30px] justify-center">
+                            {u.reportsReceived}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <span className="text-muted-foreground text-sm font-medium">{u.reportsFiled}</span>

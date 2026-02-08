@@ -34,7 +34,7 @@
 │  /api/items/*     │  /api/users/me     │  /api/favorites/*     │
 │  /api/exchanges/* │  /api/notifications│  /api/reviews         │
 │  /api/admin/*     │  /api/announcements│  /api/reports         │
-│  /api/support     │  /api/line/*       │  /api/upload, health  │
+│  /api/support     │  /api/line/*       │  /api/upload/*, health│
 │  ────────────────────────────────────────────────────────────── │
 │  • Client เรียก API เป็นหลัก (lib/api-client, authFetchJson)   │
 │  • Retry + Exponential Backoff (429/5xx/network), Retry-After  │
@@ -50,8 +50,8 @@
 │  Firebase          │  Cloudinary      │  LINE Messaging API     │
 │  ─────────────────────────────────────────────────────────────  │
 │  • Firestore DB    │  • Image CDN     │  • Push Notifications   │
-│  • Authentication  │  • Compression   │  • Account Linking      │
-│  • Admin SDK       │  • Auto WebP     │  • Rich Messages        │
+│  • Authentication  │  • Signed Upload │  • Account Linking      │
+│  • Admin SDK       │  • f_auto/q_auto │  • Rich Messages        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -111,7 +111,6 @@ User Action → Component → lib/db/* (authFetchJson) → API Route → Firesto
 | **Firebase Admin** | 13.6.0 | Server-side Operations |
 | **Cloudinary** | 2.8.0 | Image CDN & Optimization |
 | **LINE Messaging API** | - | Notifications & Chat Integration |
-| **Google Gemini AI** | 1.5 Flash | AI Chatbot (Sharky) |
 | **Vercel** | - | Hosting & Deployment |
 
 ### Development & Testing
@@ -157,7 +156,7 @@ rmu-campus-x/
 │   │   ├── reports/                  # Report APIs
 │   │   ├── reviews/                  # รีวิว (list, create — ต้อง terms)
 │   │   ├── support/                  # Support (GET รายการคำร้องของฉัน, POST สร้าง ticket — ต้อง terms)
-│   │   ├── upload/                   # Image Upload API
+│   │   ├── upload/                   # Image Upload (sign for direct Cloudinary)
 │   │   ├── users/me/                 # โปรไฟล์ + accept-terms
 │   │   ├── users/[id]/               # โปรไฟล์สาธารณะ (ไม่ต้อง auth)
 │   │   └── health/                   # Health Check
@@ -213,11 +212,12 @@ rmu-campus-x/
 │   │
 │   ├── firebase.ts                   # Firebase Client Config
 │   ├── firebase-admin.ts             # Firebase Admin Config
-│   ├── cloudinary.ts                 # Cloudinary Config
+│   ├── cloudinary.ts                 # Cloudinary Config (server)
+│   ├── cloudinary-url.ts             # URL helpers (public_id → URL, f_auto/q_auto)
 │   ├── line.ts                       # LINE API Integration
 │   ├── rate-limiter.ts               # API Rate Limiting
 │   ├── image-utils.ts                # Image Compression
-│   ├── storage.ts                    # Upload Utilities
+│   ├── storage.ts                    # uploadToCloudinary (Signed Upload → Cloudinary)
 │   └── api-wrapper.ts                # API Response Wrapper
 │
 ├── hooks/                            # Custom React Hooks
@@ -251,7 +251,8 @@ rmu-campus-x/
 | `LINE_CHANNEL_ACCESS_TOKEN` | ✅ | ส่งแจ้งเตือน LINE (ถ้าไม่ตั้ง จะไม่ส่ง LINE) |
 | `LINE_CHANNEL_SECRET` | ✅ | ใช้กับ Webhook / ยืนยัน signature |
 | `NEXT_PUBLIC_BASE_URL` | แนะนำ | ใช้ใน LINE/ลิงก์ (ควรเป็นโดเมนจริง เช่น `https://your-app.vercel.app`) |
-| `CLOUDINARY_*` | ✅ | อัปโหลดรูปภาพ |
+| `CLOUDINARY_*` | ✅ | อัปโหลดรูปภาพ (Signed Upload) |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | ✅ | แปลง public_id เป็น URL บน client |
 | `UPSTASH_REDIS_REST_*` | แนะนำ | Rate limiting แบบกระจาย (Production) |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | ไม่บังคับ | Error tracking |
 
@@ -273,7 +274,9 @@ rmu-campus-x/
 ### 2. ระบบสิ่งของ (Item Management)
 
 - **โพสต์สิ่งของ** - รองรับหลายรูปภาพ (สูงสุด 5 รูป)
-- **บีบอัดรูปอัตโนมัติ** - ลดขนาดไฟล์ 50-80%
+- **Cloudinary Signed Upload** - อัปโหลดรูปตรงไป Cloudinary (client → /api/upload/sign → POST ตรงไป Cloudinary)
+- **เก็บ public_id เท่านั้น** - บันทึก public_id ใน Firestore เพื่อให้ transform ได้ flexible
+- **บีบอัดรูปอัตโนมัติ** - ลดขนาดไฟล์ 50-80% ก่อนอัปโหลด
 - **หมวดหมู่** - อิเล็กทรอนิกส์, หนังสือ, เฟอร์นิเจอร์, เสื้อผ้า/เครื่องแต่งกาย, กีฬา/ของเล่น, อื่นๆ (กำหนดใน `lib/constants.ts`)
 - **สถานะ** - พร้อมให้, รอดำเนินการ, เสร็จสิ้น
 - **โปรไฟล์สาธารณะ** - หน้า `/profile/[uid]` แสดงโพสและรีวิว; คลิกที่ใดก็ได้บนการ์ดสิ่งของเพื่อเปิด modal รายละเอียด
@@ -484,6 +487,7 @@ FIREBASE_SERVICE_ACCOUNT_KEY=base64_encoded_service_account_json
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
 
 # LINE Messaging API
 LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
@@ -610,7 +614,7 @@ bun start
 | **Reports** | POST | `/api/reports` | สร้างรายงาน (ต้อง terms) |
 | **Admin Announcements** | GET/POST | `/api/admin/announcements` | list / สร้างประกาศ |
 | | GET/PATCH/DELETE | `/api/admin/announcements/[id]` | ดึง / แก้ไข / ลบประกาศ |
-| **Admin / LINE / Upload** | - | `/api/admin/*`, `/api/line/*`, `/api/upload` | ดู docs/API.md |
+| **Admin / LINE / Upload** | - | `/api/admin/*`, `/api/line/*`, `/api/upload`, `/api/upload/sign` | ดู docs/API.md |
 
 ### Rate Limiting
 
@@ -652,10 +656,10 @@ bun start
 
 ### Image Upload Security
 
-- File Type Validation
+- **Signed Upload** - Client รับ signature จาก `/api/upload/sign` แล้ว POST ตรงไป Cloudinary
+- File Type Validation (magic bytes)
 - Max File Size: 10MB
-- Server-side Processing
-- Cloudinary CDN
+- Cloudinary CDN (f_auto, q_auto)
 
 ---
 

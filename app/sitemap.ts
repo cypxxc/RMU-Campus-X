@@ -9,7 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/dashboard',
     '/login',
     '/register',
-    '/faq',
+    '/guide',
     '/guidelines',
     '/terms',
     '/privacy',

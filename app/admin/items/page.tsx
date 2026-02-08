@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { collection, query, where, getDocs } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
-import { deleteItem, updateItem, createAdminLog, getItems } from "@/lib/firestore"
+import { deleteItem, updateItem, createAdminLog } from "@/lib/firestore"
+import { useItems } from "@/hooks/use-items"
 import type { Item, ItemStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
@@ -32,7 +33,8 @@ import { ItemCard } from "@/components/item-card"
 import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
 import { ItemDetailView } from "@/components/item-detail-view"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { memo, useRef } from "react"
+import { memo } from "react"
+import debounce from "lodash/debounce"
 
 const MemoizedItemCard = memo(ItemCard)
 
@@ -42,21 +44,15 @@ const statusLabels: Record<string, string> = {
   completed: "เสร็จสิ้น",
 }
 
+const PAGE_SIZE = 20
+
 export default function AdminItemsPage() {
-  const [items, setItems] = useState<Item[]>([])
-  const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
   const [processing, setProcessing] = useState(false)
-  
-  // Pagination แบบหน้า (เหมือน dashboard)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
-  const pageSize = 20
-  const paginationLastIds = useRef<Map<number, string | null>>(new Map([[1, null]]))
 
   // สถิติโพสแบบ real-time จาก API (โพสทั้งหมด, ใหม่ 24 ชม., พร้อมให้รับ, แลกเปลี่ยนแล้ว)
   const [itemStats, setItemStats] = useState<{
@@ -131,60 +127,25 @@ export default function AdminItemsPage() {
     checkAdmin()
   }, [authLoading, checkAdmin, router, user])
 
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
-
-  const loadItems = useCallback(async (page: number, options?: { silent?: boolean }) => {
-    const silent = options?.silent ?? false
-    try {
-      if (!silent) setLoading(true)
-
-      const lastId = page === 1 ? undefined : (paginationLastIds.current.get(page) ?? undefined)
-
-      const result = await getItems({
-        pageSize,
-        lastId,
-        searchQuery: debouncedSearchQuery.trim() || undefined,
-      })
-
-      if (!result.success && result.error) {
-        throw new Error(result.error)
-      }
-
-      if (result.data) {
-        const data = result.data
-        setItems(data.items)
-        setTotalCount(data.totalCount ?? 0)
-        const count = data.totalCount ?? 0
-        setTotalPages(count > 0 ? Math.ceil(count / pageSize) : (data.hasMore ? page + 1 : page))
-        if (data.lastId != null && data.hasMore) {
-          paginationLastIds.current.set(page + 1, data.lastId)
-        }
-      }
-    } catch (error) {
-      console.error("[AdminItems] Error loading items:", error)
-      if (!silent) toast({ title: "โหลดข้อมูลล้มเหลว", variant: "destructive" })
-      setItems([])
-    } finally {
-      setLoading(false)
-    }
-  }, [pageSize, debouncedSearchQuery, toast])
-
-  // Debounce search แล้ว reset หน้า 1
   useEffect(() => {
-    const delay = searchQuery ? 500 : 0
-    const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery)
-      setCurrentPage(1)
-      paginationLastIds.current = new Map([[1, null]])
-    }, delay)
-    return () => clearTimeout(timer)
+    const handler = debounce(() => setDebouncedSearchQuery(searchQuery), searchQuery ? 500 : 0)
+    handler()
+    return () => handler.cancel()
   }, [searchQuery])
 
-  // โหลดเมื่อเปลี่ยนหน้าหรือคำค้น (หลัง debounce)
-  useEffect(() => {
-    if (!isAdmin) return
-    loadItems(currentPage)
-  }, [isAdmin, currentPage, debouncedSearchQuery, loadItems])
+  const {
+    items,
+    isLoading: loading,
+    refetch: refetchItems,
+    currentPage,
+    totalPages,
+    totalCount,
+    goToPage,
+  } = useItems({
+    searchQuery: debouncedSearchQuery,
+    pageSize: PAGE_SIZE,
+    enabled: isAdmin,
+  })
 
   // โหลดสถิติโพสแบบ real-time เมื่อเป็น admin
   useEffect(() => {
@@ -192,16 +153,16 @@ export default function AdminItemsPage() {
     fetchItemStats()
   }, [isAdmin, user, fetchItemStats])
 
-  // อัปเดตอัตโนมัติทุก 30 วินาที (สถิติ + รายการโพส) เฉพาะเมื่อแท็บเปิดอยู่
+  // อัปเดตอัตโนมัติทุก 30 วินาที (สถิติ) เฉพาะเมื่อแท็บเปิดอยู่ - รายการโพสใช้ refetchInterval จาก useItems
   useEffect(() => {
     if (!isAdmin) return
     const interval = setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return
       fetchItemStats()
-      loadItems(currentPage, { silent: true })
+      refetchItems()
     }, 30_000)
     return () => clearInterval(interval)
-  }, [isAdmin, currentPage, fetchItemStats, loadItems])
+  }, [isAdmin, fetchItemStats, refetchItems])
 
   const handleDeleteItem = async () => {
     if (!deleteDialog.itemId || !user) return
@@ -226,9 +187,7 @@ export default function AdminItemsPage() {
       } as any)
 
       toast({ title: "ลบโพสสำเร็จ" })
-      
-      // Remove from list locally
-      setItems(prev => prev.filter(i => i.id !== deleteDialog.itemId))
+      refetchItems()
       fetchItemStats() // อัปเดตสถิติ real-time
       
       setDeleteDialog({ open: false, itemId: null })
@@ -264,9 +223,7 @@ export default function AdminItemsPage() {
       } as any)
 
       toast({ title: `เปลี่ยนสถานะเป็น ${statusLabels[newStatus]}` })
-       // Update locally
-      setItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus } : i))
-      
+      refetchItems()
       if (selectedItem?.id === itemId) {
         setSelectedItem(prev => prev ? { ...prev, status: newStatus } : null)
       }
@@ -412,7 +369,7 @@ export default function AdminItemsPage() {
               variant="admin"
               onViewDetails={(i) => setSelectedItem(i)}
               onDelete={() => setDeleteDialog({ open: true, itemId: item.id })}
-              priority={index < 4}
+              priority={index < 6}
             />
           ))}
         </div>
@@ -429,7 +386,7 @@ export default function AdminItemsPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                setCurrentPage((p) => Math.max(1, p - 1))
+                goToPage(Math.max(1, currentPage - 1))
                 window.scrollTo({ top: 0, behavior: "smooth" })
               }}
               disabled={currentPage === 1 || loading}
@@ -445,7 +402,7 @@ export default function AdminItemsPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                setCurrentPage((p) => Math.min(totalPages, p + 1))
+                goToPage(Math.min(totalPages, currentPage + 1))
                 window.scrollTo({ top: 0, behavior: "smooth" })
               }}
               disabled={currentPage === totalPages || loading}
@@ -476,7 +433,7 @@ export default function AdminItemsPage() {
                 }}
                 onAdminItemUpdated={(updated) => {
                   setSelectedItem(updated)
-                  setItems((prev) => prev.map((i) => (i.id === updated.id ? { ...i, ...updated } : i)))
+                  refetchItems()
                 }}
                 adminProcessing={processing}
               />

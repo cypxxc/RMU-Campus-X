@@ -5,6 +5,7 @@
 import { authFetchJson } from "@/lib/api-client"
 import { getItemById } from "@/lib/db/items"
 import type { Item } from "@/types"
+import { getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
 
 export interface FavoriteItem {
   id: string
@@ -36,7 +37,7 @@ export const toggleFavorite = async (userId: string, item: Item): Promise<boolea
       body: {
         itemId: item.id,
         itemTitle: item.title,
-        itemImage: item.imageUrls?.[0] || item.imageUrl || undefined,
+        itemImage: getItemPrimaryImageUrl(item) || undefined,
       },
     })
     return true

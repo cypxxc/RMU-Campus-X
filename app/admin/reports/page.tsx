@@ -3,7 +3,7 @@
 
 
 import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import { getReports, updateReportStatus } from "@/lib/firestore"
@@ -42,7 +42,8 @@ import {
   Search,
   User as UserIcon,
   X,
-  Bell
+  Bell,
+  Filter
 } from "lucide-react"
 import Image from "next/image"
 import { Input } from "@/components/ui/input"
@@ -109,6 +110,8 @@ export default function AdminReportsPage() {
   
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const reportedUserId = searchParams.get("reportedUserId")
   const { toast } = useToast()
 
   const loadData = useCallback(async () => {
@@ -277,27 +280,28 @@ export default function AdminReportsPage() {
     )
   }
 
-  const filteredReports = reports.filter(r => {
+  const filteredBySearch = reports.filter(r => {
     const q = searchQuery.toLowerCase()
-    
-    // Check main report fields
+    if (!q) return true
     if (r.id.toLowerCase().includes(q) || 
         r.reporterEmail.toLowerCase().includes(q) || 
         r.reason.toLowerCase().includes(q) || 
-        (r.description || "").toLowerCase().includes(q)) {
-      return true
-    }
-    
-    // Check target data
+        (r.description || "").toLowerCase().includes(q)) return true
     if (r.targetId.toLowerCase().includes(q)) return true
-    
     if (r.targetData) {
       if (r.targetData.email && r.targetData.email.toLowerCase().includes(q)) return true
       if (r.targetData.title && r.targetData.title.toLowerCase().includes(q)) return true
     }
-    
     return false
   })
+
+  const filteredReports = reportedUserId
+    ? filteredBySearch.filter(r => (r as Report & { reportedUserId?: string }).reportedUserId === reportedUserId)
+    : filteredBySearch
+
+  const reportedUserEmail = reportedUserId && reports.find(r => (r as Report & { reportedUserId?: string }).reportedUserId === reportedUserId)
+    ? (reports.find(r => (r as Report & { reportedUserId?: string }).reportedUserId === reportedUserId) as Report & { reportedUserEmail?: string })?.reportedUserEmail || reportedUserId
+    : reportedUserId
 
   // Update these to use filteredReports instead of reports
   const pendingReports = filteredReports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status))
@@ -318,6 +322,27 @@ export default function AdminReportsPage() {
           </div>
         </div>
       </div>
+
+      {/* กรองตามผู้ใช้ถูกรายงาน */}
+      {reportedUserId && (
+        <div className="flex items-center justify-between gap-4 p-4 rounded-xl border bg-primary/5 border-primary/20 mb-6">
+          <div className="flex items-center gap-2">
+            <Filter className="h-5 w-5 text-primary" />
+            <span className="text-sm font-medium">
+              แสดงรายงานที่เกี่ยวกับผู้ใช้: <span className="font-mono text-primary">{reportedUserEmail || reportedUserId}</span>
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push("/admin/reports")}
+            className="gap-2 shrink-0"
+          >
+            <X className="h-4 w-4" />
+            ล้างตัวกรอง
+          </Button>
+        </div>
+      )}
 
       {/* สถิติรายงาน – 3 การ์ด: ทั้งหมด / รอตรวจสอบ / จบแล้ว */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

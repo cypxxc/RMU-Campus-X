@@ -73,6 +73,7 @@ export const itemSchema = z.object({
 })
 
 export const itemUpdateSchema = itemSchema.partial().extend({
+  imagePublicIds: z.array(z.string().min(1).max(500)).max(5).optional(),
   imageUrls: z.array(z.string().url()).max(5).optional(),
 })
 

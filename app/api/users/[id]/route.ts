@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getAdminDb } from "@/lib/firebase-admin"
+import { usersCollection } from "@/lib/db/collections"
 import { ApiErrors } from "@/lib/api-response"
 
 export async function GET(
@@ -22,8 +22,7 @@ export async function GET(
       return getMe(request)
     }
 
-    const db = getAdminDb()
-    const snap = await db.collection("users").doc(userId).get()
+    const snap = await usersCollection().doc(userId).get()
     if (!snap.exists) return ApiErrors.notFound("User not found")
 
     const data = snap.data()

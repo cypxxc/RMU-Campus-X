@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Megaphone, Plus, Pencil, Trash2 } from "lucide-react"
+import { Loader2, Megaphone, Plus, Trash2 } from "lucide-react"
 
 function toDateStr(v: unknown): string {
   if (!v) return "—"
@@ -42,23 +42,11 @@ function toDateStr(v: unknown): string {
   return d.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
 }
 
-function toDateTimeLocalValue(v: unknown): string {
-  if (!v) return ""
-  let d: Date
-  if (typeof (v as { toDate?: () => Date }).toDate === "function") d = (v as { toDate: () => Date }).toDate()
-  else if (typeof (v as { toMillis?: () => number }).toMillis === "function") d = new Date((v as { toMillis: () => number }).toMillis())
-  else if (typeof v === "string" || typeof v === "number") d = new Date(v)
-  else if (typeof v === "object" && v !== null && "_seconds" in (v as object)) d = new Date((v as { _seconds: number })._seconds * 1000)
-  else return ""
-  return d.toISOString().slice(0, 16)
-}
-
 export default function AdminAnnouncementsPage() {
   const [list, setList] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<Announcement | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -105,25 +93,12 @@ export default function AdminAnnouncementsPage() {
   }, [user, authLoading, isAdminFromAuth, router, toast])
 
   const openCreate = () => {
-    setEditing(null)
     setForm({
       title: "",
       message: "",
       isActive: true,
       startAt: "",
       endAt: "",
-    })
-    setModalOpen(true)
-  }
-
-  const openEdit = (a: Announcement) => {
-    setEditing(a)
-    setForm({
-      title: a.title,
-      message: a.message,
-      isActive: a.isActive,
-      startAt: toDateTimeLocalValue(a.startAt),
-      endAt: toDateTimeLocalValue(a.endAt),
     })
     setModalOpen(true)
   }
@@ -139,39 +114,23 @@ export default function AdminAnnouncementsPage() {
     }
     setSaving(true)
     try {
-      if (editing) {
-        await authFetchJson(`/api/admin/announcements/${editing.id}`, {
-          method: "PATCH",
-          body: {
-            title: form.title.trim(),
-            message: form.message.trim(),
-            isActive: form.isActive,
-            startAt: form.startAt || null,
-            endAt: form.endAt || null,
-            linkUrl: null,
-            linkLabel: null,
-          },
-        })
-        toast({ title: "แก้ไขประกาศแล้ว" })
-      } else {
-        await authFetchJson("/api/admin/announcements", {
-          method: "POST",
-          body: {
-            title: form.title.trim(),
-            message: form.message.trim(),
-            isActive: form.isActive,
-            startAt: form.startAt || null,
-            endAt: form.endAt || null,
-            linkUrl: null,
-            linkLabel: null,
-          },
-        })
-        toast({ title: "สร้างประกาศแล้ว" })
-      }
+      await authFetchJson("/api/admin/announcements", {
+        method: "POST",
+        body: {
+          title: form.title.trim(),
+          message: form.message.trim(),
+          isActive: form.isActive,
+          startAt: form.startAt || null,
+          endAt: form.endAt || null,
+          linkUrl: null,
+          linkLabel: null,
+        },
+      })
+      toast({ title: "สร้างประกาศแล้ว" })
       setModalOpen(false)
       fetchList()
-    } catch (e: any) {
-      toast({ title: e?.message || "เกิดข้อผิดพลาด", variant: "destructive" })
+    } catch (e: unknown) {
+      toast({ title: (e as Error)?.message || "เกิดข้อผิดพลาด", variant: "destructive" })
     } finally {
       setSaving(false)
     }
@@ -238,10 +197,6 @@ export default function AdminAnnouncementsPage() {
                       </p>
                     </div>
                     <div className="flex gap-2 shrink-0">
-                      <Button variant="outline" size="sm" onClick={() => openEdit(a)} className="gap-1">
-                        <Pencil className="h-4 w-4" />
-                        แก้ไข
-                      </Button>
                       <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(a.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -257,7 +212,7 @@ export default function AdminAnnouncementsPage() {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-xl sm:max-w-lg rounded-2xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 sm:px-8 pt-6 pb-4 border-b bg-muted/30">
-            <DialogTitle className="text-lg">{editing ? "แก้ไขประกาศ" : "เพิ่มประกาศ"}</DialogTitle>
+            <DialogTitle className="text-lg">เพิ่มประกาศ</DialogTitle>
           </DialogHeader>
           <div className="px-6 sm:px-8 py-6 space-y-6 overflow-y-auto max-h-[70vh]">
             {/* ข้อมูลหลัก */}
@@ -324,7 +279,7 @@ export default function AdminAnnouncementsPage() {
             </Button>
             <Button onClick={handleSave} disabled={saving} className="rounded-lg gap-2">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {editing ? "บันทึก" : "สร้างประกาศ"}
+              สร้างประกาศ
             </Button>
           </DialogFooter>
         </DialogContent>

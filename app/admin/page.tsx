@@ -42,18 +42,6 @@ export default function AdminDashboardPage() {
     }
   }, [authLoading, user, isAdmin, router, toast])
 
-  if (authLoading || (isAdmin && isLoading)) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
-  }
-
-  if (!isAdmin) {
-    return null
-  }
-
   const nowMs = now ?? 0
   const newItemsCount = useMemo(() => items.filter(item => {
     const postedAt = toDate(item.postedAt)
@@ -67,6 +55,18 @@ export default function AdminDashboardPage() {
     const hoursAgo = (nowMs - createdAt.getTime()) / (1000 * 60 * 60)
     return hoursAgo <= 24
   }).length, [tickets, nowMs])
+
+  if (authLoading || (isAdmin && isLoading)) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return null
+  }
 
   const handleTabChange = (tab: string) => {
     switch (tab) {

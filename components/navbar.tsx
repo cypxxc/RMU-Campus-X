@@ -15,7 +15,7 @@ import { ModeToggle } from "./mode-toggle"
 import { Logo } from "./logo"
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
-import { userHasSupportTickets } from "@/lib/firestore"
+import { userHasSupportTickets } from "@/lib/db/support"
 
 // Lazy load heavy modals - only loaded when opened
 const PostItemModal = dynamic(
@@ -81,12 +81,12 @@ export function Navbar() {
   return (
     <>
       <nav className="sticky top-0 z-50 border-b glass pt-safe">
-        <div className="container mx-auto px-4 pl-safe pr-safe h-14 sm:h-16 flex items-center justify-between">
-          {/* Logo */}
+        <div className="container mx-auto px-4 pl-safe pr-safe h-14 sm:h-16 flex flex-nowrap items-center justify-between gap-2 md:gap-4">
+          {/* Logo - fixed width */}
           <Logo size="md" href="/dashboard" className="shrink-0" />
 
-          {/* Desktop Navigation */}
-          <ul className="hidden md:flex items-center gap-1 list-none m-0 p-0">
+          {/* Desktop Navigation - แสดงเฉพาะจอ lg ขึ้นไป */}
+          <ul className="hidden lg:flex items-center gap-1 list-none m-0 p-0">
             {user && navItems.map((item) => (
               <li key={item.href}>
                 <Button
@@ -131,14 +131,14 @@ export function Navbar() {
           </ul>
 
           {/* Right Side Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-nowrap items-center gap-2 shrink-0">
             
             {user ? (
               <>
                 {/* Post Item Button - Desktop (Opens Modal) */}
                 <Button 
                   size="sm" 
-                  className="hidden sm:flex gap-2"
+                  className="hidden lg:flex gap-2"
                   onClick={() => setPostModalOpen(true)}
                 >
                   <Plus className="h-4 w-4" />
@@ -154,7 +154,7 @@ export function Navbar() {
                     variant="ghost"
                     size="sm"
                     asChild
-                    className="hidden sm:flex gap-2"
+                    className="hidden lg:flex gap-2"
                   >
                     <Link href="/admin">
                       <Shield className="h-4 w-4" />
@@ -176,7 +176,7 @@ export function Navbar() {
                   variant="outline" 
                   size="sm" 
                   onClick={handleSignOut}
-                  className="hidden sm:flex gap-2"
+                  className="hidden lg:flex gap-2"
                 >
                   <LogOut className="h-4 w-4" />
                   <span className="hidden lg:inline">ออกจากระบบ</span>
@@ -185,12 +185,12 @@ export function Navbar() {
                 {/* Mobile Menu */}
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                     <SheetTrigger asChild>
-                      <Button variant="ghost" size="icon" className="md:hidden">
+                      <Button variant="ghost" size="icon" className="lg:hidden">
                         <Menu className="h-5 w-5" />
                         <span className="sr-only">เมนู</span>
                       </Button>
                     </SheetTrigger>
-                    <SheetContent side="right" className="w-[280px] sm:w-[320px]">
+                    <SheetContent side="right" className="w-[85vw] max-w-xs sm:max-w-sm">
                       <SheetTitle className="sr-only">เมนูหลัก</SheetTitle>
                       <div className="flex flex-col h-full">
                         {/* Mobile Header */}
@@ -282,7 +282,7 @@ export function Navbar() {
                   <Link href="/login">เข้าสู่ระบบ</Link>
                 </Button>
                 <Button size="sm" asChild>
-                  <Link href="/register">รับสิทธิ์ใช้งานฟรี</Link>
+                  <Link href="/register">สมัครสมาชิก</Link>
                 </Button>
               </>
             )}

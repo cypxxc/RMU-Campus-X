@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Package, Edit, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { formatPostedAt, safeToDate } from "@/lib/utils"
+import { getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
 
 interface MyItemsListProps {
   items: Item[]
@@ -79,13 +80,14 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
               <div className="flex flex-col sm:flex-row sm:items-center">
                 {/* Image Part */}
                 <div className="relative w-24 h-24 m-4 rounded-xl overflow-hidden bg-muted shrink-0">
-                  {(item.imageUrls?.[0] || item.imageUrl) ? (
+                {getItemPrimaryImageUrl(item) ? (
                     <Image 
-                      src={item.imageUrls?.[0] || item.imageUrl || ''} 
+                      src={getItemPrimaryImageUrl(item)}
                       alt={item.title} 
                       fill 
                       className="object-cover group-hover:scale-105 transition-transform duration-200" 
                       sizes="(max-width: 768px) 100px, 96px"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">

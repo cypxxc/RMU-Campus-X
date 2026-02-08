@@ -17,7 +17,7 @@ export function SecurityBadges() {
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Lock className="h-4 w-4 text-primary shrink-0" aria-hidden />
-        <span>ไม่มีค่าใช้จ่าย ตลอดชีพ</span>
+        <span>ไม่มีค่าใช้จ่าย</span>
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Mail className="h-4 w-4 text-primary shrink-0" aria-hidden />

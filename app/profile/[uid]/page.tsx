@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { 
   Package, 
@@ -19,6 +19,8 @@ import { useToast } from "@/hooks/use-toast"
 import { StarRating } from "@/components/star-rating"
 
 import { getUserPublicProfile } from "@/lib/firestore"
+import { resolveImageUrl } from "@/lib/cloudinary-url"
+import { useItems } from "@/hooks/use-items"
 import { ItemCard } from "@/components/item-card"
 import { ItemDetailView } from "@/components/item-detail-view"
 import { Button } from "@/components/ui/button"
@@ -60,15 +62,30 @@ export default function PublicProfilePage() {
   const uid = isValidProfileUid(rawUid) ? rawUid : ""
 
   const [profile, setProfile] = useState<Partial<User> | null>(null)
-  const [items, setItems] = useState<Item[]>([])
   const [reviews, setReviews] = useState<any[]>([])
   const [reviewerProfiles, setReviewerProfiles] = useState<Record<string, { displayName?: string; photoURL?: string }>>({})
   const [loading, setLoading] = useState(true)
-  const [loadingItems, setLoadingItems] = useState(true)
   const [loadingReviews, setLoadingReviews] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const mountedRef = useRef(true)
+
+  const { items: rawItems, isLoading: loadingItems } = useItems({
+    postedBy: uid || undefined,
+    pageSize: 100,
+    enabled: !!uid,
+  })
+
+  const items = useMemo(() => {
+    if (!uid) return []
+    return rawItems
+      .filter((item) => String(item.postedBy) === uid && ["available", "pending"].includes(item.status))
+      .sort((a, b) => {
+        const timeA = (a.postedAt as { toMillis?: () => number })?.toMillis?.() ?? (typeof a.postedAt === "string" ? new Date(a.postedAt).getTime() : 0)
+        const timeB = (b.postedAt as { toMillis?: () => number })?.toMillis?.() ?? (typeof b.postedAt === "string" ? new Date(b.postedAt).getTime() : 0)
+        return timeB - timeA
+      })
+  }, [uid, rawItems])
 
   useEffect(() => {
     mountedRef.current = true
@@ -78,14 +95,11 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!uid) {
       setLoading(false)
-      setLoadingItems(false)
       setProfile(null)
-      setItems([])
       setReviews([])
       return
     }
     loadProfile()
-    loadUserItems()
     loadReviews()
   }, [uid])
 
@@ -173,38 +187,6 @@ export default function PublicProfilePage() {
     }
   }
 
-  const loadUserItems = async () => {
-    if (!uid) {
-      setItems([])
-      setLoadingItems(false)
-      return
-    }
-    try {
-      setLoadingItems(true)
-      const { getItems } = await import("@/lib/firestore")
-      const result = await getItems({ postedBy: uid, pageSize: 100 })
-      if (!mountedRef.current) return
-      if (result.success && result.data) {
-        let userItems = result.data.items
-        userItems = userItems
-          .filter((item: Item) => String(item.postedBy) === uid && ["available", "pending"].includes(item.status))
-          .sort((a: Item, b: Item) => {
-            const timeA = (a.postedAt as { toMillis?: () => number })?.toMillis?.() ?? (typeof a.postedAt === "string" ? new Date(a.postedAt).getTime() : 0)
-            const timeB = (b.postedAt as { toMillis?: () => number })?.toMillis?.() ?? (typeof b.postedAt === "string" ? new Date(b.postedAt).getTime() : 0)
-            return timeB - timeA
-          })
-        setItems(userItems)
-      } else {
-        setItems([])
-      }
-    } catch (error) {
-      if (!mountedRef.current) return
-      console.error("Error loading items:", error)
-    } finally {
-      if (mountedRef.current) setLoadingItems(false)
-    }
-  }
-
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -237,7 +219,7 @@ export default function PublicProfilePage() {
               {/* Profile Image with Ring Animation */}
               <div className="relative shrink-0">
                 <Avatar className="h-28 w-28 sm:h-32 sm:w-32 rounded-full ring-4 ring-background shadow-xl">
-                  <AvatarImage src={profile.photoURL || undefined} alt={profile.displayName || "ผู้ใช้งาน"} className="object-cover" />
+                  <AvatarImage src={resolveImageUrl(profile.photoURL ?? undefined) || undefined} alt={profile.displayName || "ผู้ใช้งาน"} className="object-cover" />
                   <AvatarFallback className="text-3xl bg-primary/5 text-primary">
                     {profile.displayName?.[0] || "?"}
                   </AvatarFallback>
@@ -345,7 +327,7 @@ export default function PublicProfilePage() {
                {reviews.map((review) => {
                  const reviewer = reviewerProfiles[review.reviewerId]
                  const displayName = reviewer?.displayName?.trim() || review.reviewerName
-                 const avatarUrl = reviewer?.photoURL || review.reviewerAvatar
+                 const avatarUrl = resolveImageUrl(reviewer?.photoURL ?? review.reviewerAvatar ?? undefined)
                  return (
                  <Card key={review.id} className="border-border/60">
                     <CardContent className="p-4">

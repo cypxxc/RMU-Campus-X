@@ -42,6 +42,7 @@ import { ReviewModal } from "@/components/review-modal"
 import { checkExchangeReviewed } from "@/lib/db/reviews"
 import { Star } from "lucide-react"
 import { getConfirmButtonLabel, getWaitingOtherConfirmationMessage } from "@/lib/exchange-state-machine"
+import { getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
 import { ExchangeStepIndicator } from "@/components/exchange/exchange-step-indicator"
 
 
@@ -523,7 +524,7 @@ export default function ChatPage({
   const isOwner = user?.uid === exchange.ownerId
   const otherUserId = isOwner ? exchange.requesterId : exchange.ownerId
   const hasConfirmed = isOwner ? exchange.ownerConfirmed : exchange.requesterConfirmed
-  const itemImage = item?.imageUrls?.[0] || item?.imageUrl
+  const itemImage = item ? getItemPrimaryImageUrl(item) : undefined
 
   return (
     <div className="min-h-screen bg-background">
@@ -659,7 +660,7 @@ export default function ChatPage({
                                     {exchange.status === "accepted"
                                       ? isOwner
                                         ? "เจ้าของโพส ยืนยันการส่งมอบ"
-                                        : "ผู้ขอ ยืนยันการรับของ"
+                                        : "ผู้ขอรับ ยืนยันการรับของ"
                                       : isOwner
                                         ? "ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว"
                                         : "ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว"}

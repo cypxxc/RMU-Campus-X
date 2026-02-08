@@ -9,12 +9,14 @@ import { z } from "zod"
 import { withValidation, type ValidationContext } from "@/lib/api-validation"
 import { getAdminDb, canUserPost, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
+import { itemsCollection, usersCollection } from "@/lib/db/collections"
 import { itemSchema, itemStatusSchema } from "@/lib/schemas"
 import { generateKeywords, refineItemsBySearchTerms } from "@/lib/db/items-helpers"
 import type { Item } from "@/types"
 
 const createItemSchema = itemSchema.extend({
-  imageUrls: z.array(z.string().url()).max(5).optional(),
+  imagePublicIds: z.array(z.string().min(1).max(500)).max(5).optional(),
+  imageUrls: z.array(z.string().url()).max(5).optional(), // legacy
 })
 
 type CreateItemBody = z.infer<typeof createItemSchema>
@@ -35,26 +37,28 @@ export const POST = withValidation(
       )
     }
 
-    const db = getAdminDb()
     const searchKeywords = generateKeywords(data.title, data.description)
 
     // ดึงชื่อแสดงในโปรไฟล์เพื่อใส่ใน card (โพสต์โดย: ชื่อบัญชี)
     let postedByName: string | null = null
     try {
-      const userSnap = await db.collection("users").doc(ctx.userId).get()
+      const userSnap = await usersCollection().doc(ctx.userId).get()
       const userData = userSnap.data()
       postedByName = (userData?.displayName as string | undefined) ?? (ctx.email ? ctx.email.split("@")[0] : null) ?? null
     } catch {
       postedByName = ctx.email ? ctx.email.split("@")[0] ?? null : null
     }
 
-    const docRef = await db.collection("items").add({
+    const imagePublicIds = data.imagePublicIds?.length ? data.imagePublicIds : null
+    const imageUrls = data.imageUrls?.length ? data.imageUrls : null
+    const docRef = await itemsCollection().add({
       title: data.title,
       description: data.description,
       category: data.category,
       location: data.location,
       locationDetail: data.locationDetail ?? null,
-      imageUrls: data.imageUrls ?? null,
+      imagePublicIds: imagePublicIds ?? null,
+      imageUrls: imageUrls ?? null,
       status: "available",
       postedBy: ctx.userId,
       postedByEmail: ctx.email ?? "",
@@ -105,8 +109,7 @@ export async function GET(request: NextRequest) {
     // สำคัญ: ถ้า client ส่ง postedBy มา ต้องใช้เสมอ — อย่าทิ้งเมื่อ parse ล้มเหลว (ไม่งั้นจะได้รายการของทุกคน)
     if (rawPostedBy && !query.postedBy) (query as { postedBy?: string }).postedBy = rawPostedBy
 
-    const db = getAdminDb()
-    let q = db.collection("items").orderBy("postedAt", "desc").limit(Math.min(query.pageSize * (query.search ? 3 : 1), 100))
+    let q = itemsCollection().orderBy("postedAt", "desc").limit(Math.min(query.pageSize * (query.search ? 3 : 1), 100))
 
     if (query.postedBy) {
       q = q.where("postedBy", "==", query.postedBy)
@@ -124,14 +127,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (query.lastId) {
-      const lastSnap = await db.collection("items").doc(query.lastId).get()
+      const lastSnap = await itemsCollection().doc(query.lastId).get()
       if (lastSnap.exists) {
         q = q.startAfter(lastSnap)
       }
     }
 
     const snapshot = await q.get()
-    let items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Item))
+    let items: Item[] = snapshot.docs.map((d) => d.data() as Item)
 
     if (searchTerms.length > 0) {
       items = refineItemsBySearchTerms(items, searchTerms)
@@ -141,11 +144,11 @@ export async function GET(request: NextRequest) {
     const page = items.slice(0, query.pageSize)
 
     // แสดงชื่อปัจจุบันจากโปรไฟล์ (ถ้า user เปลี่ยนชื่อแล้ว จะได้ชื่อล่าสุด)
-    const postedByIds = [...new Set(page.map((it: Item) => it.postedBy).filter(Boolean))]
+    const postedByIds = [...new Set(page.map((it) => it.postedBy).filter(Boolean))]
     const nameByUid = new Map<string, string>()
     if (postedByIds.length > 0) {
-      const userRefs = postedByIds.map((uid) => db.collection("users").doc(uid))
-      const userSnaps = await db.getAll(...userRefs)
+      const userRefs = postedByIds.map((uid) => usersCollection().doc(uid))
+      const userSnaps = await getAdminDb().getAll(...userRefs)
       userSnaps.forEach((snap, i) => {
         const uid = postedByIds[i]
         if (!uid) return
@@ -154,7 +157,7 @@ export async function GET(request: NextRequest) {
         nameByUid.set(uid, name)
       })
     }
-    const pageWithCurrentNames = page.map((it: Item) => ({
+    const pageWithCurrentNames = page.map((it) => ({
       ...it,
       postedByName: nameByUid.get(it.postedBy) ?? it.postedByName ?? it.postedByEmail?.split("@")[0] ?? null,
     }))

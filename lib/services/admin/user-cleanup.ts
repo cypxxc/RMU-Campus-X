@@ -1,5 +1,6 @@
 import { getAdminDb, getAdminAuth } from "@/lib/firebase-admin"
 import { cloudinary } from "@/lib/cloudinary"
+import { extractItemImagePublicIds } from "@/lib/services/items/cloudinary-utils"
 
 export interface CleanupStats {
   deletedDocs: number
@@ -43,15 +44,8 @@ export async function collectUserResources(userId: string): Promise<CollectUserR
   const itemsSnapshot = await db.collection("items").where("postedBy", "==", userId).get()
   itemsSnapshot.docs.forEach(doc => {
     addRef(doc.ref)
-    const data = doc.data()
-    if (Array.isArray(data.imageUrls)) {
-        data.imageUrls.forEach((url: string) => {
-            if (url.includes("cloudinary")) {
-                const matches = url.match(/\/rmu-exchange\/items\/([^/.]+)/)
-                if (matches?.[1]) addImage(`rmu-exchange/items/${matches[1]}`)
-            }
-        })
-    }
+    const publicIds = extractItemImagePublicIds(doc.data() ?? {})
+    publicIds.forEach(id => addImage(id))
   })
 
   // 3. Exchanges

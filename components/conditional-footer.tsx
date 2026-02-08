@@ -10,7 +10,7 @@ import { SiteFooter } from "@/components/site-footer"
 const FOOTER_PATHS: string[] = [
   "/",
   "/about",
-  "/faq",
+  "/guide",
   "/terms",
   "/privacy",
   "/guidelines",

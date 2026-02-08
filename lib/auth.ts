@@ -18,6 +18,7 @@ import type { ActionCodeSettings } from "firebase/auth"
 export const EMAIL_VERIFICATION_LINK_EXPIRY_DAYS = 3
 import { doc, setDoc, serverTimestamp } from "firebase/firestore"
 import { getFirebaseAuth, getFirebaseDb } from "./firebase"
+import { SUPPORT_EMAIL } from "./constants"
 
 import { registrationSchema } from "./schemas"
 
@@ -163,7 +164,7 @@ export const loginUser = async (email: string, password: string, remember: boole
       // User exists in Auth but not in Firestore. Strict Rule: Block Access.
       // Auto-cleanup could be risky here without admin consent, safer to just block.
       await firebaseSignOut(auth)
-      throw new Error("บัญชีของคุณไม่สมบูรณ์ หรือถูกลบ (Ghost Account) - กรุณาติดต่อผู้ดูแลระบบ")
+      throw new Error(`บัญชีของคุณไม่สมบูรณ์ หรือถูกลบ (Ghost Account) - กรุณาติดต่อทีมสนับสนุนที่ ${SUPPORT_EMAIL}`)
     }
 
     const userData = userDoc.data()
@@ -171,7 +172,7 @@ export const loginUser = async (email: string, password: string, remember: boole
     // 4. Status Check
     if (userData?.status === 'BANNED') {
        await firebaseSignOut(auth)
-       throw new Error("บัญชีของคุณถูกระงับการใช้งาน (BANNED) - กรุณาติดต่อผู้ดูแลระบบ")
+       throw new Error(`บัญชีของคุณถูกระงับการใช้งาน (BANNED) - กรุณาติดต่อทีมสนับสนุนที่ ${SUPPORT_EMAIL}`)
     }
     
     // (Optional) Update last login timestamp here if needed

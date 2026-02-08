@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
-import { getItems, deleteItem, updateItem } from "@/lib/firestore"
+import { deleteItem, updateItem } from "@/lib/firestore"
+import { useItems } from "@/hooks/use-items"
 import { authFetchJson } from "@/lib/api-client"
 import { updateUserPassword, deleteUserAccount } from "@/lib/auth"
 import type { Item, Exchange } from "@/types"
@@ -32,6 +33,7 @@ import { uploadToCloudinary, validateImageFile } from "@/lib/storage"
 import { getFirebaseAuth } from "@/lib/firebase"
 import { IMAGE_UPLOAD_CONFIG, LOCATION_OPTIONS } from "@/lib/constants"
 import { updateUserProfile, getUserProfile } from "@/lib/firestore"
+import { extractPublicIdFromUrl, resolveImageUrl } from "@/lib/cloudinary-url"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Settings } from "lucide-react"
@@ -50,8 +52,6 @@ export default function ProfilePage() {
   const [userProfile, setUserProfile] = useState<any>(null)
   
   // Data State
-  const [myItems, setMyItems] = useState<Item[]>([])
-  const [loadingItems, setLoadingItems] = useState(true)
   const [completedExchanges, setCompletedExchanges] = useState<Exchange[]>([])
   const [loadingExchanges, setLoadingExchanges] = useState(true)
   // Edit Item State
@@ -96,13 +96,18 @@ export default function ProfilePage() {
     return () => { mountedRef.current = false }
   }, [])
 
+  const { items: myItems, isLoading: loadingItems, refetch: refetchMyItems } = useItems({
+    postedBy: user?.uid ?? undefined,
+    pageSize: 50,
+    enabled: !!user,
+  })
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login")
     } else if (!authLoading && user) {
       setLoading(false)
       loadProfile()
-      loadMyItems()
       loadCompletedExchanges()
     }
   }, [user, authLoading, router])
@@ -111,13 +116,13 @@ export default function ProfilePage() {
     if (!user) return
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        loadMyItems()
+        refetchMyItems()
         loadCompletedExchanges()
       }
     }
     document.addEventListener("visibilitychange", onVisibilityChange)
     return () => document.removeEventListener("visibilitychange", onVisibilityChange)
-  }, [user])
+  }, [user, refetchMyItems])
 
   const loadCompletedExchanges = async () => {
     if (!user) return
@@ -152,40 +157,14 @@ export default function ProfilePage() {
     }
   }
 
-  const loadMyItems = async () => {
-    if (!user) return
-    setLoadingItems(true)
-    try {
-      const result = await getItems({ postedBy: user.uid, pageSize: 50 })
-      if (!mountedRef.current) return
-      if (result.success && result.data) {
-        const list = result.data.items
-        setMyItems(list)
-      } else {
-        setMyItems([])
-      }
-    } catch (error: unknown) {
-      if (!mountedRef.current) return
-      console.error("[Profile] Error loading items:", error)
-      setMyItems([])
-    } finally {
-      if (mountedRef.current) setLoadingItems(false)
-    }
-  }
-
   const handleOpenEditItem = (item: Item) => {
     setSelectedItem(item)
     setEditTitle(item.title)
     setEditDescription(item.description)
     setEditLocation(item.location || "")
     setEditLocationDetail(item.locationDetail || "")
-    setEditImageUrls(
-      (item.imageUrls && item.imageUrls.length > 0)
-        ? [...item.imageUrls]
-        : item.imageUrl
-          ? [item.imageUrl]
-          : []
-    )
+    const refs = (item.imagePublicIds?.length ? item.imagePublicIds : item.imageUrls?.length ? item.imageUrls : item.imageUrl ? [item.imageUrl] : [])
+    setEditImageUrls([...refs])
   }
 
   const handleEditItemImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,8 +188,8 @@ export default function ProfilePage() {
           toast({ title: "ไฟล์ไม่ถูกต้อง", description: `${file.name}: ${valid.error}`, variant: "destructive" })
           continue
         }
-        const url = await uploadToCloudinary(file, "item", token)
-        added.push(url)
+        const publicId = await uploadToCloudinary(file, "item", token)
+        added.push(publicId)
       }
       if (added.length) setEditImageUrls((prev) => [...prev, ...added].slice(0, maxImages))
       if (added.length) toast({ title: `เพิ่ม ${added.length} รูปสำเร็จ` })
@@ -234,12 +213,13 @@ export default function ProfilePage() {
     }
     setSavingItem(true)
     try {
+      const imagePublicIds = editImageUrls.map((ref) => extractPublicIdFromUrl(ref) ?? ref).filter(Boolean)
       await updateItem(selectedItem.id, { 
         title: editTitle.trim(), 
         description: editDescription.trim(),
         location: editLocation.trim(),
         locationDetail: editLocationDetail.trim() || undefined,
-        imageUrls: editImageUrls,
+        imagePublicIds: imagePublicIds.length ? imagePublicIds : undefined,
       })
       try {
         const token = await user.getIdToken()
@@ -257,7 +237,7 @@ export default function ProfilePage() {
         console.warn("[LINE] Notify item updated:", lineErr)
       }
       toast({ title: "บันทึกสำเร็จ" })
-      loadMyItems()
+      refetchMyItems()
       setSelectedItem(null)
     } catch (error: any) {
       toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
@@ -332,7 +312,7 @@ export default function ProfilePage() {
         console.warn("[LINE] Notify item deleted:", lineErr)
       }
       toast({ title: "ลบสิ่งของสำเร็จ" })
-      loadMyItems()
+      refetchMyItems()
     } catch (error: any) {
       toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
     } finally {
@@ -404,7 +384,7 @@ export default function ProfilePage() {
               <CardContent className="px-6 pt-10 text-center pb-8">
                 <div className="relative inline-block group">
                   <Avatar className="h-32 w-32 border-4 border-background ring-2 ring-primary/20 shadow-xl">
-                    <AvatarImage src={profileImage || undefined} className="object-cover" />
+                    <AvatarImage src={resolveImageUrl(profileImage ?? undefined) || undefined} className="object-cover" />
                     <AvatarFallback className="text-3xl bg-primary/5 text-primary">
                       {userProfile?.displayName?.[0] || user.email?.[0]?.toUpperCase()}
                     </AvatarFallback>
@@ -624,9 +604,9 @@ export default function ProfilePage() {
                 รูปภาพ ({editImageUrls.length}/{IMAGE_UPLOAD_CONFIG.maxImages})
               </Label>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {editImageUrls.map((url, index) => (
-                  <div key={`${url}-${index}`} className="relative aspect-square rounded-lg overflow-hidden bg-muted border group">
-                    <Image src={url} alt={`รูปที่ ${index + 1}`} fill className="object-cover" sizes="120px" />
+                {editImageUrls.map((ref, index) => (
+                  <div key={`${ref}-${index}`} className="relative aspect-square rounded-lg overflow-hidden bg-muted border group">
+                    <Image src={resolveImageUrl(ref)} alt={`รูปที่ ${index + 1}`} fill className="object-cover" sizes="120px" />
                     <button
                       type="button"
                       onClick={() => setEditImageUrls((prev) => prev.filter((_, i) => i !== index))}

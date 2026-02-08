@@ -33,7 +33,7 @@ export const CATEGORY_OPTIONS: CategoryOption[] = [
   { value: "electronics", label: "อิเล็กทรอนิกส์", icon: Smartphone, color: "text-blue-500" },
   { value: "books", label: "หนังสือ", icon: BookOpen, color: "text-amber-500" },
   { value: "clothing", label: "เสื้อผ้า", icon: Shirt, color: "text-pink-500" },
-  { value: "furniture", label: "ของใช้ในชีวิตประจำวัน", icon: Sofa, color: "text-purple-500" },
+  { value: "furniture", label: "เฟอร์นิเจอร์", icon: Sofa, color: "text-purple-500" },
   { value: "sports", label: "อุปกรณ์กีฬา", icon: Dumbbell, color: "text-cyan-500" },
   { value: "other", label: "อื่นๆ", icon: MoreHorizontal, color: "text-orange-500" },
 ];
@@ -41,11 +41,16 @@ export const CATEGORY_OPTIONS: CategoryOption[] = [
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   electronics: "อิเล็กทรอนิกส์",
   books: "หนังสือ",
-  furniture: "ของใช้ในชีวิตประจำวัน",
+  furniture: "เฟอร์นิเจอร์",
   clothing: "เสื้อผ้า",
   sports: "อุปกรณ์กีฬา",
   other: "อื่นๆ",
 };
+
+// ============ Support / Admin Contact ============
+export const SUPPORT_EMAIL = "653120100120@rmu.ac.th"
+export const SUPPORT_EMAIL_SUBJECT = "RMU Campus X Appeal"
+export const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_EMAIL_SUBJECT)}`
 
 // ============ Status Constants ============
 

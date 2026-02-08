@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, Loader2, User, X, ExternalLink, Calendar, Package, RefreshCw } from "lucide-react"
+import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, Loader2, User, X, ExternalLink, Calendar, Package, RefreshCw, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 
@@ -486,7 +486,10 @@ export function UserDetailModal({
                 {stats.warningCount}
               </p>
             </Card>
-            <Card className="p-4 text-center bg-card border hover:shadow-md transition-shadow">
+            <Card className={cn(
+              "p-4 text-center bg-card border hover:shadow-md transition-shadow",
+              stats.reportsReceived > 0 && "hover:border-primary/50"
+            )}>
               <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
                 ถูกรายงาน
               </p>
@@ -498,6 +501,14 @@ export function UserDetailModal({
               >
                 {stats.reportsReceived}
               </p>
+              {stats.reportsReceived > 0 && uid && (
+                <Button variant="ghost" size="sm" className="mt-2 h-8 gap-1.5 text-primary" asChild>
+                  <Link href={`/admin/reports?reportedUserId=${uid}`} target="_blank" rel="noopener noreferrer">
+                    <FileText className="h-4 w-4" />
+                    ดูรายงานที่ถูกรายงาน
+                  </Link>
+                </Button>
+              )}
             </Card>
             <Card className="p-4 text-center bg-card border hover:shadow-md transition-shadow">
               <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">

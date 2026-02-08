@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { HandHeart, X, Maximize2, Package, MapPin, Calendar, User as UserIcon, AlertTriangle, Info, CheckCircle2, Clock, Trash2, Pencil } from "lucide-react"
 import { formatPostedAt, safeToDate } from "@/lib/utils"
+import { getItemImageUrls } from "@/lib/cloudinary-url"
 import Image from "next/image"
 import Link from "next/link"
 import { ReportModal } from "@/components/report-modal"
@@ -187,8 +188,7 @@ export function ItemDetailView({
     }
   }
 
-  // Get images array (new format) or fallback to single imageUrl (old format)
-  const allImages = item.imageUrls?.length ? item.imageUrls : (item.imageUrl ? [item.imageUrl] : [])
+  const allImages = getItemImageUrls(item)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const currentImage = allImages[selectedImageIndex] || null
 
@@ -234,7 +234,7 @@ export function ItemDetailView({
                       : 'border-border hover:border-primary/50'
                   }`}
                 >
-                  <Image src={img} alt={`รูปที่ ${index + 1}`} fill className="object-cover" unoptimized />
+                  <Image src={img} alt={`รูปที่ ${index + 1}`} fill className="object-cover" unoptimized loading="lazy" />
                 </button>
               ))}
             </div>

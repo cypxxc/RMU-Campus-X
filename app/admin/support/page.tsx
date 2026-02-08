@@ -29,6 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, MessageSquare, Send, Pencil, CheckCircle2, Clock, Inbox, Search, Check, UserCircle } from "lucide-react"
 import Image from "next/image"
+import { resolveImageUrl } from "@/lib/cloudinary-url"
 
 const ticketStatusLabels: Record<string, string> = {
   new: "ใหม่",
@@ -449,7 +450,7 @@ export default function AdminSupportPage() {
                             <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-muted text-muted-foreground border overflow-hidden relative">
                               {ticketUser?.photoURL ? (
                                 <Image
-                                  src={ticketUser.photoURL}
+                                  src={resolveImageUrl(ticketUser.photoURL)}
                                   alt={`รูปโปรไฟล์ของ ${ticketUser?.displayName || ticketUser?.email || "ผู้ส่งคำร้อง"}`}
                                   fill
                                   className="object-cover"

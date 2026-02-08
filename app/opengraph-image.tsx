@@ -8,7 +8,7 @@ export const size = {
 }
 export const contentType = "image/png"
 
-// RMU Brand colors - Green primary (เขียว มรม.)
+// RMU Brand colors - Green primary (เขียว RMU)
 const BRAND = {
   greenDark: "#166534",
   green: "#16a34a",
