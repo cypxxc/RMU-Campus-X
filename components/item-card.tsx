@@ -62,7 +62,7 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
           {(item.imageUrls?.[0] || item.imageUrl) ? (
             <div className="relative aspect-4/3 w-full bg-muted overflow-hidden">
               <Image 
-                src={item.imageUrls?.[0] || item.imageUrl || "/placeholder.svg"} 
+                src={item.imageUrls?.[0] || item.imageUrl || "/images/placeholder-item.svg"} 
                 alt={item.title} 
                 fill 
                 className="object-cover transition-transform duration-300 group-hover:scale-105"

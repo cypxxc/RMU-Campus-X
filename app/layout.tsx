@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -10,13 +10,11 @@ import { ConditionalFooter } from "@/components/conditional-footer"
 import { NavigationHistoryProvider } from "@/components/navigation-history-provider"
 import { AnnouncementProvider } from "@/components/announcement-context"
 import { ConsentGuard } from "@/components/consent-guard"
+import { TopLoadingBar } from "@/components/top-loading-bar"
+import { SmoothScrollProvider } from "@/components/smooth-scroll-provider"
+import { CustomCursor } from "@/components/custom-cursor"
+import { CookieConsentBanner } from "@/components/cookie-consent-banner"
 import "./globals.css"
-
-const geistSans = Geist({ 
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-geist-sans",
-})
 
 const geistMono = Geist_Mono({ 
   subsets: ["latin"],
@@ -45,9 +43,24 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "th_TH",
-    title: "RMU-Campus X",
-description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม",
-  siteName: "RMU-Campus X",
+    url: "/",
+    title: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ",
+    description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม — ฟรี ไม่มีค่าใช้จ่าย",
+    siteName: "RMU-Campus X",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา มรม.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ",
+    description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร ม.ราชภัฏมหาสารคาม — ฟรี ไม่มีค่าใช้จ่าย",
+    images: ["/opengraph-image"],
   },
   robots: {
     follow: true,
@@ -73,7 +86,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="th" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`} data-scroll-behavior="smooth">
+    <html lang="th" suppressHydrationWarning className={geistMono.variable} data-scroll-behavior="smooth">
       <body className="font-sans antialiased bg-background text-foreground">
         <QueryProvider>
           <AuthProvider>
@@ -86,8 +99,13 @@ export default function RootLayout({
             >
               <AnnouncementProvider>
               <NavigationHistoryProvider>
-                {children}
-                <ConditionalFooter />
+                <SmoothScrollProvider>
+                  <CustomCursor />
+                  <TopLoadingBar />
+                  {children}
+                  <ConditionalFooter />
+                  <CookieConsentBanner />
+                </SmoothScrollProvider>
               </NavigationHistoryProvider>
             </AnnouncementProvider>
               <Toaster />

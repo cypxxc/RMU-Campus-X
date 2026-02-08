@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2, Info, Eye, EyeOff } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { CursorReactiveBackground } from "@/components/cursor-reactive-background"
+import { SecurityBadges } from "@/components/security-badges"
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("")
@@ -91,7 +92,8 @@ export default function RegisterPage() {
           </CardHeader>
 
           <CardContent className="pt-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <SecurityBadges />
+            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
                   อีเมล RMU

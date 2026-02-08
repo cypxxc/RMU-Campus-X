@@ -282,7 +282,7 @@ export function Navbar() {
                   <Link href="/login">เข้าสู่ระบบ</Link>
                 </Button>
                 <Button size="sm" asChild>
-                  <Link href="/register">สมัครสมาชิก</Link>
+                  <Link href="/register">รับสิทธิ์ใช้งานฟรี</Link>
                 </Button>
               </>
             )}

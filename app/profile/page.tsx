@@ -626,7 +626,7 @@ export default function ProfilePage() {
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {editImageUrls.map((url, index) => (
                   <div key={`${url}-${index}`} className="relative aspect-square rounded-lg overflow-hidden bg-muted border group">
-                    <Image src={url} alt="" fill className="object-cover" sizes="120px" unoptimized />
+                    <Image src={url} alt={`รูปที่ ${index + 1}`} fill className="object-cover" sizes="120px" />
                     <button
                       type="button"
                       onClick={() => setEditImageUrls((prev) => prev.filter((_, i) => i !== index))}

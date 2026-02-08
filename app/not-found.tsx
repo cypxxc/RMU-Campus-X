@@ -1,39 +1,44 @@
 import { Button } from "@/components/ui/button"
-import { FileQuestion, Home, Search } from "lucide-react"
+import { Home, Search, Compass } from "lucide-react"
 import Link from "next/link"
 
 export default function NotFound() {
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4">
-      <div className="text-center max-w-md mx-auto space-y-6">
-        {/* 404 Icon */}
-        <div className="mx-auto w-24 h-24 rounded-full bg-muted flex items-center justify-center">
-          <FileQuestion className="h-12 w-12 text-muted-foreground" />
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-16">
+      <div className="text-center max-w-lg mx-auto space-y-8">
+        {/* Friendly 404 illustration */}
+        <div className="relative mx-auto w-32 h-32">
+          <div className="absolute inset-0 rounded-3xl bg-primary/10 flex items-center justify-center transform rotate-6" aria-hidden />
+          <div className="relative w-full h-full rounded-3xl bg-muted/80 border-2 border-dashed border-primary/30 flex items-center justify-center">
+            <Compass className="h-16 w-16 text-primary/60" strokeWidth={1.5} aria-hidden />
+          </div>
         </div>
 
-        {/* Message */}
-        <div className="space-y-2">
-          <h1 className="text-6xl font-black text-primary">404</h1>
+        {/* Message - น่าอุ่นใจ เป็นกันเอง */}
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-primary">หน้านี้หายไป</p>
+          <h1 className="text-5xl sm:text-6xl font-black text-foreground tracking-tight">404</h1>
           <h2 className="text-xl font-bold text-foreground">
-            ไม่พบหน้าที่ค้นหา
+            ดูเหมือนคุณจะหลงทางเล็กน้อย
           </h2>
-          <p className="text-sm text-muted-foreground">
-            หน้าที่คุณกำลังมองหาอาจถูกลบ เปลี่ยนชื่อ หรือไม่มีอยู่ในระบบ
+          <p className="text-muted-foreground leading-relaxed max-w-sm mx-auto">
+            ไม่เป็นไรนะ — บางทีลิงก์อาจเก่า หรือหน้านี้อาจย้ายไปแล้ว 
+            ลองเริ่มใหม่จากหน้าหลักหรือค้นหาสิ่งของที่สนใจกันนะ
           </p>
         </div>
 
-        {/* Actions */}
+        {/* Actions - CTA ที่ชัดเจน */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button asChild className="gap-2">
+          <Button asChild size="lg" className="gap-2">
             <Link href="/dashboard">
               <Home className="h-4 w-4" />
-              หน้าหลัก
+              กลับไปหน้าหลัก
             </Link>
           </Button>
-          <Button variant="outline" asChild className="gap-2">
+          <Button variant="outline" asChild size="lg" className="gap-2">
             <Link href="/dashboard">
               <Search className="h-4 w-4" />
-              ค้นหาสิ่งของ
+              ค้นหาสิ่งของที่อยากได้
             </Link>
           </Button>
         </div>

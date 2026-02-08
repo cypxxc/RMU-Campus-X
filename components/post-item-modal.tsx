@@ -382,7 +382,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               <div className="grid grid-cols-3 gap-2">
                 {images.map((img, index) => (
                   <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-muted border border-border group">
-                    <Image src={img} alt={`Preview ${index + 1}`} fill className="object-cover" unoptimized />
+                    <Image src={img} alt={`รูปตัวอย่างที่ ${index + 1}`} fill className="object-cover" unoptimized />
                     <Button
                       type="button"
                       variant="destructive"

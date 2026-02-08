@@ -7,37 +7,38 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { Logo } from "@/components/logo"
 import { LandingHero3D } from "@/components/landing-hero-3d"
 import { LandingStats } from "@/components/landing-stats"
+import { ScrollReveal } from "@/components/scroll-reveal"
 
 const features = [
   {
     icon: Package,
     title: "โพสต์และขอรับสิ่งของ",
     description: "ลงประกาศสิ่งของที่ไม่ใช้แล้ว หรือค้นหาและขอรับจากเพื่อนนักศึกษา",
-    color: "text-blue-500 bg-blue-500/10",
+    color: "text-primary bg-primary/10",
   },
   {
     icon: MessageSquare,
     title: "แชทและนัดรับของ",
     description: "แชทในระบบกับเจ้าของ/ผู้ขอ แล้วนัดรับของในมหาวิทยาลัย",
-    color: "text-green-500 bg-green-500/10",
+    color: "text-primary bg-primary/10",
   },
   {
     icon: Bell,
     title: "แจ้งเตือนผ่าน LINE",
     description: "ผูก LINE แล้วรับการแจ้งเตือนเมื่อมีคนสนใจของ ขอรับ แชท หรือเมื่อมีการแก้ไขโดยผู้ดูแล",
-    color: "text-emerald-500 bg-emerald-500/10",
+    color: "text-primary bg-primary/10",
   },
   {
     icon: Shield,
     title: "ปลอดภัย มั่นใจ",
     description: "สมัครด้วยอีเมล @rmu.ac.th เท่านั้น",
-    color: "text-amber-500 bg-amber-500/10",
+    color: "text-primary bg-primary/10",
   },
   {
     icon: Users,
     title: "ชุมชนนักศึกษา มรม.",
     description: "เฉพาะนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม",
-    color: "text-purple-500 bg-purple-500/10",
+    color: "text-primary bg-primary/10",
   },
 ]
 
@@ -47,8 +48,7 @@ export default function LandingPage() {
       {/* 3D Background - Client Component for interactivity */}
       <LandingHero3D />
       
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-background/80 border-b">
+      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-background/90 border-b shadow-sm" role="banner">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Logo size="sm" href="/" />
           <div className="flex items-center gap-3">
@@ -57,70 +57,86 @@ export default function LandingPage() {
               <Button variant="ghost" size="sm">เข้าสู่ระบบ</Button>
             </Link>
             <Link href="/register">
-              <Button size="sm">สมัครสมาชิก</Button>
+              <Button size="sm">รับสิทธิ์ใช้งานฟรี</Button>
             </Link>
           </div>
         </div>
       </header>
 
+      <main id="main-content">
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 relative z-10">
+      <section className="pt-36 pb-24 px-4 relative z-10" aria-labelledby="hero-heading">
         <div className="container mx-auto text-center max-w-3xl">
-          <Badge variant="outline" className="mb-6 px-4 py-1.5 text-sm font-medium">
+          <Badge variant="outline" className="mb-6 px-4 py-1.5 text-sm font-medium border-primary/30 text-primary animate-fade-in animation-duration-[0.6s]">
             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
             แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา มรม.
           </Badge>
           
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight mb-6">
+          <h1 id="hero-heading" className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight mb-6 animate-fade-in animation-duration-[0.6s] [animation-delay:100ms]">
             แลกเปลี่ยนสิ่งของ
-            <span className="text-primary block mt-2">ง่ายๆ ในมหาวิทยาลัย</span>
+            <span className="block mt-2 bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent">ง่ายๆ ในมหาวิทยาลัย</span>
           </h1>
           
-          <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto">
+          <p className="text-lg text-muted-foreground mb-10 max-w-xl mx-auto leading-relaxed animate-fade-in animation-duration-[0.6s] [animation-delay:200ms]">
             โพสต์สิ่งของที่ไม่ใช้แล้ว ขอรับของจากเพื่อนนักศึกษา แชทและนัดรับของได้ในมหาวิทยาลัย
             มหาวิทยาลัยราชภัฏมหาสารคาม
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in animation-duration-[0.6s] [animation-delay:300ms]">
             <Link href="/dashboard">
-              <Button size="lg" className="w-full sm:w-auto gap-2 px-8 h-12 text-base font-bold shadow-lg">
-                เริ่มใช้งาน
+              <Button size="lg" className="w-full sm:w-auto gap-2 px-8 h-12 text-base font-bold shadow-lg hover:shadow-xl transition-shadow ring-2 ring-primary/20 ring-offset-2 ring-offset-background focus-visible:ring-primary">
+                เริ่มแลกเปลี่ยนเลย
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link href="/register">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto px-8 h-12 text-base font-bold">
-                สมัครสมาชิก
+              <Button size="lg" variant="outline" className="w-full sm:w-auto px-8 h-12 text-base font-bold border-2 hover:bg-muted/50 transition-colors">
+                รับสิทธิ์ใช้งานฟรี
               </Button>
             </Link>
           </div>
           
           {/* Stats – ข้อมูลจริงจากระบบ อัปเดตอัตโนมัติ */}
-          <LandingStats />
+          <div className="animate-fade-in animation-duration-[0.6s] [animation-delay:400ms]">
+            <LandingStats />
+          </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-20 px-4 bg-muted/30 relative z-10">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-4">ทำไมต้อง RMU-Campus X?</h2>
-            <p className="text-muted-foreground">ฟีเจอร์ที่ออกแบบมาเพื่อนักศึกษาและบุคลากร ม.ราชภัฏมหาสารคาม</p>
-          </div>
+      {/* Features Section - Apple Bento Grid */}
+      <section className="py-24 px-4 bg-muted/30 relative z-10">
+        <div className="container mx-auto max-w-6xl">
+          <ScrollReveal variant="slide-up" className="text-center mb-14">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-3">ทำไมต้อง RMU-Campus X?</h2>
+            <p className="text-sm text-muted-foreground max-w-xl mx-auto">ฟีเจอร์ที่ออกแบบมาเพื่อนักศึกษาและบุคลากร ม.ราชภัฏมหาสารคาม</p>
+          </ScrollReveal>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-            {features.map((feature) => {
+          {/* Apple Bento: 1 ใหญ่ + 2 กลาง + 2 เล็ก แบบ asymmetric */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 auto-rows-[minmax(140px,auto)]">
+            {features.map((feature, index) => {
               const Icon = feature.icon
+              const isLarge = index === 0
               return (
-                <Card key={feature.title} className="border-none shadow-soft bg-background/80 backdrop-blur">
-                  <CardContent className="p-6 text-center">
-                    <div className={`h-12 w-12 rounded-xl ${feature.color} flex items-center justify-center mx-auto mb-4`}>
-                      <Icon className="h-6 w-6" />
-                    </div>
-                    <h3 className="font-bold mb-2">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground">{feature.description}</p>
-                  </CardContent>
-                </Card>
+                <ScrollReveal
+                  key={feature.title}
+                  variant="slide-up"
+                  delay={index * 80}
+                >
+                  <Card
+                    className={`border border-border/60 shadow-soft bg-background/90 backdrop-blur rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-soft-lg hover:-translate-y-1 hover:border-primary/20 h-full
+                      ${isLarge ? "sm:col-span-2 lg:col-span-2 lg:row-span-2" : ""}`}
+                  >
+                    <CardContent className={`p-6 h-full flex flex-col justify-center ${isLarge ? "flex-col lg:flex-row lg:items-center lg:gap-6 lg:text-left lg:p-8" : "text-center"}`}>
+                      <div className={`${isLarge ? "lg:shrink-0" : ""} h-12 w-12 rounded-xl ${feature.color} flex items-center justify-center ${isLarge ? "mx-auto lg:mx-0" : "mx-auto"} mb-4 lg:mb-0`}>
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <div className={isLarge ? "lg:flex-1" : ""}>
+                        <h3 className="font-bold mb-2">{feature.title}</h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </ScrollReveal>
               )
             })}
           </div>
@@ -128,45 +144,51 @@ export default function LandingPage() {
       </section>
 
       {/* How it Works */}
-      <section className="py-20 px-4 relative z-10">
-        <div className="container mx-auto max-w-3xl">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-4">วิธีใช้งาน</h2>
-            <p className="text-muted-foreground">3 ขั้นตอนง่ายๆ</p>
-          </div>
+      <section className="py-24 px-4 relative z-10">
+        <div className="container mx-auto max-w-2xl">
+          <ScrollReveal variant="slide-up" className="text-center mb-14">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-3">วิธีใช้งาน</h2>
+            <p className="text-sm text-muted-foreground">3 ขั้นตอนง่ายๆ</p>
+          </ScrollReveal>
           
-          <div className="space-y-6">
+          <ScrollReveal variant="slide-up" delay={100}>
+          <div className="relative">
+            {/* เส้นเชื่อมแนวตั้ง */}
+            <div className="absolute left-5 top-6 bottom-6 w-0.5 bg-linear-to-b from-primary/40 via-primary/30 to-primary/20 rounded-full" aria-hidden />
             {[
               { step: 1, title: "สมัครด้วยอีเมล @rmu.ac.th", desc: "กรอกอีเมลนักศึกษา/บุคลากร แล้วยืนยันตัวตนผ่านอีเมล" },
               { step: 2, title: "โพสต์สิ่งของ หรือค้นหาแล้วขอรับ", desc: "ลงประกาศของที่ไม่ใช้ หรือค้นหาและกดขอรับของที่สนใจ" },
               { step: 3, title: "แชท นัดรับ และยืนยันแลกเปลี่ยน", desc: "แชทกับอีกฝ่าย นัดรับของในมหาวิทยาลัย แล้วกดยืนยันเมื่อรับของแล้ว" },
             ].map((item) => (
-              <div key={item.step} className="flex items-start gap-4 p-4 rounded-xl bg-muted/30">
-                <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0">
+              <div key={item.step} className="relative flex items-start gap-5 pl-2 pb-10 last:pb-0">
+                <div className="relative z-10 h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 ring-4 ring-background shadow-md">
                   {item.step}
                 </div>
-                <div>
-                  <h3 className="font-bold">{item.title}</h3>
-                  <p className="text-sm text-muted-foreground">{item.desc}</p>
+                <div className="flex-1 pt-0.5">
+                  <h3 className="font-bold text-foreground">{item.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{item.desc}</p>
                 </div>
               </div>
             ))}
           </div>
+          </ScrollReveal>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 bg-primary text-primary-foreground relative z-10">
-        <div className="container mx-auto text-center max-w-2xl">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-4">พร้อมเริ่มแลกเปลี่ยนแล้วหรือยัง?</h2>
-          <p className="mb-8 opacity-90">สมัครด้วยอีเมล @rmu.ac.th ใช้งานฟรี ไม่มีค่าใช้จ่าย</p>
+      <section className="py-24 px-4 bg-primary text-primary-foreground relative z-10 rounded-t-3xl overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(255,255,255,0.15),transparent)] pointer-events-none" aria-hidden />
+        <ScrollReveal variant="fade" className="container mx-auto text-center max-w-2xl relative">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-3">พร้อมเริ่มแลกเปลี่ยนแล้วหรือยัง?</h2>
+          <p className="mb-8 opacity-90">สมัครด้วยอีเมล @rmu.ac.th — ฟรี ไม่มีค่าใช้จ่ายตลอดชีพ</p>
           <Link href="/register">
-            <Button size="lg" variant="secondary" className="px-8 h-12 text-base font-bold">
-              สมัครสมาชิก
+            <Button size="lg" className="px-8 h-12 text-base font-bold shadow-lg hover:shadow-xl transition-shadow bg-white text-primary hover:bg-white/90 border-0 focus-visible:ring-2 focus-visible:ring-white/50">
+              รับสิทธิ์ใช้งานฟรีเลย
             </Button>
           </Link>
-        </div>
+        </ScrollReveal>
       </section>
+      </main>
     </div>
   )
 }

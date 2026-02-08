@@ -12,18 +12,15 @@ const nextConfig = {
     removeConsole: process.env.NODE_ENV === "production",
   },
 
-  // Image optimization - enable for Cloudinary CDN
+  // Image optimization - CDN + โปรไฟล์ผู้ใช้ (Google, Firebase)
   images: {
     unoptimized: false,
+    deviceSizes: [320, 384, 640, 750, 828, 1080, 1200, 1920, 2048],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**.firebasestorage.app",
-      },
-      {
-        protocol: "https",
-        hostname: "res.cloudinary.com",
-      },
+      { protocol: "https", hostname: "**.firebasestorage.app" },
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
   },
 

@@ -188,18 +188,18 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
+      {/* Hero Section - Visual Hierarchy: H1 เด่นกว่า body */}
       <div className="border-b bg-linear-to-b from-primary/5 to-background">
-        <div className="container mx-auto px-4 py-8 sm:py-12">
-          <div className="space-y-2">
+        <div className="container mx-auto px-4 py-10 sm:py-14">
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               <span className="text-sm font-medium text-primary">แพลตฟอร์มแลกเปลี่ยน</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
               RMU-Campus X
             </h1>
-            <p className="text-muted-foreground max-w-lg">
+            <p className="text-muted-foreground max-w-lg text-sm sm:text-base">
               แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร
               <span className="hidden sm:inline"> มหาวิทยาลัยราชภัฏมหาสารคาม</span>
             </p>
@@ -226,7 +226,7 @@ export default function DashboardPage() {
           {/* Items Grid */}
           <main className="flex-1 min-w-0">
             {/* Results Header & Search */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
               <h2 className="text-sm font-medium text-muted-foreground order-2 sm:order-1 flex items-center gap-2" role="status" aria-live="polite">
                 {loading ? (
                   <>
