@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, MessageSquare, Send, Pencil, CheckCircle2, Clock, Inbox, Search, Check, UserCircle } from "lucide-react"
+import Image from "next/image"
 
 const ticketStatusLabels: Record<string, string> = {
   new: "ใหม่",
@@ -445,12 +446,14 @@ export default function AdminSupportPage() {
                           className={`flex w-full gap-3 ${isMe ? "flex-row-reverse" : "flex-row"}`}
                         >
                           {!isMe && (
-                            <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-muted text-muted-foreground border overflow-hidden">
+                            <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-muted text-muted-foreground border overflow-hidden relative">
                               {ticketUser?.photoURL ? (
-                                <img
+                                <Image
                                   src={ticketUser.photoURL}
-                                  alt=""
-                                  className="h-full w-full object-cover"
+                                  alt={`รูปโปรไฟล์ของ ${ticketUser?.displayName || ticketUser?.email || "ผู้ส่งคำร้อง"}`}
+                                  fill
+                                  className="object-cover"
+                                  sizes="36px"
                                 />
                               ) : (
                                 <UserCircle className="h-4 w-4" />

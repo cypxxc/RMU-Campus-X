@@ -3,6 +3,36 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ฟอนต์หลัก: Kanit - ไทย + อังกฤษ อ่านง่าย */
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* RMU University Colors - Light Theme: เขียว-แดง (Green-Red) */
 :root {
   /* Base colors */
@@ -27,7 +57,7 @@
 
   /* Muted */
   --muted: oklch(0.96 0.02 145);
-  --muted-foreground: oklch(0.5 0.04 260);
+  --muted-foreground: oklch(0.42 0.04 260); /* Darkened for WCAG AA contrast ≥4.5:1 on background */
 
   /* Accent - โทนแดงอ่อน (แดง) */
   --accent: oklch(0.94 0.05 25);
@@ -104,7 +134,7 @@
 
   /* Muted - Dark Gray/Blue */
   --muted: oklch(0.25 0.03 260);
-  --muted-foreground: oklch(0.7 0.05 260);
+  --muted-foreground: oklch(0.72 0.05 260); /* Lightened for WCAG AA contrast on dark background */
 
   /* Accent - Subtle Blue Highlight */
   --accent: oklch(0.25 0.08 260);
@@ -160,8 +190,8 @@
 }
 
 @theme inline {
-  /* Typography - Clean, modern fonts */
-  --font-sans: "Inter", "Geist", system-ui, sans-serif;
+  /* Typography - Kanit (ไทย + อังกฤษ) */
+  --font-sans: "Kanit", system-ui, sans-serif;
   --font-mono: "Geist Mono", "Fira Code", monospace;
 
   /* Colors mapped */
@@ -377,6 +407,20 @@
   }
 }
 
+/* Top loading bar (micro-interaction on route change) */
+@keyframes top-loading {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 90%;
+  }
+}
+
+.animate-top-loading {
+  animation: top-loading 0.4s ease-out forwards;
+}
+
 /* Animation utilities */
 .animate-fade-in {
   animation: fade-in 0.1s ease-out;
@@ -534,6 +578,11 @@
 /* Glass effect for navbar */
 .glass {
   @apply bg-background/80 backdrop-blur-md;
+}
+
+/* Glassmorphism - การ์ดกระจกฝ้า (ใช้กับ card, panel) */
+.glass-card {
+  @apply bg-background/70 backdrop-blur-lg border border-border/60;
 }
 
 /* Page container */
@@ -770,4 +819,19 @@ nextjs-portal {
 /* Prevent horizontal overflow on mobile */
 body {
   overflow-x: hidden;
+}
+
+/* Custom cursor active: hide default cursor on desktop (cursor component adds its own) */
+body.custom-cursor-active {
+  cursor: none;
+}
+
+body.custom-cursor-active button,
+body.custom-cursor-active a,
+body.custom-cursor-active [role="button"],
+body.custom-cursor-active [type="button"],
+body.custom-cursor-active [type="submit"],
+body.custom-cursor-active [type="reset"],
+body.custom-cursor-active [tabindex]:not([tabindex="-1"]) {
+  cursor: none;
 }

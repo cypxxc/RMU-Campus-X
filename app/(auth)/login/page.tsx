@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2, Eye, EyeOff } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { CursorReactiveBackground } from "@/components/cursor-reactive-background"
+import { SecurityBadges } from "@/components/security-badges"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -122,9 +123,10 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent className="pt-4">
+            <SecurityBadges />
             <form
               onSubmit={handleSubmit}
-              className="space-y-4"
+              className="space-y-4 mt-4"
               autoComplete={rememberMe ? "on" : "off"}
             >
               <div className="space-y-2">

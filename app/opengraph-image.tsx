@@ -1,76 +1,111 @@
-import { ImageResponse } from 'next/og'
+import { ImageResponse } from "next/og"
 
-// Image metadata
-export const alt = 'RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ'
+// Image metadata - Facebook/LINE/X recommend 1200x630
+export const alt = "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ"
 export const size = {
   width: 1200,
   height: 630,
 }
-export const contentType = 'image/png'
+export const contentType = "image/png"
 
-// Generate OpenGraph image
+// RMU Brand colors - Green primary (เขียว มรม.)
+const BRAND = {
+  greenDark: "#166534",
+  green: "#16a34a",
+  greenLight: "#4ade80",
+  white: "#ffffff",
+  cream: "#fafaf9",
+}
+
 export default function Image() {
   return new ImageResponse(
     (
       <div
         style={{
-          fontSize: 48,
-          background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #60a5fa 100%)',
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'white',
-          padding: '40px',
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: `linear-gradient(135deg, ${BRAND.greenDark} 0%, ${BRAND.green} 40%, ${BRAND.greenLight} 100%)`,
+          padding: "48px",
+          fontFamily: "system-ui, sans-serif",
         }}
       >
-        {/* Logo */}
+        {/* Card-like container for readability */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '30px',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: BRAND.cream,
+            borderRadius: "24px",
+            padding: "56px 64px",
+            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
           }}
         >
+          {/* Logo block */}
           <div
             style={{
-              width: '80px',
-              height: '80px',
-              background: 'white',
-              borderRadius: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: '20px',
+              display: "flex",
+              alignItems: "center",
+              gap: "24px",
+              marginBottom: "32px",
             }}
           >
-            <span style={{ fontSize: '48px', color: '#1d4ed8', fontWeight: 'bold' }}>X</span>
+            <div
+              style={{
+                width: "88px",
+                height: "88px",
+                background: `linear-gradient(135deg, ${BRAND.green} 0%, ${BRAND.greenDark} 100%)`,
+                borderRadius: "20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: BRAND.white,
+                fontSize: "48px",
+                fontWeight: "bold",
+              }}
+            >
+              X
+            </div>
+            <span
+              style={{
+                fontSize: "52px",
+                fontWeight: "bold",
+                color: BRAND.greenDark,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              RMU-Campus X
+            </span>
           </div>
-          <span style={{ fontSize: '56px', fontWeight: 'bold' }}>RMU-Campus X</span>
-        </div>
-        
-        {/* Tagline */}
-        <div
-          style={{
-            fontSize: '32px',
-            opacity: 0.9,
-            textAlign: 'center',
-          }}
-        >
-          แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา
-        </div>
-        
-        {/* University */}
-        <div
-          style={{
-            fontSize: '24px',
-            opacity: 0.7,
-            marginTop: '20px',
-          }}
-        >
-          มหาวิทยาลัยราชภัฏมหาสารคาม
+
+          {/* Tagline */}
+          <div
+            style={{
+              fontSize: "28px",
+              color: "#374151",
+              textAlign: "center",
+              lineHeight: 1.4,
+              maxWidth: "600px",
+            }}
+          >
+            แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา
+          </div>
+
+          {/* University - subtle */}
+          <div
+            style={{
+              fontSize: "20px",
+              color: "#6b7280",
+              marginTop: "16px",
+            }}
+          >
+            มหาวิทยาลัยราชภัฏมหาสารคาม
+          </div>
         </div>
       </div>
     ),

@@ -186,7 +186,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
             <div className="grid grid-cols-3 gap-2">
               {images.map((img, index) => (
                 <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-muted border border-border group">
-                  <Image src={img} alt="" fill className="object-cover" unoptimized />
+                  <Image src={img} alt={`รูปหลักฐานที่ ${index + 1}`} fill className="object-cover" unoptimized />
                   <Button
                     type="button"
                     variant="destructive"
