@@ -2,12 +2,15 @@
 
 import type React from "react"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, lazy, Suspense } from "react"
 import { use } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { doc, setDoc, onSnapshot, serverTimestamp, collection, query, where, orderBy, limit } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import {
+  subscribeToChatMessages,
+  subscribeToChatTyping,
+  setChatTyping,
+} from "@/lib/services/client-firestore"
 import { createNotification, getItemById, confirmExchange, getUserProfile, respondToExchange } from "@/lib/firestore"
 import { authFetchJson } from "@/lib/api-client"
 import type { Exchange, ChatMessage, Item } from "@/types"
@@ -37,8 +40,8 @@ import {
 import Link from "next/link"
 import { format, isToday, isYesterday } from "date-fns"
 import { th } from "date-fns/locale"
-import { ReportModal } from "@/components/report-modal"
-import { ReviewModal } from "@/components/review-modal"
+const ReportModal = lazy(() => import("@/components/report-modal").then((m) => ({ default: m.ReportModal })))
+const ReviewModal = lazy(() => import("@/components/review-modal").then((m) => ({ default: m.ReviewModal })))
 import { checkExchangeReviewed } from "@/lib/db/reviews"
 import { Star } from "lucide-react"
 import { getConfirmButtonLabel, getWaitingOtherConfirmationMessage } from "@/lib/exchange-state-machine"
@@ -109,51 +112,25 @@ export default function ChatPage({
     loadExchange()
   }, [exchangeId, user, authLoading])
 
-  // Real-time ข้อความแชท (แบบ Facebook) — ใช้ Firestore onSnapshot แทน polling
+  // Real-time: ใช้ onSnapshot เฉพาะจุดที่จำเป็น (แชท + typing) — Logic อยู่ใน client-firestore
   const MESSAGE_PAGE_SIZE = 50
   useEffect(() => {
     if (!user || !exchangeId) return
-    const db = getFirebaseDb()
-    const q = query(
-      collection(db, "chatMessages"),
-      where("exchangeId", "==", exchangeId),
-      orderBy("createdAt", "desc"),
-      limit(MESSAGE_PAGE_SIZE)
-    )
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
+    const unsub = subscribeToChatMessages(
+      exchangeId,
+      MESSAGE_PAGE_SIZE,
+      (ordered) => {
         if (!mountedRef.current) return
-        const list: ChatMessage[] = snapshot.docs.map((d) => {
-          const data = d.data()
-          const toIso = (v: unknown) =>
-            v && typeof (v as { toDate?: () => Date }).toDate === "function"
-              ? (v as { toDate: () => Date }).toDate().toISOString()
-              : undefined
-          return {
-            id: d.id,
-            exchangeId: data.exchangeId,
-            senderId: data.senderId,
-            senderEmail: data.senderEmail ?? "",
-            message: data.message ?? "",
-            createdAt: (toIso(data.createdAt) ?? new Date().toISOString()) as unknown as ChatMessage["createdAt"],
-            imageUrl: data.imageUrl ?? null,
-            imageType: data.imageType ?? null,
-            readAt: data.readAt != null ? (toIso(data.readAt) as unknown as ChatMessage["readAt"]) : undefined,
-            updatedAt: data.updatedAt != null ? toIso(data.updatedAt) : undefined,
-          } as ChatMessage
-        })
-        const ordered = [...list].reverse()
         setNewestMessages(ordered)
         if (ordered.length > 0) oldestMessageRef.current = ordered[0] ?? null
-        setHasMoreOlder(snapshot.docs.length >= MESSAGE_PAGE_SIZE)
+        setHasMoreOlder(ordered.length >= MESSAGE_PAGE_SIZE)
       },
-      (_err) => {
+      () => {
         if (mountedRef.current) toast({ title: "โหลดข้อความไม่สำเร็จ", variant: "destructive" })
       }
     )
-    return () => unsub()
-  }, [exchangeId, user])
+    return unsub
+  }, [exchangeId, user, toast])
 
   useEffect(() => {
     scrollToBottom()
@@ -246,34 +223,23 @@ export default function ChatPage({
   }
 
   const setTyping = (value: boolean) => {
-    if (!user || !exchangeId) return
-    const db = getFirebaseDb()
-    const key = user.uid === exchange?.ownerId ? "ownerTypingAt" : "requesterTypingAt"
-    setDoc(doc(db, "chatTyping", exchangeId), { [key]: value ? serverTimestamp() : null }, { merge: true }).catch(() => {})
+    if (!user || !exchangeId || !exchange) return
+    const key = user.uid === exchange.ownerId ? "ownerTypingAt" : "requesterTypingAt"
+    setChatTyping(exchangeId, key, value)
   }
 
   useEffect(() => {
     if (!exchange || !user || !exchangeId) return
-    const db = getFirebaseDb()
     const otherKey = user.uid === exchange.ownerId ? "requesterTypingAt" : "ownerTypingAt"
-    const unsub = onSnapshot(
-      doc(db, "chatTyping", exchangeId),
-      (snap) => {
-        if (!snap.exists()) {
-          setOtherTyping(false)
-          return
-        }
-        const data = snap.data()
-        const t = data?.[otherKey]
-        const millis = t && typeof (t as { toMillis?: () => number }).toMillis === "function" ? (t as { toMillis: () => number }).toMillis() : 0
-        setOtherTyping(millis > 0 && Date.now() - millis < 5000)
-      },
-      (_err) => {
-        // permission-denied หรือ network error — ปิด typing indicator และไม่ throw
+    const unsub = subscribeToChatTyping(
+      exchangeId,
+      otherKey,
+      setOtherTyping,
+      () => {
         if (mountedRef.current) setOtherTyping(false)
       }
     )
-    return () => unsub()
+    return unsub
   }, [exchangeId, exchange?.ownerId, user?.uid])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -524,7 +490,7 @@ export default function ChatPage({
   const isOwner = user?.uid === exchange.ownerId
   const otherUserId = isOwner ? exchange.requesterId : exchange.ownerId
   const hasConfirmed = isOwner ? exchange.ownerConfirmed : exchange.requesterConfirmed
-  const itemImage = item ? getItemPrimaryImageUrl(item) : undefined
+  const itemImage = item ? getItemPrimaryImageUrl(item, { width: 200 }) : undefined
 
   return (
     <div className="min-h-screen bg-background">
@@ -540,7 +506,7 @@ export default function ChatPage({
                       alt={exchange.itemTitle}
                       fill
                       className="object-cover"
-                      unoptimized
+                      sizes="48px"
                     />
                   </div>
                 ) : (
@@ -875,25 +841,29 @@ export default function ChatPage({
 
       {/* Report Modal (รายงานผู้ใช้เท่านั้น) */}
       {reportTargetId && exchange && (
-        <ReportModal
-          open={showReportModal}
-          onOpenChange={setShowReportModal}
-          reportType="user_report"
-          targetId={reportTargetId}
-          targetTitle={undefined}
-        />
+        <Suspense fallback={null}>
+          <ReportModal
+            open={showReportModal}
+            onOpenChange={setShowReportModal}
+            reportType="user_report"
+            targetId={reportTargetId}
+            targetTitle={undefined}
+          />
+        </Suspense>
       )}
 
       {/* Review Modal */}
       {exchange && user && (
-        <ReviewModal
-          open={showReviewModal}
-          onOpenChange={setShowReviewModal}
-          exchangeId={exchangeId}
-          targetUserId={user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId}
-          itemTitle={exchange.itemTitle}
-          onSuccess={() => setHasReviewed(true)}
-        />
+        <Suspense fallback={null}>
+          <ReviewModal
+            open={showReviewModal}
+            onOpenChange={setShowReviewModal}
+            exchangeId={exchangeId}
+            targetUserId={user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId}
+            itemTitle={exchange.itemTitle}
+            onSuccess={() => setHasReviewed(true)}
+          />
+        </Suspense>
       )}
     </div>
   )

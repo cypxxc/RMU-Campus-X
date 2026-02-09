@@ -1,4 +1,6 @@
-import { BookOpen, UserPlus, Package, Search, MessageSquare, Handshake, Heart, Flag } from "lucide-react"
+import { BookOpen, UserPlus, Package, Search, MessageSquare, Handshake, Heart, Flag, FileText } from "lucide-react"
+
+const GUIDE_LAST_UPDATED = "4 กุมภาพันธ์ 2568"
 
 const SECTIONS = [
   {
@@ -76,7 +78,7 @@ const SECTIONS = [
     steps: [
       "พบสิ่งของหรือผู้ใช้ที่ผิดกฎหรือไม่เหมาะสม: กดปุ่ม **รายงาน** ที่หน้ารายการสิ่งของหรือหน้าโปรไฟล์ของผู้ใช้",
       "มีคำถามหรือปัญหาเฉพาะ: ใช้เมนู **ช่วยเหลือ** แล้วเลือก **ส่งคำร้อง** เพื่อแจ้งทีมงาน (คำร้องของฉันจะแสดงในเมนูเมื่อมีคำร้องอยู่)",
-      "อ่าน **แนวทางชุมชน** และ **ข้อกำหนดการใช้งาน** ได้จากลิงก์ในฟุตเตอร์",
+      "อ่าน **แนวทางชุมชน** และ **ข้อกำหนดการใช้งาน** ได้จากลิงก์ในเอกสารชุดนี้",
     ],
   },
 ]
@@ -89,8 +91,12 @@ export default function GuidePage() {
           <BookOpen className="h-6 w-6" />
         </div>
         <h1 className="text-3xl font-bold mb-2">คู่มือการใช้งาน</h1>
-        <p className="text-muted-foreground">
-          วิธีการใช้งานระบบ RMU-Campus X แบบละเอียด
+        <p className="text-muted-foreground mb-2">
+          RMU-Campus X — แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม
+        </p>
+        <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+          <FileText className="h-3.5 w-3.5" />
+          อัปเดตล่าสุด: {GUIDE_LAST_UPDATED}
         </p>
       </div>
 

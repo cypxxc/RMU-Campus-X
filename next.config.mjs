@@ -1,4 +1,5 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import withPWA from "@ducanh2912/next-pwa";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -87,7 +88,7 @@ const nextConfig = {
               "worker-src 'self' blob:",
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: blob: https: http:",
-              "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://*.vercel-insights.com https://vercel.live https://va.vercel-scripts.com https://*.vercel-scripts.com wss://*.firebaseio.com https://res.cloudinary.com https://api.line.me https://*.sentry.io https://*.ingest.sentry.io",
+              "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://*.vercel-insights.com https://vercel.live https://va.vercel-scripts.com https://*.vercel-scripts.com wss://*.firebaseio.com https://res.cloudinary.com https://api.cloudinary.com https://api.line.me https://*.sentry.io https://*.ingest.sentry.io",
               "frame-src 'self' https://*.firebaseapp.com",
               "object-src 'none'",
               "base-uri 'self'",
@@ -127,7 +128,18 @@ const nextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+// PWA: ติดตั้งลงมือถือได้ + พร้อมรองรับ Push Notifications (ต้องลงทะเบียนใน manifest + service worker)
+const pwaConfig = withPWA({
+  dest: "public",
+  disable: process.env.NODE_ENV === "development",
+  cacheOnFrontEndNav: true,
+  cacheStartUrl: true,
+  register: true,
+  scope: "/",
+  sw: "sw.js",
+})(nextConfig);
+
+export default withSentryConfig(pwaConfig, {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   silent: !process.env.CI,

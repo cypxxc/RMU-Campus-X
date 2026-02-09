@@ -1,12 +1,15 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, lazy, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { Loader2, LayoutDashboard } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { DashboardOverview } from "@/components/admin/dashboard-overview"
 import { useAdminDashboardData } from "@/hooks/use-admin-dashboard"
+
+const DashboardOverview = lazy(() =>
+  import("@/components/admin/dashboard-overview").then((m) => ({ default: m.DashboardOverview }))
+)
 
 function toDate(v: unknown): Date {
   if (v && typeof v === "object" && "toDate" in v && typeof (v as { toDate: () => Date }).toDate === "function") {
@@ -106,14 +109,16 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <DashboardOverview
-        items={items}
-        tickets={tickets}
-        totalUsersCount={totalUsersCount}
-        newItemsCount={newItemsCount}
-        newTicketsCount={newTicketsCount}
-        onTabChange={handleTabChange}
-        />
+        <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+          <DashboardOverview
+            items={items}
+            tickets={tickets}
+            totalUsersCount={totalUsersCount}
+            newItemsCount={newItemsCount}
+            newTicketsCount={newTicketsCount}
+            onTabChange={handleTabChange}
+          />
+        </Suspense>
       </div>
     </div>
   )

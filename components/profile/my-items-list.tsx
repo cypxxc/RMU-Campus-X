@@ -80,9 +80,9 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
               <div className="flex flex-col sm:flex-row sm:items-center">
                 {/* Image Part */}
                 <div className="relative w-24 h-24 m-4 rounded-xl overflow-hidden bg-muted shrink-0">
-                {getItemPrimaryImageUrl(item) ? (
+                {getItemPrimaryImageUrl(item, { width: 200 }) ? (
                     <Image 
-                      src={getItemPrimaryImageUrl(item)}
+                      src={getItemPrimaryImageUrl(item, { width: 200 })}
                       alt={item.title} 
                       fill 
                       className="object-cover group-hover:scale-105 transition-transform duration-200" 

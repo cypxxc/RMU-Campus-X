@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, lazy, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { authFetchJson } from "@/lib/api-client"
@@ -14,7 +14,7 @@ import { format, isToday, isYesterday } from "date-fns"
 import { th } from "date-fns/locale"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { ReportModal } from "@/components/report-modal"
+const ReportModal = lazy(() => import("@/components/report-modal").then((m) => ({ default: m.ReportModal })))
 import { CancelExchangeDialog, DeleteExchangeDialog } from "@/components/exchange/exchange-action-dialogs"
 import { STATUS_LABELS } from "@/lib/exchange-state-machine"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -488,13 +488,15 @@ export default function MyExchangesPage() {
 
       {/* Report Modal */}
       {reportExchangeId && (
-        <ReportModal
-          open={showReportModal}
-          onOpenChange={setShowReportModal}
-          reportType="exchange_report"
-          targetId={reportExchangeId}
-          targetTitle={exchanges.find(e => e.id === reportExchangeId)?.itemTitle}
-        />
+        <Suspense fallback={null}>
+          <ReportModal
+            open={showReportModal}
+            onOpenChange={setShowReportModal}
+            reportType="exchange_report"
+            targetId={reportExchangeId}
+            targetTitle={exchanges.find(e => e.id === reportExchangeId)?.itemTitle}
+          />
+        </Suspense>
       )}
     </div>
   )

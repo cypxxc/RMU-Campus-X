@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, query, where, getDocs } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { deleteItem, updateItem, createAdminLog } from "@/lib/firestore"
 import { useItems } from "@/hooks/use-items"
 import type { Item, ItemStatus } from "@/types"
@@ -71,12 +70,8 @@ export default function AdminItemsPage() {
     if (!user) return
 
     try {
-      const db = getFirebaseDb()
-      const adminsRef = collection(db, "admins")
-      const q = query(adminsRef, where("email", "==", user.email))
-      const snapshot = await getDocs(q)
-
-      if (snapshot.empty) {
+      const isAdmin = await checkIsAdmin(user.email ?? undefined)
+      if (!isAdmin) {
         toast({
           title: "ไม่มีสิทธิ์เข้าถึง",
           description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
@@ -85,7 +80,6 @@ export default function AdminItemsPage() {
         router.push("/dashboard")
         return
       }
-
       setIsAdmin(true)
     } catch (error) {
       console.error("[AdminItems] Error checking admin:", error)

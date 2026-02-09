@@ -8,7 +8,7 @@
     "allowJs": true,
     "target": "ES6",
     "skipLibCheck": true,
-    /* Strict Type-Checking Options */
+    /* Strict Type-Checking: บังคับจัดการ null/undefined ป้องกันเว็บล่มกลางคัน */
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitReturns": true,

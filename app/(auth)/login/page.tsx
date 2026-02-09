@@ -170,7 +170,7 @@ export default function LoginPage() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="absolute right-0 top-0 h-11 w-11 text-muted-foreground hover:text-foreground"
+                    className="absolute right-0 top-0 h-11 w-11 min-h-11 min-w-11 sm:h-11 sm:w-11 sm:min-h-11 sm:min-w-11 text-muted-foreground hover:text-foreground"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (

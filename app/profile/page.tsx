@@ -74,7 +74,7 @@ export default function ProfilePage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deletingAccount, setDeletingAccount] = useState(false)
 
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, refreshUserProfile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const mountedRef = useRef(true)
@@ -256,6 +256,7 @@ export default function ProfilePage() {
         bio: newBio,
         photoURL: profileImage || "",
       })
+      await refreshUserProfile()
       // อัปเดต state ทันที (optimistic) เพื่อไม่ให้ฟอร์มรีเซ็ตหรือแสดงค่าเก่าเมื่อ loadProfile() ทำงาน
       setUserProfile((prev: typeof userProfile) =>
         prev ? { ...prev, displayName: newDisplayName, bio: newBio } : prev
@@ -282,6 +283,7 @@ export default function ProfilePage() {
       await updateUserProfile(user.uid, { 
         photoURL: cloudinaryUrl,
       })
+      await refreshUserProfile()
       toast({ title: "อัปโหลดรูปโปรไฟล์สำเร็จ" })
       loadProfile()
     } catch (error: any) {
@@ -606,7 +608,7 @@ export default function ProfilePage() {
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {editImageUrls.map((ref, index) => (
                   <div key={`${ref}-${index}`} className="relative aspect-square rounded-lg overflow-hidden bg-muted border group">
-                    <Image src={resolveImageUrl(ref)} alt={`รูปที่ ${index + 1}`} fill className="object-cover" sizes="120px" />
+                    <Image src={resolveImageUrl(ref, { width: 200 })} alt={`รูปที่ ${index + 1}`} fill className="object-cover" sizes="120px" />
                     <button
                       type="button"
                       onClick={() => setEditImageUrls((prev) => prev.filter((_, i) => i !== index))}

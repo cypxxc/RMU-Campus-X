@@ -5,8 +5,11 @@
 
 import * as Sentry from "@sentry/nextjs"
 
+const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN
+const isProduction = process.env.NODE_ENV === "production"
+
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  dsn,
 
   // Adjust this value in production, or use tracesSampler for greater control
   tracesSampleRate: 1,
@@ -14,8 +17,8 @@ Sentry.init({
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
 
-  // Only enable Sentry in production
-  enabled: process.env.NODE_ENV === "production",
+  // Only enable when DSN is set and in production (เช็คก่อนส่งข้อมูล)
+  enabled: isProduction && !!dsn,
 
   replaysOnErrorSampleRate: 1.0,
 

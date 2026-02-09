@@ -3,11 +3,30 @@
  * Basic API communication with LINE Messaging API
  */
 
-import type { LineMessage, LinePushResponse } from "./types"
+import type { LineMessage, LinePushResponse, LineQuickReply } from "./types"
 
 // ============ Configuration ============
 
 const LINE_API_BASE = "https://api.line.me/v2/bot"
+
+const DEFAULT_REPLY_QUICK_REPLY: LineQuickReply = {
+  items: [
+    { type: "action", action: { type: "message", label: "คู่มือ", text: "คู่มือ" } },
+    { type: "action", action: { type: "message", label: "แชท", text: "แชท" } },
+    { type: "action", action: { type: "message", label: "สถานะ", text: "สถานะ" } },
+    { type: "action", action: { type: "message", label: "เชื่อมบัญชี", text: "เชื่อมบัญชี" } },
+    { type: "action", action: { type: "message", label: "ยกเลิกเชื่อม", text: "ยกเลิกการเชื่อมต่อ" } },
+    { type: "action", action: { type: "message", label: "ออก", text: "ออก" } },
+  ],
+}
+
+function withDefaultReplyQuickReply(messages: LineMessage[]): LineMessage[] {
+  return messages.map((message) => {
+    if (message.type !== "text") return message
+    if (message.quickReply && message.quickReply.items?.length) return message
+    return { ...message, quickReply: DEFAULT_REPLY_QUICK_REPLY }
+  })
+}
 
 export function getChannelAccessToken(): string | null {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
@@ -95,7 +114,7 @@ export async function sendReplyMessage(
       },
       body: JSON.stringify({
         replyToken,
-        messages: messages.slice(0, 5),
+        messages: withDefaultReplyQuickReply(messages).slice(0, 5),
       }),
     })
 

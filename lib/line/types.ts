@@ -5,15 +5,32 @@
 export interface LineTextMessage {
   type: "text"
   text: string
+  quickReply?: LineQuickReply
 }
 
 export interface LineFlexMessage {
   type: "flex"
   altText: string
   contents: object
+  quickReply?: LineQuickReply
 }
 
 export type LineMessage = LineTextMessage | LineFlexMessage
+
+export interface LineQuickReplyAction {
+  type: "message"
+  label: string
+  text: string
+}
+
+export interface LineQuickReplyItem {
+  type: "action"
+  action: LineQuickReplyAction
+}
+
+export interface LineQuickReply {
+  items: LineQuickReplyItem[]
+}
 
 export interface LinePushResponse {
   success: boolean

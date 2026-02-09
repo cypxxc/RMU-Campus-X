@@ -1,5 +1,10 @@
 rules_version = '2';
 
+// ความปลอดภัยและความถูกต้องของข้อมูล (Strictness & Security)
+// - ไม่อนุญาต allow read, write: if true
+// - เฉพาะเจ้าของโพสต์เท่านั้นที่แก้ไข/ลบโพสต์ได้; เฉพาะแอดมินเท่านั้นที่ลบหรือจัดการระบบได้
+// - เปิด Firebase App Check ใน Console เพื่อป้องกัน Bot / การยิง API จากเว็บอื่น
+
 service cloud.firestore {
   match /databases/{database}/documents {
 

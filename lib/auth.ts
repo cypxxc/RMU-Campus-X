@@ -44,7 +44,7 @@ export const validateRMUEmail = (email: string): boolean => {
 
 export const registerUser = async (rawEmail: string, password: string) => {
   // Normalize email
-  const email = rawEmail.trim().toLowerCase();
+  const email = rawEmail.trim().toLowerCase()
 
   // 1. Strict Validation using Zod
   const validation = registrationSchema.safeParse({ email, password, confirmPassword: password })
@@ -54,7 +54,7 @@ export const registerUser = async (rawEmail: string, password: string) => {
   }
 
   const auth = getFirebaseAuth()
-  let userCredential;
+  let userCredential
 
   try {
     // 2. Create Auth User
@@ -72,12 +72,6 @@ export const registerUser = async (rawEmail: string, password: string) => {
   try {
     await sendEmailVerification(userCredential.user, getEmailVerificationActionCodeSettings())
 
-    // Verify Auth State before Write
-    const currentUser = auth.currentUser;
-    console.log("[Register] Current Auth User before DB Write:", currentUser?.uid);
-    
-    if (!currentUser) throw new Error("Auth state lost before DB write");
-
     // Create user document in Firestore
     const db = getFirebaseDb()
     await setDoc(doc(db, "users", userCredential.user.uid), {
@@ -94,7 +88,7 @@ export const registerUser = async (rawEmail: string, password: string) => {
         canChat: true,
       },
     })
-    
+
     return userCredential.user
 
   } catch (firestoreError) {
@@ -110,7 +104,8 @@ export const registerUser = async (rawEmail: string, password: string) => {
       console.error("[Register] CRITICAL: Rollback failed!", deleteError)
     }
 
-    throw new Error(`ระบบไม่สามารถสร้างข้อมูลผู้ใช้ได้: ${(firestoreError as any).message || firestoreError} (กรุณาลองใหม่อีกครั้ง)`)
+    const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError)
+    throw new Error(`ระบบไม่สามารถสร้างข้อมูลผู้ใช้ได้: ${errorMessage} (กรุณาลองใหม่อีกครั้ง)`)
   }
 }
 

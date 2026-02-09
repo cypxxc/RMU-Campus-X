@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb, getAdminAuth, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 import { cloudinary } from "@/lib/cloudinary"
 import { recalculateUserRating } from "@/lib/services/admin/user-cleanup"
-import { extractItemImagePublicIds } from "@/lib/services/items/cloudinary-utils"
+import { extractCloudinaryPublicId, extractItemImagePublicIds } from "@/lib/services/items/cloudinary-utils"
 
 export const runtime = 'nodejs'
 
@@ -40,12 +40,8 @@ export async function DELETE(request: NextRequest) {
     if (userDoc.exists) {
       refsToDelete.push(userDoc.ref)
       const data = userDoc.data()
-      if (data?.photoURL?.includes("cloudinary")) {
-          try {
-            const matches = data.photoURL.match(/\/v\d+\/([^/]+)\./)
-            if (matches?.[1]) cloudinaryPublicIds.push(matches[1])
-          } catch {}
-      }
+      const avatarPublicId = extractCloudinaryPublicId(data?.photoURL)
+      if (avatarPublicId) cloudinaryPublicIds.push(avatarPublicId)
     }
 
     // 2.2 Items (Images)

@@ -40,7 +40,8 @@ export const ItemCard = memo(function ItemCard({ item, showRequestButton: _showR
   const postedDate = safeToDate(item.postedAt, new Date(0))
   const isAdmin = variant === 'admin'
   const imageUrls = getItemImageUrls(item)
-  const primaryImage = getItemPrimaryImageUrl(item)
+  // Responsive: w_400 สำหรับการ์ด (มือถือ/แท็บเล็ต) ลด Bandwidth
+  const primaryImage = getItemPrimaryImageUrl(item, { width: 400 })
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (onViewDetails) {

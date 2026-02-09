@@ -10,6 +10,7 @@ import { createFirebaseAdminItemDeps, createItemUpdateAdminDeps } from "@/lib/se
 import { isItemDeletionError } from "@/lib/services/items/errors"
 import { updateItemWithValidation, ItemUpdateError } from "@/lib/services/items/item-update"
 import { itemUpdateSchema } from "@/lib/schemas"
+import { parseItemFromFirestore } from "@/lib/schemas-firestore"
 
 export const runtime = "nodejs"
 
@@ -42,7 +43,7 @@ export async function GET(
       return NextResponse.json({ success: true, item: null })
     }
 
-    const item = snap.data()
+    const item = parseItemFromFirestore(snap.id, snap.data())
     return NextResponse.json({
       success: true,
       item: item ?? null,

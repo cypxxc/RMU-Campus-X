@@ -4,8 +4,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, query, where, getDocs } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { getAdminLogs, type AdminLog, type AdminActionType } from "@/lib/firestore"
 import { useAuth } from "@/components/auth-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -102,12 +101,8 @@ export default function AdminLogsPage() {
     if (!user) return
 
     try {
-      const db = getFirebaseDb()
-      const adminsRef = collection(db, "admins")
-      const q = query(adminsRef, where("email", "==", user.email))
-      const snapshot = await getDocs(q)
-
-      if (snapshot.empty) {
+      const isAdmin = await checkIsAdmin(user.email ?? undefined)
+      if (!isAdmin) {
         toast({
           title: "ไม่มีสิทธิ์เข้าถึง",
           description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
