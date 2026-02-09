@@ -37,6 +37,72 @@ export interface LinePushResponse {
   error?: string
 }
 
+export interface LineRichMenuActionBase {
+  type: string
+  label?: string
+}
+
+export interface LineRichMenuMessageAction extends LineRichMenuActionBase {
+  type: "message"
+  text: string
+}
+
+export interface LineRichMenuUriAction extends LineRichMenuActionBase {
+  type: "uri"
+  uri: string
+}
+
+export interface LineRichMenuPostbackAction extends LineRichMenuActionBase {
+  type: "postback"
+  data: string
+  displayText?: string
+}
+
+export type LineRichMenuAction =
+  | LineRichMenuMessageAction
+  | LineRichMenuUriAction
+  | LineRichMenuPostbackAction
+  | (LineRichMenuActionBase & Record<string, unknown>)
+
+export interface LineRichMenuBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface LineRichMenuArea {
+  bounds: LineRichMenuBounds
+  action: LineRichMenuAction
+}
+
+export interface LineRichMenuSize {
+  width: number
+  height: number
+}
+
+export interface LineRichMenu {
+  richMenuId: string
+  size: LineRichMenuSize
+  selected: boolean
+  name: string
+  chatBarText: string
+  areas: LineRichMenuArea[]
+}
+
+export interface LineRichMenuListResponse extends LinePushResponse {
+  richMenus?: LineRichMenu[]
+}
+
+export interface LineRichMenuIdResponse extends LinePushResponse {
+  richMenuId?: string | null
+}
+
+export interface LineRichMenuApplyResponse extends LinePushResponse {
+  richMenuId?: string | null
+  skipped?: boolean
+}
+
 export interface FlexBubbleOptions {
   title: string
   subtitle: string

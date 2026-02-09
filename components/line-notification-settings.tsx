@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useAuth } from "@/components/auth-provider"
 import { getAuth } from "firebase/auth"
-import { updateUserProfile } from "@/lib/firestore"
 import { LINE_CONFIG } from "@/lib/line-config"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -47,15 +46,28 @@ function UnlinkButton({ userId, onSuccess }: { userId?: string, onSuccess?: () =
     
     setLoading(true)
     try {
-      await updateUserProfile(userId, {
-        lineUserId: null,
-        lineNotifications: {
-          enabled: false,
-          exchangeRequest: false,
-          exchangeStatus: false,
-          exchangeComplete: false,
+      const auth = getAuth()
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
+      if (!token) {
+        toast({
+          title: "กรุณาเข้าสู่ระบบ",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const res = await fetch("/api/line/link", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      } as any)
+        body: JSON.stringify({ userId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || "ไม่สามารถยกเลิกการเชื่อมต่อได้")
+      }
       
       toast({
         title: "ยกเลิกการเชื่อมต่อสำเร็จ",
@@ -63,7 +75,8 @@ function UnlinkButton({ userId, onSuccess }: { userId?: string, onSuccess?: () =
       })
       
       onSuccess?.()
-    } catch {
+    } catch (error) {
+      console.error("[LineNotificationSettings] Unlink error:", error)
       toast({
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถยกเลิกการเชื่อมต่อได้",
@@ -200,10 +213,28 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
 
     setLoading(true)
     try {
-      await updateUserProfile(user.uid, {
-        lineNotifications: newSettings,
-        email: user.email || ""
-      } as any)
+      const auth = getAuth()
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
+      if (!token) {
+        toast({
+          title: "กรุณาเข้าสู่ระบบ",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const res = await fetch("/api/line/link", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId: user.uid, settings: newSettings }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || "ไม่สามารถบันทึกการตั้งค่าได้")
+      }
       setSettings(newSettings)
       toast({
         title: "บันทึกการตั้งค่าสำเร็จ",

@@ -278,9 +278,39 @@ POST /api/line/link
 **Body:**
 ```json
 {
-  "lineUserId": "string"
+  "userId": "firebase_uid",
+  "linkCode": "123456"
 }
 ```
+
+#### Get/Update/Unlink LINE Link State
+```http
+GET /api/line/link?userId=<firebase_uid>
+PATCH /api/line/link
+DELETE /api/line/link
+```
+*Requires authentication (owner only).*
+
+`PATCH` body:
+```json
+{
+  "userId": "firebase_uid",
+  "settings": {
+    "enabled": true,
+    "exchangeRequest": true,
+    "exchangeStatus": true,
+    "exchangeComplete": true
+  }
+}
+```
+
+`DELETE` body (optional):
+```json
+{
+  "userId": "firebase_uid"
+}
+```
+Unlink via web now clears LINE connection and removes the user rich menu automatically.
 
 #### LINE Bot Text Commands (via `/api/line/webhook`)
 
@@ -383,6 +413,32 @@ GET /api/admin/stats
   "pendingReports": 5
 }
 ```
+
+### LINE Rich Menu
+
+#### Manage Rich Menus (Admin)
+```http
+GET /api/admin/line-rich-menu
+PATCH /api/admin/line-rich-menu
+POST /api/admin/line-rich-menu
+DELETE /api/admin/line-rich-menu?lineUserId=<line_user_id>
+```
+*Requires admin authentication.*
+
+`GET` returns:
+- configured default rich menu id from env (`LINE_RICH_MENU_DEFAULT_ID`)
+- current default rich menu id on LINE
+- list of available rich menus
+
+`PATCH` actions:
+- `set-default` + `richMenuId`
+- `set-configured-default`
+- `clear-default`
+
+`POST` actions:
+- `apply-default` + `lineUserId`
+- `link` + `lineUserId` + `richMenuId`
+- `unlink` + `lineUserId`
 
 ---
 
