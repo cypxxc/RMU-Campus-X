@@ -18,7 +18,7 @@ import {
   limit,
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
-import type { ChatMessage } from "@/types"
+import type { ChatMessage, Exchange } from "@/types"
 
 // ============ Admin ============
 
@@ -57,6 +57,56 @@ function toIso(v: unknown): string | undefined {
     return (v as { toDate: () => Date }).toDate().toISOString()
   }
   return undefined
+}
+
+function toExchange(data: Record<string, unknown>, id: string): Exchange {
+  const exchange: Record<string, unknown> = { ...data, id }
+
+  const createdAtIso = toIso(exchange.createdAt)
+  if (createdAtIso) {
+    exchange.createdAt = createdAtIso as unknown as Exchange["createdAt"]
+  }
+
+  const updatedAtIso = toIso(exchange.updatedAt)
+  if (updatedAtIso) {
+    exchange.updatedAt = updatedAtIso as unknown as Exchange["updatedAt"]
+  }
+
+  if (exchange.cancelledAt != null) {
+    const cancelledAtIso = toIso(exchange.cancelledAt)
+    if (cancelledAtIso) {
+      exchange.cancelledAt = cancelledAtIso as unknown as Exchange["cancelledAt"]
+    }
+  }
+
+  return exchange as unknown as Exchange
+}
+
+/**
+ * Subscribe exchange details real-time
+ * @returns unsubscribe function
+ */
+export function subscribeToExchange(
+  exchangeId: string,
+  onUpdate: (exchange: Exchange | null) => void,
+  onError?: () => void
+): () => void {
+  const db = getFirebaseDb()
+  const unsub = onSnapshot(
+    doc(db, "exchanges", exchangeId),
+    (snap) => {
+      if (!snap.exists()) {
+        onUpdate(null)
+        return
+      }
+      const data = snap.data() as Record<string, unknown>
+      onUpdate(toExchange(data, snap.id))
+    },
+    () => {
+      onError?.()
+    }
+  )
+  return () => unsub()
 }
 
 /**
