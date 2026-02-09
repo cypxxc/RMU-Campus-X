@@ -130,6 +130,108 @@ async function getUserIdByLineUserId(lineUserId: string): Promise<string | null>
 /** สถานะที่ยังแชทได้ — ไม่รวม cancelled, rejected, completed (ตามแนวทาง marketplace: แชทที่ deal เสร็จแล้วไม่แสดงในรายการ) */
 const CHATABLE_STATUSES = ["pending", "accepted", "in_progress"]
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const RMU_EMAIL_REGEX = /^[a-zA-Z0-9._+-]{1,64}@rmu\.ac\.th$/i
+
+const HELP_COMMANDS = [
+  "help",
+  "คู่มือ",
+  "วิธีใช้",
+  "ช่วยเหลือ",
+  "คำสั่ง",
+  "เมนู",
+  "manual",
+  "guide",
+]
+const NOTE_COMMANDS = ["note", "โน้ต", "สรุปคำสั่ง", "notebot", "linenote"]
+const CHAT_COMMANDS = ["chat", "แชท", "คุย", "เริ่มแชท", "เลือกแชท"]
+const LINK_COMMANDS = ["link", "เชื่อมบัญชี", "ผูกบัญชี", "linkaccount", "connectline"]
+const STATUS_COMMANDS = ["status", "สถานะ", "เช็คสถานะ", "ตรวจสอบสถานะ", "linkstatus"]
+const UNLINK_COMMANDS = [
+  "unlink",
+  "ยกเลิก",
+  "ยกเลิกการเชื่อมต่อ",
+  "ยกเลิกเชื่อมต่อ",
+  "ยกเลิกเชื่อมบัญชี",
+  "disconnect",
+]
+const EXIT_CHAT_COMMANDS = ["exit", "ออก", "หยุดแชท", "จบแชท", "ออกจากแชท"]
+
+function normalizeCommandText(value: string): { lower: string; compact: string } {
+  const lower = value.normalize("NFC").trim().toLowerCase()
+  const compact = lower.replace(/\s+/g, "")
+  return { lower, compact }
+}
+
+function isCommand(compact: string, commands: string[]): boolean {
+  return commands.some((command) => compact === command.replace(/\s+/g, "").toLowerCase())
+}
+
+function hasKeyword(lower: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => lower.includes(keyword.toLowerCase()))
+}
+
+function buildHelpText(): string {
+  return `🧭 คู่มือ LINE Bot (สรุปเร็ว)
+
+คำสั่งที่ใช้ได้:
+• "เชื่อมบัญชี" / "link" = ขอรหัส 6 หลักไปกรอกบนเว็บ
+• พิมพ์อีเมล @rmu.ac.th = เชื่อมบัญชีตรง
+• "สถานะ" / "status" = ตรวจสอบสถานะการเชื่อม
+• "แชท" / "chat" = ดูรายการแลกเปลี่ยนที่คุยได้
+• พิมพ์เลข 1..N = เลือกห้องแชท
+• พิมพ์ข้อความ = ส่งข้อความไปยังห้องที่เลือก
+• "ออก" / "exit" = ออกจากโหมดแชท
+• "ยกเลิกการเชื่อมต่อ" / "unlink" = ตัดการเชื่อม LINE
+• "โน้ต" / "note" = ส่งคู่มือแบบยาวสำหรับเก็บเป็นโน้ต
+
+หมายเหตุ:
+• ถ้าอีกฝ่ายยังไม่เชื่อม LINE ข้อความจะยังถูกส่งเข้าเว็บแชทปกติ
+• พิมพ์ "คู่มือ" ซ้ำได้ทุกเมื่อ`
+}
+
+function buildUsageNoteText(): string {
+  return `📝 NOTE: วิธีใช้งาน LINE Bot RMU-Campus X
+
+[เริ่มต้นเชื่อมบัญชี]
+1) พิมพ์ "เชื่อมบัญชี" เพื่อรับรหัส 6 หลัก (หมดอายุ 5 นาที)
+2) เข้าเว็บ > โปรไฟล์ > แจ้งเตือนผ่าน LINE
+3) กรอกรหัส 6 หลัก แล้วกดยืนยัน
+4) พิมพ์ "สถานะ" เพื่อเช็กว่าเชื่อมสำเร็จ
+
+[คำสั่งทั้งหมด]
+• help | คู่มือ | วิธีใช้
+• note | โน้ต
+• เชื่อมบัญชี | link
+• สถานะ | status
+• แชท | chat
+• ออก | หยุดแชท | exit
+• ยกเลิกการเชื่อมต่อ | unlink
+
+[โหมดแชท]
+• พิมพ์ "แชท" เพื่อดูรายการที่ยังคุยได้
+• พิมพ์เลข 1..N เพื่อเลือกห้อง
+• จากนั้นพิมพ์ข้อความได้ทันที
+• พิมพ์ "ออก" เพื่อออกจากห้อง
+
+[ข้อควรรู้]
+• ยกเลิกการเชื่อมจากเว็บหรือจากบอท มีผลทันทีทั้งระบบ
+• ถ้าอีกฝ่ายยังไม่เชื่อม LINE ข้อความยังขึ้นในเว็บแชทปกติ
+• ถ้าสงสัย พิมพ์ "คู่มือ"`
+}
+
+function buildFollowWelcomeText(): string {
+  return `สวัสดี 👋 ยินดีต้อนรับสู่ RMU-Campus X LINE Bot
+
+เริ่มใช้งานแบบเร็ว:
+1) พิมพ์ "เชื่อมบัญชี" เพื่อรับรหัส 6 หลัก
+2) ไปกรอกรหัสบนหน้าโปรไฟล์ในเว็บ
+3) พิมพ์ "สถานะ" เพื่อตรวจสอบผล
+
+ต้องการคู่มือทั้งหมด พิมพ์ "คู่มือ"
+ต้องการข้อความแบบโน้ตสำหรับเก็บไว้ พิมพ์ "โน้ต"`
+}
+
 async function getExchangeStatus(exchangeId: string): Promise<string | null> {
   const db = getAdminDb()
   const doc = await db.collection("exchanges").doc(exchangeId).get()
@@ -218,10 +320,7 @@ export async function POST(request: NextRequest) {
         const result = await sendReplyMessage(event.replyToken, [
           {
             type: "text",
-            text: `สวัสดี! 👋 ยินดีต้อนรับสู่ RMU-Campus X Notification
-
-📧 พิมพ์อีเมลของคุณเพื่อเชื่อมบัญชี
-(ตัวอย่าง: student@rmu.ac.th)`,
+            text: buildFollowWelcomeText(),
           },
         ])
         console.log("[LINE Webhook] Follow reply result:", result)
@@ -243,21 +342,29 @@ async function handleTextMessage(event: LineEvent) {
   const raw = (event.message?.text || "").replace(/^\uFEFF/, "").trim()
   const text = raw.normalize("NFC")
   const lineUserId = event.source.userId
+  const { lower, compact } = normalizeCommandText(text)
 
   try {
     // ========== แชท (ตรวจก่อนคำสั่งอื่น เพื่อให้จับ "แชท" ได้เสมอ) ==========
     const wantChat =
-      text === "แชท" ||
-      text.toLowerCase() === "chat" ||
-      /^แชท\s*$/.test(text) ||
-      (text.length <= 20 && text.includes("แชท") && !text.includes("@"))
+      isCommand(compact, CHAT_COMMANDS) ||
+      /^แชท\s*$/i.test(text) ||
+      (compact.length <= 20 && compact.includes("แชท") && !compact.includes("@"))
     if (wantChat) {
       try {
         console.log("[LINE Webhook] Chat command from:", lineUserId?.slice(0, 8), "text length:", text.length)
         const userId = await getUserIdByLineUserId(lineUserId)
         if (!userId) {
           await sendReplyMessage(event.replyToken, [
-            { type: "text", text: "❌ ยังไม่ได้เชื่อมบัญชี\n\n📧 พิมพ์อีเมล @rmu.ac.th เพื่อเชื่อมบัญชีก่อน" },
+            {
+              type: "text",
+              text: `❌ ยังไม่ได้เชื่อมบัญชี LINE
+
+วิธีเชื่อมบัญชี:
+1) พิมพ์ "เชื่อมบัญชี" เพื่อรับรหัส 6 หลัก
+2) ไปที่หน้าโปรไฟล์บนเว็บแล้วกรอกรหัส
+หรือพิมพ์อีเมล @rmu.ac.th เพื่อเชื่อมตรง`,
+            },
           ])
           return
         }
@@ -291,8 +398,28 @@ async function handleTextMessage(event: LineEvent) {
       return
     }
 
+    const wantHelp = isCommand(compact, HELP_COMMANDS) || hasKeyword(lower, ["คู่มือ", "วิธีใช้", "ช่วยเหลือ", "help"])
+    if (wantHelp) {
+      await sendReplyMessage(event.replyToken, [{ type: "text", text: buildHelpText() }])
+      return
+    }
+
+    const wantNote = isCommand(compact, NOTE_COMMANDS) || hasKeyword(lower, ["โน้ต", "note"])
+    if (wantNote) {
+      await sendReplyMessage(event.replyToken, [
+        { type: "text", text: buildUsageNoteText() },
+        {
+          type: "text",
+          text: `📌 หมายเหตุ: LINE Bot ไม่สามารถเขียน "โน้ต" ให้โดยอัตโนมัติได้
+คุณสามารถปักหมุดหรือคัดลอกข้อความนี้ไปเก็บในโน้ตได้ทันที`,
+        },
+      ])
+      return
+    }
+
     // เชื่อมบัญชีด้วยรหัส: สร้างรหัส 6 หลัก แล้วให้ผู้ใช้ไปกรอกบนเว็บ
-    if (text === "เชื่อมบัญชี" || text.toLowerCase() === "link") {
+    const wantLinkCode = isCommand(compact, LINK_COMMANDS) || hasKeyword(lower, ["เชื่อมบัญชี", "link account"])
+    if (wantLinkCode) {
       const db = getAdminDb()
       const linkCode = Math.floor(100000 + Math.random() * 900000).toString()
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 นาที
@@ -306,16 +433,31 @@ async function handleTextMessage(event: LineEvent) {
     }
 
     // Check if text looks like an email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (emailRegex.test(text)) {
+    if (EMAIL_REGEX.test(text)) {
+      const email = text.trim().toLowerCase()
+      if (!RMU_EMAIL_REGEX.test(email)) {
+        await sendReplyMessage(event.replyToken, [
+          {
+            type: "text",
+            text: `❌ รองรับเฉพาะอีเมล @rmu.ac.th
+
+อีเมลที่พิมพ์: ${email}
+ตัวอย่างที่ถูกต้อง: 6531xxxxxxx@rmu.ac.th
+
+ถ้าต้องการดูคำสั่งทั้งหมด พิมพ์ "คู่มือ"`,
+          },
+        ])
+        return
+      }
+
       // Find user by email
       let result: FirestoreQueryResult | null
       try {
-        result = await firestoreQueryOne("users", "email", text.trim().toLowerCase())
+        result = await firestoreQueryOne("users", "email", email)
       } catch (queryError) {
-        // Show the actual error to user for debugging
+        console.error("[LINE Webhook] Query user by email error:", queryError)
         await sendReplyMessage(event.replyToken, [
-          { type: "text", text: `❌ Query Error: ${String(queryError)}` },
+          { type: "text", text: "❌ ระบบค้นหาบัญชีมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้ง" },
         ])
         return
       }
@@ -325,12 +467,44 @@ async function handleTextMessage(event: LineEvent) {
         await sendReplyMessage(event.replyToken, [
           {
             type: "text",
-            text: `❌ ไม่พบบัญชีที่ใช้อีเมล "${text}"
+            text: `❌ ไม่พบบัญชีที่ใช้อีเมล "${email}"
 
-กรุณาตรวจสอบอีเมลให้ถูกต้อง หรือลงทะเบียนบนเว็บก่อน`,
+กรุณาตรวจสอบอีเมลให้ถูกต้อง หรือลงทะเบียนบนเว็บก่อน
+หากต้องการคู่มือ พิมพ์ "คู่มือ"`,
           },
         ])
         return
+      }
+
+      const targetLineUserId =
+        typeof result.data?.lineUserId === "string" && result.data.lineUserId.trim()
+          ? result.data.lineUserId.trim()
+          : null
+
+      if (targetLineUserId && targetLineUserId !== lineUserId) {
+        await sendReplyMessage(event.replyToken, [
+          {
+            type: "text",
+            text: `❌ อีเมลนี้เชื่อมกับ LINE อื่นอยู่แล้ว
+
+กรุณายกเลิกการเชื่อมจากบัญชีนั้นก่อน
+หรือลองพิมพ์ "เชื่อมบัญชี" แล้วกรอกรหัส 6 หลักบนเว็บแทน`,
+          },
+        ])
+        return
+      }
+
+      const currentLinkedUser = await firestoreQueryOne("users", "lineUserId", lineUserId)
+      if (currentLinkedUser && currentLinkedUser.id !== result.id) {
+        await firestoreUpdate(currentLinkedUser.path, {
+          lineUserId: null,
+          lineNotifications: {
+            enabled: false,
+            exchangeRequest: false,
+            exchangeStatus: false,
+            exchangeComplete: false,
+          },
+        })
       }
 
       const docPath = result.path
@@ -347,50 +521,82 @@ async function handleTextMessage(event: LineEvent) {
           },
         })
       } catch (updateError) {
+        console.error("[LINE Webhook] Link update error:", updateError)
         await sendReplyMessage(event.replyToken, [
-          { type: "text", text: `❌ Update Error: ${String(updateError)}` },
+          { type: "text", text: "❌ ระบบเชื่อมบัญชีขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง" },
         ])
         return
       }
 
+      await clearChatSession(lineUserId)
       await sendReplyMessage(event.replyToken, [
         {
           type: "text",
           text: `✅ เชื่อมบัญชีสำเร็จ!
 
-📧 ${text}
+📧 ${email}
 
-คุณจะได้รับการแจ้งเตือนผ่าน LINE แล้ว 🎉`,
+จากนี้คุณจะได้รับการแจ้งเตือนผ่าน LINE 🎉
+พิมพ์ "แชท" เพื่อคุยกับคู่แลกเปลี่ยนได้ทันที
+พิมพ์ "สถานะ" เพื่อตรวจสอบการเชื่อม`,
         },
       ])
       return
     }
 
     // Check status
-    if (text === "สถานะ" || text === "status") {
+    const wantStatus = isCommand(compact, STATUS_COMMANDS) || hasKeyword(lower, ["สถานะ", "status"])
+    if (wantStatus) {
       try {
         const result = await firestoreQueryOne("users", "lineUserId", lineUserId)
         
         if (!result) {
           await sendReplyMessage(event.replyToken, [
-            { type: "text", text: "❌ ยังไม่ได้เชื่อมบัญชี\n\n📧 พิมพ์อีเมลเพื่อเชื่อมบัญชี" },
+            {
+              type: "text",
+              text: `❌ ยังไม่ได้เชื่อมบัญชี LINE
+
+เริ่มเชื่อมได้ 2 วิธี:
+• พิมพ์ "เชื่อมบัญชี" เพื่อรับรหัส 6 หลัก
+• หรือพิมพ์อีเมล @rmu.ac.th โดยตรง`,
+            },
           ])
         } else {
           const email = (result.data?.email as string | undefined) || "ไม่ระบุ"
+          const settings = (result.data?.lineNotifications as {
+            enabled?: boolean
+            exchangeRequest?: boolean
+            exchangeStatus?: boolean
+            exchangeComplete?: boolean
+          }) || { enabled: true }
+          const enabled = settings.enabled !== false
           await sendReplyMessage(event.replyToken, [
-            { type: "text", text: `✅ เชื่อมบัญชีแล้ว\n\n📧 ${email}` },
+            {
+              type: "text",
+              text: `✅ เชื่อมบัญชีแล้ว
+
+📧 ${email}
+🔔 แจ้งเตือนรวม: ${enabled ? "เปิด" : "ปิด"}
+• คำขอแลกเปลี่ยน: ${settings.exchangeRequest === false ? "ปิด" : "เปิด"}
+• สถานะแลกเปลี่ยน: ${settings.exchangeStatus === false ? "ปิด" : "เปิด"}
+• แลกเปลี่ยนสำเร็จ: ${settings.exchangeComplete === false ? "ปิด" : "เปิด"}
+
+พิมพ์ "แชท" เพื่อเริ่มคุยกับคู่แลกเปลี่ยน`,
+            },
           ])
         }
       } catch (statusError) {
+        console.error("[LINE Webhook] Status error:", statusError)
         await sendReplyMessage(event.replyToken, [
-          { type: "text", text: `❌ Status Error: ${String(statusError)}` },
+          { type: "text", text: "❌ ตรวจสอบสถานะไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
         ])
       }
       return
     }
 
     // Unlink account
-    if (text === "ยกเลิก" || text === "unlink" || text === "ยกเลิกการเชื่อมต่อ") {
+    const wantUnlink = isCommand(compact, UNLINK_COMMANDS) || hasKeyword(lower, ["ยกเลิกการเชื่อม", "unlink", "disconnect"])
+    if (wantUnlink) {
       try {
         const result = await firestoreQueryOne("users", "lineUserId", lineUserId)
         
@@ -411,6 +617,7 @@ async function handleTextMessage(event: LineEvent) {
               exchangeComplete: false,
             },
           })
+          await clearChatSession(lineUserId)
           
           const email = (result.data?.email as string | undefined) || "บัญชี"
           await sendReplyMessage(event.replyToken, [
@@ -427,15 +634,16 @@ async function handleTextMessage(event: LineEvent) {
           ])
         }
       } catch (unlinkError) {
+        console.error("[LINE Webhook] Unlink error:", unlinkError)
         await sendReplyMessage(event.replyToken, [
-          { type: "text", text: `❌ Unlink Error: ${String(unlinkError)}` },
+          { type: "text", text: "❌ ยกเลิกการเชื่อมต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
         ])
       }
       return
     }
 
     // ออกจากโหมดแชท
-    if (text === "ออก" || text === "หยุดแชท" || text.toLowerCase() === "exit") {
+    if (isCommand(compact, EXIT_CHAT_COMMANDS)) {
       await clearChatSession(lineUserId)
       await sendReplyMessage(event.replyToken, [
         { type: "text", text: "ออกจากแชทแล้ว\n\nพิมพ์ \"แชท\" เมื่อต้องการแชทกับรายการอื่น" },
@@ -553,19 +761,16 @@ async function handleTextMessage(event: LineEvent) {
     await sendReplyMessage(event.replyToken, [
       {
         type: "text",
-        text: `📋 วิธีใช้งาน RMU-Campus X
+        text: `🤖 ไม่เข้าใจคำสั่ง "${text}"
 
-📧 พิมพ์อีเมล @rmu.ac.th เพื่อเชื่อมบัญชี
-🔗 "เชื่อมบัญชี" - ขอรหัสไปกรอกบนเว็บ
-💬 "แชท" - แชทกับคู่แลกเปลี่ยนผ่าน LINE (ไม่ต้องแอดเพื่อน)
-• "สถานะ" - ตรวจสอบสถานะ
-• "ยกเลิก" - ยกเลิกการเชื่อมต่อ`,
+พิมพ์ "คู่มือ" เพื่อดูวิธีใช้ทั้งหมด
+หรือพิมพ์ "โน้ต" เพื่อรับคู่มือแบบละเอียด`,
       },
     ])
   } catch (error) {
     console.error("[LINE Webhook] handleTextMessage error:", error)
     await sendReplyMessage(event.replyToken, [
-      { type: "text", text: `เกิดข้อผิดพลาด: ${String(error)}` },
+      { type: "text", text: "เกิดข้อผิดพลาดชั่วคราว กรุณาลองใหม่อีกครั้ง หรือพิมพ์ \"คู่มือ\"" },
     ])
   }
 }

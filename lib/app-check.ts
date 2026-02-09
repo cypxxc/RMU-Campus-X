@@ -1,12 +1,12 @@
 /**
  * Firebase App Check Configuration
- * Protects backend resources from abuse
- * 
- * Setup Instructions:
- * 1. Enable App Check in Firebase Console
- * 2. Register your app with reCAPTCHA v3 provider
- * 3. Set NEXT_PUBLIC_RECAPTCHA_SITE_KEY in environment
- * 4. Enforce App Check in Firebase Security Rules
+ * ป้องกัน Bot หรือเว็บอื่นแอบยิง API เข้า Firebase (ลดค่าใช้จ่ายและ abuse)
+ *
+ * วิธีเปิดใช้:
+ * 1. เปิด App Check ใน Firebase Console > App Check
+ * 2. ลงทะเบียนแอปด้วย reCAPTCHA v3 provider
+ * 3. ตั้งค่า NEXT_PUBLIC_RECAPTCHA_SITE_KEY ใน .env
+ * 4. เปิด Enforcement สำหรับ Firestore/Auth ใน Console ตามต้องการ
  */
 
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
@@ -45,7 +45,7 @@ export function initializeFirebaseAppCheck(): AppCheck | null {
       isTokenAutoRefreshEnabled: true,
     })
 
-    console.log('[App Check] Initialized successfully')
+    if (process.env.NODE_ENV === 'development') console.log('[App Check] Initialized successfully')
     return appCheck
   } catch (error) {
     console.error('[App Check] Initialization failed:', error)

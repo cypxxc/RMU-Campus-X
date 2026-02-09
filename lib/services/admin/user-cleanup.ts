@@ -1,6 +1,6 @@
 import { getAdminDb, getAdminAuth } from "@/lib/firebase-admin"
 import { cloudinary } from "@/lib/cloudinary"
-import { extractItemImagePublicIds } from "@/lib/services/items/cloudinary-utils"
+import { extractCloudinaryPublicId, extractItemImagePublicIds } from "@/lib/services/items/cloudinary-utils"
 
 export interface CleanupStats {
   deletedDocs: number
@@ -34,10 +34,8 @@ export async function collectUserResources(userId: string): Promise<CollectUserR
   if (userDoc.exists) {
     addRef(userDoc.ref)
     const data = userDoc.data()
-    if (data?.photoURL?.includes("cloudinary")) {
-        const matches = data.photoURL.match(/\/v\d+\/([^/]+)\./)
-        if (matches?.[1]) addImage(matches[1])
-    }
+    const avatarPublicId = extractCloudinaryPublicId(data?.photoURL)
+    if (avatarPublicId) addImage(avatarPublicId)
   }
 
   // 2. Items (ใช้ postedBy ตาม schema)

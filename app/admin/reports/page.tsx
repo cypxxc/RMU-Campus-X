@@ -4,8 +4,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import { checkIsAdmin, getDocById } from "@/lib/services/client-firestore"
 import { getReports, updateReportStatus } from "@/lib/firestore"
 import type { Report, ReportStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
@@ -119,45 +118,36 @@ export default function AdminReportsPage() {
       setLoading(true)
       const reportsData = await getReports()
       
-      // Fetch details for each report target
+      // Fetch details for each report target (Logic อยู่ใน client-firestore)
       const reportsWithDetails = await Promise.all(reportsData.map(async (report: ReportWithDetails) => {
         try {
-          const db = getFirebaseDb()
-          let targetData = null
-          
-          // Determine collection from targetType or reportType
           const targetType = report.targetType || (
             report.reportType === 'user_report' ? 'user' :
             report.reportType === 'item_report' ? 'item' :
             report.reportType === 'exchange_report' ? 'exchange' :
-            report.reportType === 'chat_report' ? 'exchange' : // chat uses exchange collection
+            report.reportType === 'chat_report' ? 'exchange' :
             null
           )
-          
+
+          let targetData: Record<string, unknown> | null = null
           if (targetType === 'user') {
-            const userDoc = await getDoc(doc(db, "users", report.targetId))
-            if (userDoc.exists()) targetData = userDoc.data()
+            targetData = await getDocById("users", report.targetId)
           } else if (targetType === 'item') {
-            const itemDoc = await getDoc(doc(db, "items", report.targetId))
-            if (itemDoc.exists()) targetData = itemDoc.data()
+            targetData = await getDocById("items", report.targetId)
           } else if (targetType === 'exchange' || targetType === 'chat') {
-            const exchangeDoc = await getDoc(doc(db, "exchanges", report.targetId))
-            if (exchangeDoc.exists()) {
-              const data = exchangeDoc.data()
-              // Use itemTitle as title for exchanges
-              targetData = { ...data, title: data.itemTitle || 'แชท/การแลกเปลี่ยน' }
+            const data = await getDocById("exchanges", report.targetId)
+            if (data) {
+              targetData = { ...data, title: (data.itemTitle as string) || 'แชท/การแลกเปลี่ยน' }
             }
           }
-          
-          // If still no targetData but we have targetTitle from report, use it
+
           if (!targetData && report.targetTitle) {
             targetData = { title: report.targetTitle, email: report.targetTitle }
           }
-          
+
           return { ...report, targetData }
         } catch (e) {
           console.error(`[AdminReports] Error fetching target for report ${report.id}:`, e)
-          // Use targetTitle as fallback
           if (report.targetTitle) {
             return { ...report, targetData: { title: report.targetTitle, email: report.targetTitle } }
           }
@@ -189,12 +179,8 @@ export default function AdminReportsPage() {
       if (!user) return
 
       try {
-        const db = getFirebaseDb()
-        const adminsRef = collection(db, "admins")
-        const q = query(adminsRef, where("email", "==", user.email))
-        const snapshot = await getDocs(q)
-
-        if (snapshot.empty) {
+        const isAdmin = await checkIsAdmin(user.email ?? undefined)
+        if (!isAdmin) {
           toast({
             title: "ไม่มีสิทธิ์เข้าถึง",
             description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",

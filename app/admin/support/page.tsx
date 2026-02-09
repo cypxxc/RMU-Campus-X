@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, query, where, getDocs, DocumentSnapshot } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import type { DocumentSnapshot } from "firebase/firestore"
+import { checkIsAdmin, getDocById } from "@/lib/services/client-firestore"
 import { replyToTicket, updateTicketStatus, getUserProfile, getSupportTickets } from "@/lib/firestore"
 import type { SupportTicket, User, SupportTicketStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
@@ -104,12 +104,8 @@ export default function AdminSupportPage() {
     if (!user) return
 
     try {
-      const db = getFirebaseDb()
-      const adminsRef = collection(db, "admins")
-      const q = query(adminsRef, where("email", "==", user.email))
-      const snapshot = await getDocs(q)
-
-      if (snapshot.empty) {
+      const isAdmin = await checkIsAdmin(user.email ?? undefined)
+      if (!isAdmin) {
         toast({
           title: "ไม่มีสิทธิ์เข้าถึง",
           description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
@@ -184,11 +180,9 @@ export default function AdminSupportPage() {
       await replyToTicket(selectedTicket.id, ticketReply.trim(), user.uid, user.email || "")
       setTicketReply("")
 
-      const db = getFirebaseDb()
-      const { doc, getDoc } = await import("firebase/firestore")
-      const ticketDoc = await getDoc(doc(db, "support_tickets", selectedTicket.id))
-      if (ticketDoc.exists()) {
-        const newData = { id: ticketDoc.id, ...ticketDoc.data() } as SupportTicket
+      const ticketData = await getDocById("support_tickets", selectedTicket.id)
+      if (ticketData) {
+        const newData = { id: selectedTicket.id, ...ticketData } as SupportTicket
         setSelectedTicket(newData)
       }
       refreshAll()

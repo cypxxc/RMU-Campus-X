@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, lazy, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import { createExchange, getUserProfile } from "@/lib/firestore"
 import type { Item, User, ItemStatus, ItemCategory } from "@/types"
@@ -23,10 +23,10 @@ import {
 } from "@/components/ui/dialog"
 import { HandHeart, X, Maximize2, Package, MapPin, Calendar, User as UserIcon, AlertTriangle, Info, CheckCircle2, Clock, Trash2, Pencil } from "lucide-react"
 import { formatPostedAt, safeToDate } from "@/lib/utils"
-import { getItemImageUrls } from "@/lib/cloudinary-url"
+import { getItemImageUrls, getItemImageUrlAt } from "@/lib/cloudinary-url"
 import Image from "next/image"
 import Link from "next/link"
-import { ReportModal } from "@/components/report-modal"
+const ReportModal = lazy(() => import("@/components/report-modal").then((m) => ({ default: m.ReportModal })))
 import { useAccountStatus } from "@/hooks/use-account-status"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 import { CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS, CATEGORY_OPTIONS, LOCATION_OPTIONS } from "@/lib/constants"
@@ -190,7 +190,8 @@ export function ItemDetailView({
 
   const allImages = getItemImageUrls(item)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-  const currentImage = allImages[selectedImageIndex] || null
+  // Responsive: w_1200 สำหรับรูปหลักบนเดสก์ท็อป ลด Bandwidth
+  const currentImage = getItemImageUrlAt(item, selectedImageIndex, { width: 1200 }) || allImages[selectedImageIndex] || null
 
   return (
     <div className={`w-full ${isModal ? "" : "container mx-auto px-4 py-6 sm:py-8 max-w-5xl"}`}>
@@ -209,7 +210,7 @@ export function ItemDetailView({
                   alt={item.title} 
                   fill 
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  unoptimized
+                  sizes="(max-width: 768px) 100vw, 50vw"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                   <Maximize2 className="text-white opacity-0 group-hover:opacity-100 transition-opacity h-10 w-10 drop-shadow-md" />
@@ -223,7 +224,7 @@ export function ItemDetailView({
           {/* Thumbnail Gallery */}
           {allImages.length > 1 && (
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {allImages.map((img: string, index: number) => (
+              {allImages.map((_img: string, index: number) => (
                 <button
                   key={index}
                   type="button"
@@ -234,7 +235,7 @@ export function ItemDetailView({
                       : 'border-border hover:border-primary/50'
                   }`}
                 >
-                  <Image src={img} alt={`รูปที่ ${index + 1}`} fill className="object-cover" unoptimized loading="lazy" />
+                  <Image src={getItemImageUrlAt(item, index, { width: 200 })} alt={`รูปที่ ${index + 1}`} fill className="object-cover" loading="lazy" sizes="64px" />
                 </button>
               ))}
             </div>
@@ -574,13 +575,15 @@ export function ItemDetailView({
 
       {/* Report Modal */}
       {item && (
-        <ReportModal
-          open={showReportModal}
-          onOpenChange={setShowReportModal}
-          reportType="item_report"
-          targetId={item.id}
-          targetTitle={item.title}
-        />
+        <Suspense fallback={null}>
+          <ReportModal
+            open={showReportModal}
+            onOpenChange={setShowReportModal}
+            reportType="item_report"
+            targetId={item.id}
+            targetTitle={item.title}
+          />
+        </Suspense>
       )}
     </div>
   )

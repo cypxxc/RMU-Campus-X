@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, query, where, getDocs } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -115,11 +114,8 @@ export default function AdminExchangesPage() {
   const checkAdmin = useCallback(async () => {
     if (!user) return
     try {
-      const db = getFirebaseDb()
-      const snapshot = await getDocs(
-        query(collection(db, "admins"), where("email", "==", user.email))
-      )
-      if (snapshot.empty) {
+      const isAdmin = await checkIsAdmin(user.email ?? undefined)
+      if (!isAdmin) {
         toast({ title: "ไม่มีสิทธิ์เข้าถึง", variant: "destructive" })
         router.push("/dashboard")
         return

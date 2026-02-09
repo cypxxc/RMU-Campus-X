@@ -11,10 +11,10 @@ export function SiteFooter() {
   const fromLanding = pathname === "/"
 
   const footerLinks = [
-    { href: "/guide", label: "คู่มือการใช้งาน", fromLanding: true },
-    { href: "/terms", label: "ข้อกำหนดการใช้งาน", fromLanding: false },
-    { href: "/privacy", label: "นโยบายความเป็นส่วนตัว", fromLanding: false },
-    { href: "/guidelines", label: "แนวทางชุมชน", fromLanding: false },
+    { href: "/guide", label: "คู่มือการใช้งาน" },
+    { href: "/terms", label: "ข้อกำหนดการใช้งาน" },
+    { href: "/privacy", label: "นโยบายความเป็นส่วนตัว" },
+    { href: "/guidelines", label: "แนวทางชุมชน" },
   ]
 
   return (
@@ -38,10 +38,10 @@ export function SiteFooter() {
 
           <nav aria-label="นโยบายและความปลอดภัย" className="space-y-2">
             <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm">
-              {footerLinks.map(({ href, label, fromLanding: useFromLanding }) => (
+              {footerLinks.map(({ href, label }) => (
                 <li key={href}>
                   <Link
-                    href={fromLanding && useFromLanding ? `${href}?from=landing` : href}
+                    href={fromLanding ? `${href}?from=landing` : href}
                     className="text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
                   >
                     {label}

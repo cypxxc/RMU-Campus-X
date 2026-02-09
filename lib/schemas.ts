@@ -3,6 +3,9 @@ import { sanitizeText } from "./security"
 
 // ============ User Schemas ============
 
+const CLOUDINARY_PUBLIC_ID_REGEX = /^rmu-exchange\/[a-zA-Z0-9/_-]+$/
+
+
 // User Profile Schema
 export const userProfileSchema = z.object({
   displayName: z
@@ -19,7 +22,14 @@ export const userProfileSchema = z.object({
     .string()
     .max(2000)
     .optional()
-    .refine((val) => val === undefined || val === "" || /^https?:\/\//.test(val ?? ""), "รูปโปรไฟล์ต้องเป็น URL ที่ถูกต้อง"),
+    .refine(
+      (val) =>
+        val === undefined ||
+        val === "" ||
+        /^https?:\/\//.test(val ?? "") ||
+        CLOUDINARY_PUBLIC_ID_REGEX.test(val ?? ""),
+      "รูปโปรไฟล์ต้องเป็น URL ที่ถูกต้อง หรือ Cloudinary public_id"
+    ),
   phoneNumber: z
     .string()
     .regex(/^0[0-9]{9}$/, "เบอร์โทรศัพท์ไม่ถูกต้อง (ต้องเป็นตัวเลข 10 หลัก เริ่มต้นด้วย 0)")
@@ -231,3 +241,4 @@ export type UpdateUserStatusInput = z.infer<typeof updateUserStatusSchema>
 export type IssueWarningInput = z.infer<typeof issueWarningSchema>
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type CreateSupportTicketInput = z.infer<typeof createSupportTicketSchema>
+

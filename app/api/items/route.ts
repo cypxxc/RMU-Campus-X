@@ -12,6 +12,7 @@ import { FieldValue } from "firebase-admin/firestore"
 import { itemsCollection, usersCollection } from "@/lib/db/collections"
 import { itemSchema, itemStatusSchema } from "@/lib/schemas"
 import { generateKeywords, refineItemsBySearchTerms } from "@/lib/db/items-helpers"
+import { parseItemFromFirestore } from "@/lib/schemas-firestore"
 import type { Item } from "@/types"
 
 const createItemSchema = itemSchema.extend({
@@ -134,7 +135,9 @@ export async function GET(request: NextRequest) {
     }
 
     const snapshot = await q.get()
-    let items: Item[] = snapshot.docs.map((d) => d.data() as Item)
+    let items: Item[] = snapshot.docs
+      .map((d) => parseItemFromFirestore(d.id, d.data()))
+      .filter((x): x is Item => x !== null)
 
     if (searchTerms.length > 0) {
       items = refineItemsBySearchTerms(items, searchTerms)
@@ -175,7 +178,16 @@ export async function GET(request: NextRequest) {
       totalCount,
     })
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const isDev = process.env.NODE_ENV === "development"
     console.error("[Items API] GET Error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+        ...(isDev && { detail: message, code: error instanceof Error ? (error as { code?: string }).code : undefined }),
+      },
+      { status: 500 }
+    )
   }
 }

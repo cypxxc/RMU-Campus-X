@@ -83,6 +83,11 @@ export const getItems = async (
 }
 
 export const getItemById = async (id: string): Promise<ApiResponse<Item | null>> => {
+  const timeoutMs =
+    process.env.NODE_ENV === "development"
+      ? TIMEOUT_CONFIG.HEAVY
+      : TIMEOUT_CONFIG.STANDARD
+
   return apiCall(
     async () => {
       try {
@@ -95,7 +100,7 @@ export const getItemById = async (id: string): Promise<ApiResponse<Item | null>>
       }
     },
     "getItemById",
-    TIMEOUT_CONFIG.QUICK
+    timeoutMs
   )
 }
 

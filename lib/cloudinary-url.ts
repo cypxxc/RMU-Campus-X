@@ -76,10 +76,14 @@ export function getCloudinarySrcSet(publicId: string): string {
  * Resolve a single image reference to display URL.
  * Accepts either public_id or legacy full Cloudinary URL.
  * Injects f_auto,q_auto for legacy URLs เพื่อให้ได้ auto-optimization เหมือนกัน
+ * ถ้าระบุ width (และ ref เป็น public_id) ใช้ responsive width ลด Bandwidth
  */
-export function resolveImageUrl(ref: string | undefined | null): string {
+export function resolveImageUrl(
+  ref: string | undefined | null,
+  options?: CloudinaryTransformOptions
+): string {
   if (!ref || typeof ref !== "string") return ""
-  // Legacy: full Cloudinary URL - inject f_auto,q_auto ก่อน public_id
+  // Legacy: full Cloudinary URL - inject f_auto,q_auto ก่อน public_id (options.width ไม่ใช้กับ legacy URL)
   if (ref.startsWith("https://res.cloudinary.com/") || ref.startsWith("http://res.cloudinary.com/")) {
     const match = ref.match(/^((?:https?:)?\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)/)
     const prefix = match?.[1]
@@ -88,8 +92,8 @@ export function resolveImageUrl(ref: string | undefined | null): string {
     }
     return ref
   }
-  // New: public_id
-  return getCloudinaryUrl(ref)
+  // New: public_id — ใช้ width ได้
+  return getCloudinaryUrl(ref, options)
 }
 
 /**
@@ -102,7 +106,7 @@ export function getItemImageUrls(item: {
   imageUrl?: string
 }): string[] {
   if (item.imagePublicIds && item.imagePublicIds.length > 0) {
-    return item.imagePublicIds.map(resolveImageUrl).filter(Boolean)
+    return item.imagePublicIds.map((id) => resolveImageUrl(id)).filter(Boolean)
   }
   const urls = item.imageUrls ?? []
   const legacy = item.imageUrl ? [item.imageUrl] : []
@@ -110,13 +114,48 @@ export function getItemImageUrls(item: {
 }
 
 /**
- * Get primary (first) image URL for thumbnail/card display
+ * Get image URL at index with optional width (responsive).
+ * ใช้ width สำหรับ public_id: w_200 สำหรับ thumb, w_1200 สำหรับหน้าคอม
  */
-export function getItemPrimaryImageUrl(item: {
-  imagePublicIds?: string[]
-  imageUrls?: string[]
-  imageUrl?: string
-}): string {
+export function getItemImageUrlAt(
+  item: {
+    imagePublicIds?: string[]
+    imageUrls?: string[]
+    imageUrl?: string
+  },
+  index: number,
+  options?: CloudinaryTransformOptions
+): string {
+  const publicId = item.imagePublicIds?.[index]
+  if (publicId && !publicId.startsWith("http")) {
+    return getCloudinaryUrl(publicId, options)
+  }
+  const urls = getItemImageUrls(item)
+  return urls[index] ?? ""
+}
+
+/** Options for primary/thumbnail image URL (responsive width) */
+export interface ItemImageUrlOptions {
+  /** ความกว้างเป้าหมาย (px) — ใช้ w_400 สำหรับการ์ด/มือถือ, w_1200 สำหรับเดสก์ท็อป */
+  width?: number
+}
+
+/**
+ * Get primary (first) image URL for thumbnail/card display.
+ * ใช้ width เพื่อลด Bandwidth: w_400 สำหรับการ์ดบนมือถือ, w_1200 สำหรับหน้าคอมพิวเตอร์
+ */
+export function getItemPrimaryImageUrl(
+  item: {
+    imagePublicIds?: string[]
+    imageUrls?: string[]
+    imageUrl?: string
+  },
+  options?: ItemImageUrlOptions
+): string {
+  const publicId = item.imagePublicIds?.[0]
+  if (publicId && !publicId.startsWith("http")) {
+    return getCloudinaryUrl(publicId, { width: options?.width })
+  }
   const urls = getItemImageUrls(item)
   return urls[0] ?? ""
 }

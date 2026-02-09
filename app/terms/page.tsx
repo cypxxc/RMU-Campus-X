@@ -1,5 +1,5 @@
 import { ShieldCheck, UserCheck, Ban, MessageSquareWarning, Scale, Gavel, FileText, ShieldAlert, UserX } from "lucide-react"
-import { SUPPORT_MAILTO } from "@/lib/constants"
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/constants"
 
 const TERMS_LAST_UPDATED = "4 กุมภาพันธ์ 2568"
 
@@ -133,8 +133,8 @@ export default function TermsPage() {
             <p>ทางผู้ให้บริการ (ผู้พัฒนา) ขอสงวนสิทธิ์:</p>
             <ul className="list-disc list-outside ml-4 space-y-1">
               <li><strong className="text-foreground">ออกคำเตือน</strong> — บันทึกเหตุผลและจำนวนคำเตือนสะสม ผู้ใช้ยังใช้งานได้ตามปกติ แต่จะเห็นข้อความแจ้งเตือนในระบบ และหากได้รับคำเตือนซ้ำอาจถูกระงับหรือแบนในขั้นถัดไป</li>
-              <li><strong className="text-foreground">ระงับบัญชีชั่วคราว</strong> — ผู้ใช้ยังล็อกอินได้ แต่จะไม่สามารถโพสต์ของ ขอแลกเปลี่ยน หรือแชทได้จนครบกำหนด ระบบจะแสดงวันที่ปลดระงับและปุ่มติดต่อทีมสนับสนุน หากต้องการติดต่อเพิ่มเติม ส่งอีเมลได้ที่ <a href={SUPPORT_MAILTO} className="text-primary hover:underline">Support</a></li>
-              <li><strong className="text-foreground">แบนถาวร</strong> — ผู้ใช้จะไม่สามารถเข้าสู่ระบบได้อีก ระบบจะแสดงเหตุผลและแนะนำให้ติดต่อทีมสนับสนุน หากคิดว่าเป็นข้อผิดพลาด กรุณาส่งอีเมลติดต่อที่ <a href={SUPPORT_MAILTO} className="text-primary hover:underline">Support</a></li>
+              <li><strong className="text-foreground">ระงับบัญชีชั่วคราว</strong> — ผู้ใช้ยังล็อกอินได้ แต่จะไม่สามารถโพสต์ของ ขอแลกเปลี่ยน หรือแชทได้จนครบกำหนด ระบบจะแสดงวันที่ปลดระงับและปุ่มติดต่อทีมสนับสนุน หากต้องการติดต่อเพิ่มเติม ส่งอีเมลได้ที่ <a href={SUPPORT_MAILTO} className="text-primary hover:underline">{SUPPORT_EMAIL}</a></li>
+              <li><strong className="text-foreground">แบนถาวร</strong> — ผู้ใช้จะไม่สามารถเข้าสู่ระบบได้อีก ระบบจะแสดงเหตุผลและแนะนำให้ติดต่อทีมสนับสนุน หากคิดว่าเป็นข้อผิดพลาด กรุณาส่งอีเมลติดต่อที่ <a href={SUPPORT_MAILTO} className="text-primary hover:underline">{SUPPORT_EMAIL}</a></li>
               <li>ท่านสามารถยกเลิกบัญชีของท่านได้ผ่านการตั้งค่าในระบบ (ตามฟีเจอร์ที่ระบบรองรับ)</li>
             </ul>
           </div>
