@@ -7,6 +7,7 @@ import { use } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import {
+  subscribeToExchange,
   subscribeToChatMessages,
   subscribeToChatTyping,
   setChatTyping,
@@ -114,6 +115,30 @@ export default function ChatPage({
 
   // Real-time: ใช้ onSnapshot เฉพาะจุดที่จำเป็น (แชท + typing) — Logic อยู่ใน client-firestore
   const MESSAGE_PAGE_SIZE = 50
+  useEffect(() => {
+    if (!user?.uid || !exchangeId) return
+
+    const unsub = subscribeToExchange(
+      exchangeId,
+      (nextExchange) => {
+        if (!mountedRef.current) return
+        if (!nextExchange) {
+          toast({ title: "Exchange not found", variant: "destructive" })
+          router.push("/dashboard")
+          return
+        }
+        setExchange({ ...nextExchange, id: nextExchange.id ?? exchangeId } as Exchange)
+      },
+      () => {
+        if (mountedRef.current) {
+          toast({ title: "Realtime status sync failed", variant: "destructive" })
+        }
+      }
+    )
+
+    return unsub
+  }, [exchangeId, user?.uid, toast, router])
+
   useEffect(() => {
     if (!user || !exchangeId) return
     const unsub = subscribeToChatMessages(
