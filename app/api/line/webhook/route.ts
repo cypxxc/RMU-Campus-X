@@ -4,7 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { verifySignature, sendReplyMessage, sendLinkCodeMessage, sendPushMessage } from "@/lib/line"
+import {
+  verifySignature,
+  sendReplyMessage,
+  sendLinkCodeMessage,
+  sendPushMessage,
+  applyDefaultRichMenuToUser,
+  removeRichMenuFromUser,
+} from "@/lib/line"
 import { getAdminDb } from "@/lib/firebase-admin"
 import { FieldValue, Timestamp } from "firebase-admin/firestore"
 
@@ -528,6 +535,11 @@ async function handleTextMessage(event: LineEvent) {
         return
       }
 
+      const richMenuResult = await applyDefaultRichMenuToUser(lineUserId)
+      if (!richMenuResult.success && !richMenuResult.skipped) {
+        console.warn("[LINE Webhook] Failed to apply default rich menu:", richMenuResult.error)
+      }
+
       await clearChatSession(lineUserId)
       await sendReplyMessage(event.replyToken, [
         {
@@ -617,6 +629,12 @@ async function handleTextMessage(event: LineEvent) {
               exchangeComplete: false,
             },
           })
+
+          const removeRichMenuResult = await removeRichMenuFromUser(lineUserId)
+          if (!removeRichMenuResult.success) {
+            console.warn("[LINE Webhook] Failed to remove user rich menu:", removeRichMenuResult.error)
+          }
+
           await clearChatSession(lineUserId)
           
           const email = (result.data?.email as string | undefined) || "บัญชี"
