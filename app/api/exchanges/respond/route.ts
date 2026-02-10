@@ -1,9 +1,7 @@
 /**
  * Respond to Exchange API
- * Handles Accept/Reject actions for exchanges
- * Enforces atomic state transitions and item unlocking
- * 
- * ✅ Uses withValidation wrapper + Exchange State Machine
+ * Owner accepts/rejects a pending exchange.
+ * Phase flow: pending -> in_progress -> completed
  */
 
 import { NextResponse } from "next/server"
@@ -14,10 +12,6 @@ import { respondExchangeSchema } from "@/lib/schemas"
 import { validateTransition } from "@/lib/exchange-state-machine"
 import type { ExchangeStatus } from "@/types"
 
-/**
- * POST /api/exchanges/respond
- * Accept or reject an exchange request
- */
 export const POST = withValidation(
   respondExchangeSchema,
   async (_request, data, ctx: ValidationContext | null) => {
@@ -35,7 +29,6 @@ export const POST = withValidation(
       const db = getAdminDb()
 
       await db.runTransaction(async (transaction) => {
-        // 1. Get Exchange
         const exchangeRef = db.collection("exchanges").doc(exchangeId)
         const exchangeDoc = await transaction.get(exchangeRef)
 
@@ -45,14 +38,12 @@ export const POST = withValidation(
 
         const exchangeData = exchangeDoc.data()
         const currentStatus = exchangeData?.status as ExchangeStatus
-        
-        // Ownership Check
+
         if (exchangeData?.ownerId !== userId) {
           throw new Error("เฉพาะเจ้าของสิ่งของเท่านั้นที่สามารถตอบรับ/ปฏิเสธได้")
         }
 
-        // State machine validation
-        const newStatus: ExchangeStatus = action === 'accept' ? 'accepted' : 'rejected'
+        const newStatus: ExchangeStatus = action === "accept" ? "in_progress" : "rejected"
         const transitionError = validateTransition(currentStatus, newStatus)
         if (transitionError) {
           throw new Error(transitionError)
@@ -60,41 +51,39 @@ export const POST = withValidation(
 
         const itemId = exchangeData?.itemId
 
-        // 2. Perform Action
-        if (action === 'accept') {
+        if (action === "accept") {
           transaction.update(exchangeRef, {
-            status: 'accepted',
-            updatedAt: FieldValue.serverTimestamp()
+            status: "in_progress",
+            ownerConfirmed: false,
+            requesterConfirmed: false,
+            updatedAt: FieldValue.serverTimestamp(),
           })
-        } else if (action === 'reject') {
-          transaction.update(exchangeRef, {
-            status: 'rejected',
-            updatedAt: FieldValue.serverTimestamp()
-          })
-
-          // Unlock item
-          const itemRef = db.collection("items").doc(itemId)
-          transaction.update(itemRef, {
-            status: 'available',
-            updatedAt: FieldValue.serverTimestamp()
-          })
+          return
         }
+
+        transaction.update(exchangeRef, {
+          status: "rejected",
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+
+        const itemRef = db.collection("items").doc(itemId)
+        transaction.update(itemRef, {
+          status: "available",
+          updatedAt: FieldValue.serverTimestamp(),
+        })
       })
 
-      // Notify Requester (fire and forget)
-      notifyRequester(exchangeId, action).catch(err => {
+      notifyRequester(exchangeId, action).catch((err) => {
         console.error("[RespondExchange] Notification error:", err)
       })
 
       return NextResponse.json({
         success: true,
-        data: { action }
+        data: { action },
       })
-
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error"
-      
-      // Check for specific errors
+
       if (message.includes("ไม่พบ") || message.includes("not found")) {
         return NextResponse.json(
           { error: message, code: "NOT_FOUND" },
@@ -124,26 +113,26 @@ export const POST = withValidation(
   { requireAuth: true, requireTermsAccepted: true }
 )
 
-// Helper: Notify requester about the response
 async function notifyRequester(exchangeId: string, action: "accept" | "reject"): Promise<void> {
   const db = getAdminDb()
   const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
   const data = exchangeSnap.data()
-  
+
   if (!data) return
 
-  const title = action === 'accept' ? 'คำขอได้รับการตอบรับ' : 'คำขอถูกปฏิเสธ'
-  const message = action === 'accept' 
-    ? `เจ้าของสิ่งของ "${data.itemTitle}" ได้ตอบรับคำขอของคุณแล้ว`
-    : `เจ้าของสิ่งของ "${data.itemTitle}" ได้ปฏิเสธคำขอของคุณ`
-  
+  const title = action === "accept" ? "เริ่มดำเนินการแล้ว" : "คำขอถูกปฏิเสธ"
+  const message =
+    action === "accept"
+      ? `เจ้าของสิ่งของ "${data.itemTitle}" ได้เริ่มดำเนินการแล้ว`
+      : `เจ้าของสิ่งของ "${data.itemTitle}" ได้ปฏิเสธคำขอของคุณ`
+
   await db.collection("notifications").add({
     userId: data.requesterId,
     title,
     message,
-    type: 'exchange',
+    type: "exchange",
     relatedId: exchangeId,
     isRead: false,
-    createdAt: FieldValue.serverTimestamp()
+    createdAt: FieldValue.serverTimestamp(),
   })
 }

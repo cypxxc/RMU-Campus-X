@@ -74,6 +74,12 @@ export const POST = withValidation(
 
         let newStatus: ExchangeStatus = exchange.status;
 
+        // Legacy compatibility: old "accepted" records should be treated as in_progress
+        if (exchange.status === "accepted") {
+          newStatus = "in_progress";
+          updates.status = "in_progress";
+        }
+
         if (ownerConfirmed && requesterConfirmed) {
           newStatus = "completed";
           updates.status = "completed";

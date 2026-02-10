@@ -45,7 +45,11 @@ const ReportModal = lazy(() => import("@/components/report-modal").then((m) => (
 const ReviewModal = lazy(() => import("@/components/review-modal").then((m) => ({ default: m.ReviewModal })))
 import { checkExchangeReviewed } from "@/lib/db/reviews"
 import { Star } from "lucide-react"
-import { getConfirmButtonLabel, getWaitingOtherConfirmationMessage } from "@/lib/exchange-state-machine"
+import {
+  getConfirmButtonLabel,
+  getWaitingOtherConfirmationMessage,
+  normalizeExchangePhaseStatus,
+} from "@/lib/exchange-state-machine"
 import { getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
 import { ExchangeStepIndicator } from "@/components/exchange/exchange-step-indicator"
 
@@ -422,7 +426,8 @@ export default function ChatPage({
 
   const handleConfirm = async (role: "owner" | "requester") => {
     if (!exchange) return
-    if (exchange.status !== "accepted" && exchange.status !== "in_progress") {
+    const phaseStatus = normalizeExchangePhaseStatus(exchange.status)
+    if (phaseStatus !== "in_progress") {
       toast({
         title: "ไม่สามารถยืนยันได้",
         description: "การแลกเปลี่ยนต้องได้รับการตอบรับจากเจ้าของก่อน จึงจะกดยืนยันได้",
@@ -512,6 +517,7 @@ export default function ChatPage({
 
   if (!exchange) return null
 
+  const phaseStatus = normalizeExchangePhaseStatus(exchange.status)
   const isOwner = user?.uid === exchange.ownerId
   const otherUserId = isOwner ? exchange.requesterId : exchange.ownerId
   const hasConfirmed = isOwner ? exchange.ownerConfirmed : exchange.requesterConfirmed
@@ -597,7 +603,7 @@ export default function ChatPage({
                     )}
                   </div>
                 )}
-                {exchange.status === "pending" && (
+                {phaseStatus === "pending" && (
                   isOwner ? (
                     <div className="flex items-center gap-2">
                       <Button
@@ -626,14 +632,14 @@ export default function ChatPage({
                     </div>
                   )
                 )}
-                {(exchange.status === "accepted" || exchange.status === "in_progress") && (
+                {phaseStatus === "in_progress" && (
                   <>
                     {!hasConfirmed && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button size="sm" className="h-9 font-bold bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md transition-all">
                             <CheckCheck className="h-4 w-4 mr-2" />
-                            {getConfirmButtonLabel(exchange.status, isOwner ? "owner" : "requester")}
+                            {getConfirmButtonLabel(phaseStatus, isOwner ? "owner" : "requester")}
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent className="max-w-md">
@@ -644,7 +650,7 @@ export default function ChatPage({
                               </div>
                               <div>
                                 <AlertDialogTitle>
-                                  {getConfirmButtonLabel(exchange.status, isOwner ? "owner" : "requester")}
+                                  {getConfirmButtonLabel(phaseStatus, isOwner ? "owner" : "requester")}
                                 </AlertDialogTitle>
                                 <AlertDialogDescription className="space-y-1">
                                   <span>
@@ -670,7 +676,7 @@ export default function ChatPage({
                               className="bg-green-600 hover:bg-green-700 font-bold"
                             >
                               <CheckCheck className="h-4 w-4 mr-2" />
-                              {getConfirmButtonLabel(exchange.status, isOwner ? "owner" : "requester")}
+                              {getConfirmButtonLabel(phaseStatus, isOwner ? "owner" : "requester")}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -690,7 +696,7 @@ export default function ChatPage({
             {exchange.status !== "cancelled" && exchange.status !== "rejected" && (
               <div className="mt-3 pt-3 border-t border-border/50">
                 <ExchangeStepIndicator
-                  status={exchange.status}
+                  status={phaseStatus}
                   ownerConfirmed={exchange.ownerConfirmed}
                   requesterConfirmed={exchange.requesterConfirmed}
                 />

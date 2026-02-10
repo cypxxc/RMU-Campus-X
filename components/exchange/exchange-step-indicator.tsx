@@ -2,18 +2,18 @@
 
 import { Check } from "lucide-react"
 import type { ExchangeStatus } from "@/types"
+import { normalizeExchangePhaseStatus } from "@/lib/exchange-state-machine"
 
 const STEPS: { status: ExchangeStatus; label: string }[] = [
   { status: "pending", label: "รอตอบรับ" },
-  { status: "accepted", label: "ตอบรับแล้ว" },
   { status: "in_progress", label: "กำลังดำเนินการ" },
   { status: "completed", label: "เสร็จสิ้น" },
 ]
 
-const STEP_ORDER: ExchangeStatus[] = ["pending", "accepted", "in_progress", "completed"]
+const STEP_ORDER: ExchangeStatus[] = ["pending", "in_progress", "completed"]
 
-function stepIndex(s: ExchangeStatus): number {
-  const i = STEP_ORDER.indexOf(s)
+function stepIndex(status: ExchangeStatus): number {
+  const i = STEP_ORDER.indexOf(normalizeExchangePhaseStatus(status))
   return i >= 0 ? i : 0
 }
 
@@ -24,16 +24,19 @@ interface ExchangeStepIndicatorProps {
   className?: string
 }
 
-/** แสดงขั้นตอนการแลกเปลี่ยนแบบ step-by-step */
 export function ExchangeStepIndicator({
   status,
   ownerConfirmed = false,
   requesterConfirmed = false,
   className = "",
 }: ExchangeStepIndicatorProps) {
-  const currentIdx = stepIndex(status)
-  const isCompleted = status === "completed"
-  const waitingOther = (status === "accepted" || status === "in_progress") && (ownerConfirmed || requesterConfirmed) && !isCompleted
+  const effectiveStatus = normalizeExchangePhaseStatus(status)
+  const currentIdx = stepIndex(effectiveStatus)
+  const isCompleted = effectiveStatus === "completed"
+  const waitingOther =
+    effectiveStatus === "in_progress" &&
+    (ownerConfirmed || requesterConfirmed) &&
+    !isCompleted
 
   return (
     <div className={`flex items-center gap-1 sm:gap-2 ${className}`} role="list" aria-label="ขั้นตอนการแลกเปลี่ยน">
