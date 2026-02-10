@@ -7,7 +7,7 @@ import { resendVerificationEmail, applyEmailVerificationCode, EMAIL_VERIFICATION
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Mail, RefreshCw, Loader2, Lightbulb } from "lucide-react"
+import { Mail, RefreshCw, Loader2, Lightbulb, ExternalLink } from "lucide-react"
 import dynamic from "next/dynamic"
 
 // Dynamic import for Three.js - loads only when needed
@@ -196,6 +196,12 @@ export default function VerifyEmailPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <Button asChild variant="outline" className="w-full bg-transparent">
+                    <a href="https://mail.google.com" target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      เปิด Gmail
+                    </a>
+                  </Button>
                   <Button onClick={handleCheckVerification} className="w-full" disabled={checking}>
                     <RefreshCw className="mr-2 h-4 w-4" />
                     {checking ? "กำลังตรวจสอบ..." : "ตรวจสอบการยืนยัน"}
