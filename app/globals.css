@@ -57,7 +57,9 @@
 
   /* Muted */
   --muted: oklch(0.96 0.02 145);
-  --muted-foreground: oklch(0.42 0.04 260); /* Darkened for WCAG AA contrast ≥4.5:1 on background */
+  --muted-foreground: oklch(
+    0.42 0.04 260
+  ); /* Darkened for WCAG AA contrast ≥4.5:1 on background */
 
   /* Accent - โทนแดงอ่อน (แดง) */
   --accent: oklch(0.94 0.05 25);
@@ -134,7 +136,9 @@
 
   /* Muted - Dark Gray/Blue */
   --muted: oklch(0.25 0.03 260);
-  --muted-foreground: oklch(0.72 0.05 260); /* Lightened for WCAG AA contrast on dark background */
+  --muted-foreground: oklch(
+    0.72 0.05 260
+  ); /* Lightened for WCAG AA contrast on dark background */
 
   /* Accent - Subtle Blue Highlight */
   --accent: oklch(0.25 0.08 260);
@@ -180,12 +184,14 @@
 
 /* Custom shadows for dark mode */
 .dark .shadow-soft {
-  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.4),
+  box-shadow:
+    0 2px 8px -2px rgba(0, 0, 0, 0.4),
     0 4px 16px -4px rgba(0, 0, 0, 0.3);
 }
 
 .dark .shadow-soft-lg {
-  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.5),
+  box-shadow:
+    0 4px 16px -4px rgba(0, 0, 0, 0.5),
     0 8px 32px -8px rgba(0, 0, 0, 0.4);
 }
 
@@ -245,6 +251,7 @@
 @layer base {
   /* Smooth scrolling with stable gutter to prevent layout shifts */
   html {
+    font-size: 18px;
     scroll-behavior: smooth;
     scrollbar-gutter: stable;
     /* Hide scrollbar but keep scroll functionality */
@@ -553,12 +560,14 @@
 
 /* Subtle shadows */
 .shadow-soft {
-  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.08),
+  box-shadow:
+    0 2px 8px -2px rgba(0, 0, 0, 0.08),
     0 4px 16px -4px rgba(0, 0, 0, 0.05);
 }
 
 .shadow-soft-lg {
-  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.1),
+  box-shadow:
+    0 4px 16px -4px rgba(0, 0, 0, 0.1),
     0 8px 32px -8px rgba(0, 0, 0, 0.08);
 }
 

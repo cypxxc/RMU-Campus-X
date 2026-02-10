@@ -30,6 +30,15 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // Auth bootstrap endpoint is called frequently during login/register flow.
+  // Skip rate-limit overhead here to reduce perceived auth latency.
+  if (pathname === '/api/users/me' && request.method.toUpperCase() === 'GET') {
+    const response = NextResponse.next()
+    response.headers.set('X-Request-Id', requestId)
+    response.headers.set('X-RateLimit-Skipped', 'users-me')
+    return response
+  }
+
   const method = request.method.toUpperCase()
   const skipRateLimitMethod = method === 'HEAD' || method === 'OPTIONS'
   if (skipRateLimitMethod) {

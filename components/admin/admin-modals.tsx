@@ -9,8 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Checkbox } from "@/components/ui/checkbox"
-import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, Loader2, User, X, BellOff, ExternalLink, Calendar, Package, RefreshCw, FileText, Trash2 } from "lucide-react"
+import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, Loader2, User, X, ExternalLink, Calendar, Package, RefreshCw, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/components/language-provider"
 import Link from "next/link"
@@ -307,9 +306,8 @@ interface UserDetailModalProps {
   user: any
   userDetail?: UserDetailExtra | null
   warnings?: Warning[]
-  notifications?: AdminUserNotificationItem[]
-  deletingNotifications?: boolean
-  onDeleteSelectedNotifications?: (notificationIds: string[]) => void
+  deletingWarningId?: string | null
+  onDeleteWarning?: (warningId: string) => void
   onAction: (type: ActionType) => void
   getStatusBadge: (user: any) => React.ReactNode
   formatDate?: (date: any) => string
@@ -333,43 +331,14 @@ export function UserDetailModal({
   user,
   userDetail = null,
   warnings = [],
-  notifications = [],
-  deletingNotifications = false,
-  onDeleteSelectedNotifications,
+  deletingWarningId = null,
+  onDeleteWarning,
   onAction,
   getStatusBadge,
   formatDate,
 }: UserDetailModalProps) {
   const uid = user?.uid
   const { locale, tt } = useI18n()
-  const [selectedNotificationIds, setSelectedNotificationIds] = React.useState<string[]>([])
-
-  React.useEffect(() => {
-    if (!open) {
-      setSelectedNotificationIds([])
-      return
-    }
-    const availableIds = new Set(notifications.map((n) => n.id))
-    setSelectedNotificationIds((prev) => prev.filter((id) => availableIds.has(id)))
-  }, [open, notifications])
-
-  const allNotificationsSelected =
-    notifications.length > 0 && selectedNotificationIds.length === notifications.length
-
-  const handleToggleNotification = (id: string, checked: boolean) => {
-    setSelectedNotificationIds((prev) =>
-      checked ? Array.from(new Set([...prev, id])) : prev.filter((x) => x !== id)
-    )
-  }
-
-  const handleToggleAllNotifications = () => {
-    setSelectedNotificationIds(allNotificationsSelected ? [] : notifications.map((n) => n.id))
-  }
-
-  const handleDeleteSelected = () => {
-    if (!onDeleteSelectedNotifications || selectedNotificationIds.length === 0) return
-    onDeleteSelectedNotifications(selectedNotificationIds)
-  }
 
   return (
     <UnifiedModal
@@ -549,14 +518,6 @@ export function UserDetailModal({
               >
                 {stats.reportsReceived}
               </p>
-              {stats.reportsReceived > 0 && uid && (
-                <Button variant="ghost" size="sm" className="mt-2 h-8 gap-1.5 text-primary" asChild>
-                  <Link href={`/admin/reports?reportedUserId=${uid}`} target="_blank" rel="noopener noreferrer">
-                    <FileText className="h-4 w-4" />
-                    {tt("ดูรายงานที่ถูกรายงาน", "View related reports")}
-                  </Link>
-                </Button>
-              )}
             </Card>
             <Card className="p-4 text-center bg-card border hover:shadow-md transition-shadow">
               <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
@@ -597,9 +558,39 @@ export function UserDetailModal({
                         >
                           {warning.action}
                         </Badge>
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {formatDate && formatDate(warning.issuedAt)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {formatDate && formatDate(warning.issuedAt)}
+                          </span>
+                          {warning.action === "WARNING" && onDeleteWarning && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1.5 border-destructive/40 px-2 text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => onDeleteWarning(warning.id)}
+                              disabled={deletingWarningId === warning.id}
+                              aria-label={tt("ลบคำเตือนนี้", "Delete this warning")}
+                            >
+                              {deletingWarningId === warning.id ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  {tt("กำลังลบ", "Deleting")}
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  {tt("ลบคำเตือน", "Delete warning")}
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          {warning.action !== "WARNING" && onDeleteWarning && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {tt("ลบได้เฉพาะ WARNING", "Only WARNING can be deleted")}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <p className="text-sm font-medium text-foreground leading-relaxed">
                         &quot;{warning.reason}&quot;
@@ -618,110 +609,6 @@ export function UserDetailModal({
               <CheckCircle2 className="h-8 w-8 text-green-500/50 mb-2" />
               <p className="text-sm">{tt("ไม่มีประวัติคำเตือน", "No warning history")}</p>
               <p className="text-xs opacity-70">{tt("ผู้ใช้นี้มีพฤติกรรมดีเยี่ยม", "This user has an excellent record")}</p>
-            </div>
-          )}
-        </div>
-
-        <Separator className="opacity-50" />
-
-        {/* User Notifications (selective delete) */}
-        <div>
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h3 className="font-semibold text-sm text-foreground/80 flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
-              {tt(`การแจ้งเตือนผู้ใช้ (${notifications.length})`, `User notifications (${notifications.length})`)}
-            </h3>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={notifications.length === 0}
-                onClick={handleToggleAllNotifications}
-              >
-                {allNotificationsSelected ? tt("ยกเลิกเลือกทั้งหมด", "Deselect all") : tt("เลือกทั้งหมด", "Select all")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                className="gap-2"
-                disabled={
-                  deletingNotifications ||
-                  selectedNotificationIds.length === 0 ||
-                  !onDeleteSelectedNotifications
-                }
-                onClick={handleDeleteSelected}
-              >
-                <Trash2 className="h-4 w-4" />
-                {deletingNotifications
-                  ? tt("กำลังลบ...", "Deleting...")
-                  : tt(`ลบที่เลือก (${selectedNotificationIds.length})`, `Delete selected (${selectedNotificationIds.length})`)}
-              </Button>
-            </div>
-          </div>
-
-          {notifications.length > 0 ? (
-            <div className="border rounded-lg bg-muted/20 overflow-hidden">
-              <div className="max-h-[260px] overflow-y-auto p-1 space-y-1">
-                {notifications.map((notification) => {
-                  const isChecked = selectedNotificationIds.includes(notification.id)
-                  const createdAt = notification.createdAt
-                    ? formatDate
-                      ? formatDate(notification.createdAt)
-                      : notification.createdAt.toLocaleString(locale === "th" ? "th-TH" : "en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                    : "—"
-
-                  return (
-                    <div
-                      key={notification.id}
-                      className={cn(
-                        "p-3 bg-card border rounded-md transition-colors",
-                        isChecked ? "border-destructive/40 bg-destructive/5" : "hover:bg-muted/50"
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={(checked) =>
-                            handleToggleNotification(notification.id, checked === true)
-                          }
-                          aria-label={`select-notification-${notification.id}`}
-                          className="mt-1"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <Badge
-                              variant={notification.isRead ? "outline" : "secondary"}
-                              className="text-[10px] h-5 px-1.5"
-                            >
-                              {notification.type || tt("ระบบ", "system")}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground tabular-nums">
-                              {createdAt}
-                            </span>
-                          </div>
-                          <p className="text-sm font-medium text-foreground">{notification.title}</p>
-                          <p className="text-xs text-muted-foreground leading-relaxed mt-1 line-clamp-2">
-                            {notification.message}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/10 text-muted-foreground">
-              <BellOff className="h-8 w-8 mb-2 opacity-50" />
-              <p className="text-sm">{tt("ไม่พบการแจ้งเตือนของผู้ใช้", "No user notifications found")}</p>
             </div>
           )}
         </div>

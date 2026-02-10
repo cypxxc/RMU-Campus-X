@@ -13,6 +13,11 @@ export interface AccountStatusInfo {
   suspendedUntil: Date | null
   bannedReason: string
   latestWarningReason: string
+  restrictions: {
+    canPost: boolean
+    canExchange: boolean
+    canChat: boolean
+  }
 }
 
 interface AuthContextType {
@@ -37,6 +42,11 @@ const DEFAULT_ACCOUNT_STATUS: AccountStatusInfo = {
   suspendedUntil: null,
   bannedReason: "",
   latestWarningReason: "",
+  restrictions: {
+    canPost: true,
+    canExchange: true,
+    canChat: true,
+  },
 }
 
 function parseSuspendedUntil(value: unknown): Date | null {
@@ -51,6 +61,19 @@ function parseSuspendedUntil(value: unknown): Date | null {
   return null
 }
 
+function parseRestrictions(value: unknown): AccountStatusInfo["restrictions"] {
+  const raw = (typeof value === "object" && value !== null ? value : {}) as {
+    canPost?: unknown
+    canExchange?: unknown
+    canChat?: unknown
+  }
+  return {
+    canPost: raw.canPost !== false,
+    canExchange: raw.canExchange !== false,
+    canChat: raw.canChat !== false,
+  }
+}
+
 function mapAccountStatus(userData: Record<string, unknown> | null | undefined): AccountStatusInfo {
   if (!userData) return DEFAULT_ACCOUNT_STATUS
   return {
@@ -59,6 +82,7 @@ function mapAccountStatus(userData: Record<string, unknown> | null | undefined):
     suspendedUntil: parseSuspendedUntil(userData.suspendedUntil),
     bannedReason: String(userData.bannedReason || ""),
     latestWarningReason: String(userData.latestWarningReason || ""),
+    restrictions: parseRestrictions(userData.restrictions),
   }
 }
 
@@ -88,18 +112,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initAuth = async () => {
       try {
         const { getFirebaseAuth } = await import("@/lib/firebase")
-        // เปิด App Check ก่อนใช้ Auth/Firestore เพื่อป้องกัน Bot / การยิง API จากเว็บอื่น
-        try {
-          const { initializeFirebaseAppCheck } = await import("@/lib/app-check")
-          initializeFirebaseAppCheck()
-        } catch {
-          // ไม่มี RECAPTCHA key หรือ dev ก็ข้ามได้
-        }
         const auth = getFirebaseAuth()
+
+        // Initialize App Check in background so onAuthStateChanged can subscribe immediately.
+        void (async () => {
+          try {
+            const { initializeFirebaseAppCheck } = await import("@/lib/app-check")
+            initializeFirebaseAppCheck()
+          } catch {
+            // ไม่มี RECAPTCHA key หรือ dev ก็ข้ามได้
+          }
+        })()
         
         unsubscribe = onAuthStateChanged(auth, async (user) => {
           setUser(user)
-          
+          // ปล่อย loading ทันทีเมื่อมี user เพื่อให้ dashboard/items โหลดขนานกับ users/me (ลดความรู้สึกรอหลัง login)
+          setLoading(false)
+
           if (user) {
             try {
               const offline = typeof navigator !== "undefined" && navigator.onLine === false
@@ -113,7 +142,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 // Handle race right after register/login: retry once with forced token refresh.
                 if (res.status === 401) {
-                  await new Promise((resolve) => setTimeout(resolve, 350))
                   token = await user.getIdToken(true)
                   res = await fetchProfile(token)
                 }
@@ -175,8 +203,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setAccountStatus(null)
             setTermsAccepted(false)
           }
-          
-          setLoading(false)
         })
       } catch {
         setLoading(false)

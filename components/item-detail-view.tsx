@@ -7,21 +7,9 @@ import type { Item, User, ItemStatus, ItemCategory } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { HandHeart, X, Maximize2, Package, MapPin, Calendar, User as UserIcon, AlertTriangle, Info, CheckCircle2, Clock, Trash2, Pencil } from "lucide-react"
+import { HandHeart, Maximize2, Package, MapPin, Calendar, User as UserIcon, AlertTriangle, Info, CheckCircle2, Clock, Trash2 } from "lucide-react"
 import { formatPostedAt, safeToDate } from "@/lib/utils"
 import { getItemImageUrls, getItemImageUrlAt } from "@/lib/cloudinary-url"
 import Image from "next/image"
@@ -29,10 +17,12 @@ import Link from "next/link"
 const ReportModal = lazy(() => import("@/components/report-modal").then((m) => ({ default: m.ReportModal })))
 import { useAccountStatus } from "@/hooks/use-account-status"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
-import { STATUS_COLORS, CATEGORY_OPTIONS, LOCATION_OPTIONS } from "@/lib/constants"
+import { STATUS_COLORS } from "@/lib/constants"
 import { FavoriteButton } from "@/components/favorite-button"
 import { OwnerRatingBadge } from "@/components/owner-rating-badge"
 import { useI18n } from "@/components/language-provider"
+import { ItemImageZoom } from "@/components/item-image-zoom"
+import { ItemAdminEditDialog, ItemAdminEditButton } from "@/components/item-admin-edit-dialog"
 
 interface ItemDetailViewProps {
   item: Item
@@ -61,11 +51,6 @@ export function ItemDetailView({
   const [showReportModal, setShowReportModal] = useState(false)
   const [showImageZoom, setShowImageZoom] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [editSaving, setEditSaving] = useState(false)
-  const [editTitle, setEditTitle] = useState("")
-  const [editDescription, setEditDescription] = useState("")
-  const [editCategory, setEditCategory] = useState<ItemCategory>("other")
-  const [editLocation, setEditLocation] = useState("")
   const [poster, setPoster] = useState<User | null>(null)
   const [posterLoading, setPosterLoading] = useState(true)
   const { user } = useAuth()
@@ -77,13 +62,10 @@ export function ItemDetailView({
   // Fetch poster profile only if postedByName is not available (for old items)
   useEffect(() => {
     setPoster(null)
-
-    // If postedByName exists, no need to fetch
     if (item.postedByName) {
       setPosterLoading(false)
       return
     }
-    
     const loadPoster = async () => {
       setPosterLoading(true)
       if (item.postedBy) {
@@ -101,17 +83,13 @@ export function ItemDetailView({
 
   const handleRequestItem = async () => {
     if (!user || !item) return
-
-    // ตรวจสอบสถานะบัญชีก่อนขอแลกเปลี่ยน
     const statusCheck = await canExchange()
     if (!statusCheck.isAllowed) {
       setShowRequestDialog(false)
-      return // Toast notification จะแสดงโดย hook อัตโนมัติ
+      return
     }
-
     setRequesting(true)
     try {
-      // สร้าง exchange ผ่าน client-side Firestore (มี auth)
       const response = await createExchange({
         itemId: item.id,
         itemTitle: item.title,
@@ -123,19 +101,14 @@ export function ItemDetailView({
         ownerConfirmed: false,
         requesterConfirmed: false,
       })
-
       if (!response.success || !response.data) {
          throw new Error(response.error || tt("ไม่สามารถสร้างคำขอได้", "Unable to create request"))
       }
       const exchangeId = response.data
-
-      // สถานะสิ่งของ + การแจ้งเตือนในแอป + LINE ส่งจาก POST /api/exchanges แล้ว
-
       toast({
         title: tt("ส่งคำขอสำเร็จ", "Request sent"),
         description: tt("คุณสามารถติดต่อเจ้าของได้ในแชท", "You can contact the owner in chat."),
       })
-
       router.push(`/chat/${exchangeId}`)
     } catch (error: unknown) {
       toast({
@@ -181,49 +154,8 @@ export function ItemDetailView({
           }).format(postedDate)
         : "—"
 
-  const openEditModal = () => {
-    setEditTitle(item.title)
-    setEditDescription(item.description || "")
-    setEditCategory((item.category as ItemCategory) || "other")
-    setEditLocation(item.location || "")
-    setShowEditModal(true)
-  }
-
-  const handleAdminEditSubmit = async () => {
-    if (!item?.id || editSaving) return
-    setEditSaving(true)
-    try {
-      const token = await (async () => {
-        const { getAuth } = await import("firebase/auth")
-        const auth = getAuth()
-        return auth.currentUser?.getIdToken() ?? null
-      })()
-      if (!token) throw new Error(tt("กรุณาเข้าสู่ระบบใหม่", "Please sign in again"))
-      const res = await fetch(`/api/admin/items/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          title: editTitle.trim(),
-          description: editDescription.trim(),
-          category: editCategory,
-          location: editLocation.trim(),
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error?.message || data.error || tt("แก้ไขไม่สำเร็จ", "Update failed"))
-      toast({ title: tt("แก้ไขโพสสำเร็จ เจ้าของจะได้รับการแจ้งเตือน", "Post updated. Owner has been notified.") })
-      setShowEditModal(false)
-      onAdminItemUpdated?.({ ...item, title: editTitle, description: editDescription, category: editCategory, location: editLocation })
-    } catch (e) {
-      toast({ title: tt("แก้ไขไม่สำเร็จ", "Update failed"), description: e instanceof Error ? e.message : undefined, variant: "destructive" })
-    } finally {
-      setEditSaving(false)
-    }
-  }
-
   const allImages = getItemImageUrls(item)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-  // Responsive: w_1200 สำหรับรูปหลักบนเดสก์ท็อป ลด Bandwidth
   const currentImage = getItemImageUrlAt(item, selectedImageIndex, { width: 1200 }) || allImages[selectedImageIndex] || null
 
   return (
@@ -349,9 +281,7 @@ export function ItemDetailView({
                   </div>
                   <div>
                     <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">{tt("โพสต์เมื่อ", "Posted at")}</span>
-                    <p className="font-semibold text-base">
-                      {postedAtText}
-                    </p>
+                    <p className="font-semibold text-base">{postedAtText}</p>
                   </div>
                 </div>
               </div>
@@ -381,7 +311,7 @@ export function ItemDetailView({
             </div>
           )}
 
-          {/* Unavailable Item Message (ซ่อนในโหมด admin) */}
+          {/* Unavailable Item Message */}
           {!isAdminMode && user && !isOwner && item.status !== "available" && (
             <div className="p-4 rounded-xl bg-muted/50 border text-center" role="status">
               <p className="text-sm text-muted-foreground mb-3">
@@ -412,17 +342,14 @@ export function ItemDetailView({
             </Button>
           )}
 
-          {/* แถบจัดการ Admin */}
+          {/* Admin Toolbar */}
           {isAdminMode && onAdminStatusChange && onAdminDelete && (
             <div className="p-4 border-t bg-muted/20 rounded-xl flex flex-wrap items-center justify-between gap-3">
               <Button variant="ghost" size="sm" onClick={_onClose} className="text-muted-foreground hover:text-foreground">
                 {tt("ปิด", "Close")}
               </Button>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={openEditModal} disabled={adminProcessing} className="gap-2">
-                  <Pencil className="h-4 w-4" />
-                  {tt("แก้ไข", "Edit")}
-                </Button>
+                <ItemAdminEditButton onClick={() => setShowEditModal(true)} disabled={adminProcessing} />
                 <Button
                   variant="outline"
                   size="sm"
@@ -460,129 +387,25 @@ export function ItemDetailView({
       </div>
 
       {/* Image Zoom Dialog */}
-      <Dialog open={showImageZoom} onOpenChange={setShowImageZoom}>
-        <DialogContent className="max-w-[95vw] w-fit p-0 bg-transparent border-none shadow-none flex items-center justify-center" showCloseButton={false}>
-          <DialogTitle className="sr-only">Image Preview</DialogTitle>
-          <div className="relative group">
-            {currentImage && (
-              <div className="relative max-h-[90vh] max-w-full overflow-hidden rounded-2xl shadow-2xl bg-black/50 backdrop-blur-sm p-1">
-                <Image 
-                  src={currentImage} 
-                  alt={item.title} 
-                  width={1200} 
-                  height={1200} 
-                  className="object-contain max-h-[85vh] w-auto h-auto rounded-xl"
-                  unoptimized
-                />
-                <Button 
-                  variant="secondary" 
-                  size="icon" 
-                  className="absolute top-4 right-4 rounded-full h-10 w-10 shadow-lg border border-white/20 bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm"
-                  onClick={() => setShowImageZoom(false)}
-                >
-                  <X className="h-6 w-6" />
-                </Button>
-                {/* Image counter */}
-                {allImages.length > 1 && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm px-3 py-1 rounded-full">
-                    {selectedImageIndex + 1} / {allImages.length}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ItemImageZoom
+        open={showImageZoom}
+        onOpenChange={setShowImageZoom}
+        imageUrl={currentImage}
+        title={item.title}
+        currentIndex={selectedImageIndex}
+        totalImages={allImages.length}
+      />
 
       {/* Admin Edit Dialog */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0 gap-0">
-          <DialogHeader className="px-6 pt-6 pb-4 space-y-1 border-b bg-muted/30">
-            <DialogTitle className="text-xl font-bold">{tt("แก้ไขโพส (ผู้ดูแล)", "Edit post (Admin)")}</DialogTitle>
-            <DialogDescription asChild>
-              <p className="text-sm text-muted-foreground flex items-center gap-2 pt-1">
-                <Info className="h-4 w-4 shrink-0 text-primary" />
-                {tt("เจ้าของโพสจะได้รับการแจ้งเตือนทั้งในเว็บและ LINE", "The owner will be notified via web and LINE.")}
-              </p>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-5 px-6 py-5">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-title" className="text-sm font-medium text-foreground">
-                {tt("ชื่อสิ่งของ", "Item name")}
-              </Label>
-              <Input
-                id="edit-title"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder={tt("ชื่อสิ่งของ", "Item name")}
-                minLength={3}
-                maxLength={100}
-                className="h-10 border-2 bg-background focus-visible:ring-2"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-description" className="text-sm font-medium text-foreground">
-                {tt("รายละเอียด", "Description")}
-              </Label>
-              <Textarea
-                id="edit-description"
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                placeholder={tt("อธิบายสิ่งของ", "Describe this item")}
-                rows={4}
-                minLength={10}
-                maxLength={1000}
-                className="min-h-[100px] border-2 bg-background focus-visible:ring-2 resize-y"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label className="text-sm font-medium text-foreground">{tt("หมวดหมู่", "Category")}</Label>
-              <Select value={editCategory} onValueChange={(v) => setEditCategory(v as ItemCategory)}>
-                <SelectTrigger className="h-10 border-2 bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {categoryLabelByValue[opt.value]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label className="text-sm font-medium text-foreground">{tt("สถานที่นัดรับ", "Pickup location")}</Label>
-              <Select value={editLocation || ""} onValueChange={setEditLocation}>
-                <SelectTrigger className="h-10 border-2 bg-background">
-                  <SelectValue placeholder={tt("เลือกสถานที่", "Select location")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {LOCATION_OPTIONS.map((loc) => (
-                    <SelectItem key={loc} value={loc}>
-                      {loc}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter className="px-6 py-4 border-t bg-muted/20 gap-3 sm:gap-2">
-            <Button variant="outline" onClick={() => setShowEditModal(false)} disabled={editSaving} className="min-w-[100px]">
-              {tt("ยกเลิก", "Cancel")}
-            </Button>
-            <Button
-              onClick={handleAdminEditSubmit}
-              disabled={editSaving || editTitle.trim().length < 3 || editDescription.trim().length < 10 || !editLocation.trim()}
-              className="min-w-[120px]"
-            >
-              {editSaving ? tt("กำลังบันทึก...", "Saving...") : tt("บันทึก", "Save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ItemAdminEditDialog
+        item={item}
+        open={showEditModal}
+        onOpenChange={setShowEditModal}
+        onItemUpdated={onAdminItemUpdated}
+        categoryLabels={categoryLabelByValue}
+      />
 
-      {/* Request Dialog - Refactored to UnifiedModal */}
+      {/* Request Dialog */}
       <UnifiedModal
         open={showRequestDialog}
         onOpenChange={setShowRequestDialog}
@@ -633,5 +456,4 @@ export function ItemDetailView({
       )}
     </div>
   )
-
 }

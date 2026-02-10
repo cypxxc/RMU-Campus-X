@@ -30,6 +30,11 @@ type PosterProfileSummary = {
 
 const POSTER_PROFILE_CACHE_TTL_MS = 5 * 60_000
 const posterProfileCache = new Map<string, { profile: PosterProfileSummary; at: number }>()
+const FAVORITE_STATUS_CACHE_TTL_MS = 60_000
+const favoriteStatusCache = new Map<string, { isFavorite: boolean; at: number }>()
+/** เมื่อมี search: ดึงจาก index (array-contains-any) แล้ว refine แค่ AND ใน memory — ไม่ scan หนัก */
+const SEARCH_CANDIDATE_MULTIPLIER = 2
+const SEARCH_TERMS_MAX = 10
 
 function getCachedPosterProfile(uid: string): PosterProfileSummary | null {
   const entry = posterProfileCache.get(uid)
@@ -44,13 +49,53 @@ function getCachedPosterProfile(uid: string): PosterProfileSummary | null {
 function setCachedPosterProfile(uid: string, profile: PosterProfileSummary): void {
   posterProfileCache.set(uid, { profile, at: Date.now() })
   if (posterProfileCache.size > 1_000) {
-    const oldest = [...posterProfileCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
-    if (oldest) posterProfileCache.delete(oldest[0])
+    const oldestKey = posterProfileCache.keys().next().value as string | undefined
+    if (oldestKey) posterProfileCache.delete(oldestKey)
+  }
+}
+
+function getFavoriteCacheKey(userId: string, itemId: string): string {
+  return `${userId}_${itemId}`
+}
+
+function getCachedFavoriteStatus(userId: string, itemId: string): boolean | null {
+  const key = getFavoriteCacheKey(userId, itemId)
+  const entry = favoriteStatusCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.at > FAVORITE_STATUS_CACHE_TTL_MS) {
+    favoriteStatusCache.delete(key)
+    return null
+  }
+  return entry.isFavorite
+}
+
+function setCachedFavoriteStatus(userId: string, itemId: string, isFavorite: boolean): void {
+  const key = getFavoriteCacheKey(userId, itemId)
+  favoriteStatusCache.set(key, { isFavorite, at: Date.now() })
+  if (favoriteStatusCache.size > 10_000) {
+    const oldestKey = favoriteStatusCache.keys().next().value as string | undefined
+    if (oldestKey) favoriteStatusCache.delete(oldestKey)
   }
 }
 
 function fallbackPostedByName(item: Item): string | null {
   return item.postedByName ?? item.postedByEmail?.split("@")[0] ?? item.postedBy ?? null
+}
+
+interface TimingMetric {
+  name: string
+  durMs: number
+}
+
+function withServerTiming(response: NextResponse, metrics: TimingMetric[]): NextResponse {
+  const header = metrics
+    .filter((m) => Number.isFinite(m.durMs) && m.durMs >= 0)
+    .map((m) => `${m.name};dur=${Math.round(m.durMs * 10) / 10}`)
+    .join(", ")
+
+  if (header) response.headers.set("Server-Timing", header)
+  response.headers.set("Timing-Allow-Origin", "*")
+  return response
 }
 
 /** POST /api/items – สร้าง item */
@@ -117,6 +162,14 @@ const listQuerySchema = z.object({
 
 /** GET /api/items – list items (filter, search, pagination). ต้องล็อกอิน */
 export async function GET(request: NextRequest) {
+  const startedAt = Date.now()
+  let verifyMs = 0
+  let cursorLookupMs = 0
+  let listQueryMs = 0
+  let filterMs = 0
+  let posterProfileMs = 0
+  let favoriteMs = 0
+
   try {
     const db = getAdminDb()
     const authHeader = request.headers.get("Authorization")
@@ -124,7 +177,9 @@ export async function GET(request: NextRequest) {
     if (!token) {
       return NextResponse.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 })
     }
+    const verifyStartedAt = Date.now()
     const decoded = await verifyIdToken(token, true)
+    verifyMs = Date.now() - verifyStartedAt
     if (!decoded) {
       return NextResponse.json({ error: "Invalid or expired token", code: "INVALID_TOKEN" }, { status: 401 })
     }
@@ -144,41 +199,89 @@ export async function GET(request: NextRequest) {
     // สำคัญ: ถ้า client ส่ง postedBy มา ต้องใช้เสมอ — อย่าทิ้งเมื่อ parse ล้มเหลว (ไม่งั้นจะได้รายการของทุกคน)
     if (rawPostedBy && !query.postedBy) (query as { postedBy?: string }).postedBy = rawPostedBy
 
-    let q = itemsCollection().orderBy("postedAt", "desc").limit(Math.min(query.pageSize * (query.search ? 3 : 1), 100))
+    let baseQuery = itemsCollection().orderBy("postedAt", "desc")
 
     if (query.postedBy) {
-      q = q.where("postedBy", "==", query.postedBy)
+      baseQuery = baseQuery.where("postedBy", "==", query.postedBy)
     }
     if (query.categories && query.categories.length > 0) {
-      q = q.where("category", "in", query.categories.slice(0, 10))
+      baseQuery = baseQuery.where("category", "in", query.categories.slice(0, 10))
     }
     if (query.status) {
-      q = q.where("status", "==", query.status)
+      baseQuery = baseQuery.where("status", "==", query.status)
     }
 
     const searchTerms: string[] = []
     if (query.search) {
       searchTerms.push(...query.search.toLowerCase().split(/\s+/).filter((t) => t.length > 0))
     }
+    const searchTermsForQuery = searchTerms.slice(0, SEARCH_TERMS_MAX)
 
+    let pagingCursor: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot | null = null
     if (query.lastId) {
+      const cursorLookupStartedAt = Date.now()
       const lastSnap = await itemsCollection().doc(query.lastId).get()
-      if (lastSnap.exists) {
-        q = q.startAfter(lastSnap)
+      cursorLookupMs = Date.now() - cursorLookupStartedAt
+      if (lastSnap.exists) pagingCursor = lastSnap
+    }
+
+    let hasMore = false
+    let page: Item[] = []
+
+    if (searchTerms.length === 0) {
+      // No search: fetch only what we need (+1 for hasMore accuracy).
+      let pageQuery = baseQuery.limit(query.pageSize + 1)
+      if (pagingCursor) pageQuery = pageQuery.startAfter(pagingCursor)
+      const listQueryStartedAt = Date.now()
+      const snapshot = await pageQuery.get()
+      listQueryMs = Date.now() - listQueryStartedAt
+      const items = snapshot.docs
+        .map((d) => parseItemFromFirestore(d.id, d.data()))
+        .filter((x): x is Item => x !== null)
+      hasMore = items.length > query.pageSize
+      page = items.slice(0, query.pageSize)
+    } else {
+      // Search: ใช้ full-text index (array-contains-any) — ดึงเฉพาะ doc ที่ match อย่างน้อย 1 term แล้ว refine AND ใน memory เบาๆ
+      let searchQuery = baseQuery.where(
+        "searchKeywords",
+        "array-contains-any",
+        searchTermsForQuery
+      )
+      const candidateLimit = Math.max(query.pageSize * SEARCH_CANDIDATE_MULTIPLIER, 20)
+      let workingCursor = pagingCursor
+      const collected: Item[] = []
+      let hasNextBatch = true
+
+      const listQueryStartedAt = Date.now()
+      while (hasNextBatch) {
+        let batchQuery = searchQuery.limit(candidateLimit)
+        if (workingCursor) batchQuery = batchQuery.startAfter(workingCursor)
+
+        const batchSnap = await batchQuery.get()
+        if (batchSnap.empty) {
+          hasNextBatch = false
+          break
+        }
+
+        hasNextBatch = batchSnap.size === candidateLimit
+        workingCursor = batchSnap.docs[batchSnap.docs.length - 1] ?? null
+
+        const batchItems = batchSnap.docs
+          .map((d) => parseItemFromFirestore(d.id, d.data()))
+          .filter((x): x is Item => x !== null)
+        collected.push(...batchItems)
+
+        const filteredSoFar = refineItemsBySearchTerms(collected, searchTerms)
+        if (filteredSoFar.length >= query.pageSize) break
       }
+      listQueryMs = Date.now() - listQueryStartedAt
+
+      const filterStartedAt = Date.now()
+      const filteredItems = refineItemsBySearchTerms(collected, searchTerms)
+      filterMs = Date.now() - filterStartedAt
+      hasMore = filteredItems.length > query.pageSize || hasNextBatch
+      page = filteredItems.slice(0, query.pageSize)
     }
-
-    const snapshot = await q.get()
-    let items: Item[] = snapshot.docs
-      .map((d) => parseItemFromFirestore(d.id, d.data()))
-      .filter((x): x is Item => x !== null)
-
-    if (searchTerms.length > 0) {
-      items = refineItemsBySearchTerms(items, searchTerms)
-    }
-
-    const hasMore = items.length >= query.pageSize
-    const page = items.slice(0, query.pageSize)
 
     // แสดงชื่อปัจจุบันจากโปรไฟล์ (ถ้า user เปลี่ยนชื่อแล้ว จะได้ชื่อล่าสุด)
     const postedByIds = [...new Set(page.map((it) => it.postedBy).filter(Boolean))]
@@ -202,6 +305,7 @@ export async function GET(request: NextRequest) {
       missingProfileUids.length === 0
         ? Promise.resolve()
         : (async () => {
+            const posterStartedAt = Date.now()
             const userRefs = missingProfileUids.map((uid) => usersCollection().doc(uid))
             const userSnaps = await db.getAll(...userRefs)
             userSnaps.forEach((snap, i) => {
@@ -217,19 +321,37 @@ export async function GET(request: NextRequest) {
               profileByUid.set(uid, profile)
               setCachedPosterProfile(uid, profile)
             })
+            posterProfileMs = Date.now() - posterStartedAt
           })()
 
     const favoriteTask =
       !shouldCheckFavorites
         ? Promise.resolve()
         : (async () => {
-            const favoriteRefs = page.map((it) => db.collection("favorites").doc(`${decoded.uid}_${it.id}`))
-            const favoriteSnaps = await db.getAll(...favoriteRefs)
-            favoriteSnaps.forEach((snap, idx) => {
-              if (!snap.exists) return
-              const itemId = page[idx]?.id
-              if (itemId) favoriteItemIds.add(itemId)
+            const favoriteStartedAt = Date.now()
+            const uncachedItemIds: string[] = []
+            const favoriteRefs: FirebaseFirestore.DocumentReference[] = []
+
+            page.forEach((it) => {
+              const cachedFavorite = getCachedFavoriteStatus(decoded.uid, it.id)
+              if (cachedFavorite === true) favoriteItemIds.add(it.id)
+              if (cachedFavorite === null) {
+                uncachedItemIds.push(it.id)
+                favoriteRefs.push(db.collection("favorites").doc(`${decoded.uid}_${it.id}`))
+              }
             })
+
+            if (favoriteRefs.length > 0) {
+              const favoriteSnaps = await db.getAll(...favoriteRefs)
+              favoriteSnaps.forEach((snap, idx) => {
+                const itemId = uncachedItemIds[idx]
+                if (!itemId) return
+                const isFavorite = snap.exists
+                setCachedFavoriteStatus(decoded.uid, itemId, isFavorite)
+                if (isFavorite) favoriteItemIds.add(itemId)
+              })
+            }
+            favoriteMs = Date.now() - favoriteStartedAt
           })()
 
     await Promise.all([posterProfileTask, favoriteTask])
@@ -253,18 +375,28 @@ export async function GET(request: NextRequest) {
       totalCount = page.length
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       items: pageWithFavoriteStatus,
       lastId: page.length ? page[page.length - 1]?.id ?? null : null,
       hasMore,
       totalCount,
     })
+    const totalMs = Date.now() - startedAt
+    return withServerTiming(response, [
+      { name: "verify", durMs: verifyMs },
+      { name: "cursor", durMs: cursorLookupMs },
+      { name: "list_query", durMs: listQueryMs },
+      { name: "search_filter", durMs: filterMs },
+      { name: "poster", durMs: posterProfileMs },
+      { name: "favorite", durMs: favoriteMs },
+      { name: "total", durMs: totalMs },
+    ])
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const isDev = process.env.NODE_ENV === "development"
     console.error("[Items API] GET Error:", error)
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         error: "Internal server error",
@@ -272,5 +404,15 @@ export async function GET(request: NextRequest) {
       },
       { status: 500 }
     )
+    const totalMs = Date.now() - startedAt
+    return withServerTiming(response, [
+      { name: "verify", durMs: verifyMs },
+      { name: "cursor", durMs: cursorLookupMs },
+      { name: "list_query", durMs: listQueryMs },
+      { name: "search_filter", durMs: filterMs },
+      { name: "poster", durMs: posterProfileMs },
+      { name: "favorite", durMs: favoriteMs },
+      { name: "total", durMs: totalMs },
+    ])
   }
 }

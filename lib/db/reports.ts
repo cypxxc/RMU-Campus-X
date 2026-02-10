@@ -86,9 +86,9 @@ export const updateReportStatus = async (
   const reportData = reportDoc.data() as Report
   const statusText =
     status === "resolved"
-      ? "ดำเนินการแล้ว"
+      ? "ปิดเคสแล้ว"
       : status === "action_taken"
-        ? "ลงโทษผู้กระทำผิดแล้ว"
+        ? "แจ้งเจ้าของโพสแล้ว"
         : status === "closed"
           ? "ปิดเคส"
           : status === "rejected"

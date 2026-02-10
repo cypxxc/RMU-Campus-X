@@ -1,211 +1,125 @@
 "use client"
 
-import { useRef, useMemo } from "react"
-import { Canvas, useFrame } from "@react-three/fiber"
-import { Float, MeshDistortMaterial } from "@react-three/drei"
-import * as THREE from "three"
+/**
+ * Lightweight CSS-based animated background
+ * Replaces Three.js (~600KB) with pure CSS floating gradient orbs + particles
+ * Visual: translucent floating circles with blur, matching RMU green/red brand colors
+ */
 
-// Shape configurations
-interface ShapeConfig {
-  position: [number, number, number]
-  color: string
-  speed: number
-  distort?: number
+const PRIMARY_COLOR = "rgba(34, 197, 94, 0.18)"    // green
+const SECONDARY_COLOR = "rgba(22, 163, 74, 0.14)"  // darker green
+const ACCENT_COLOR = "rgba(239, 68, 68, 0.10)"     // red accent
+
+interface OrbConfig {
   size: number
-  shape: "sphere" | "box" | "torus" | "octahedron"
+  x: string
+  y: string
+  color: string
+  duration: number
+  delay: number
 }
 
-const PRIMARY_COLOR = "#22c55e"
-const SECONDARY_COLOR = "#16a34a"
-const ACCENT_COLOR = "#ef4444"
-const PARTICLE_SEED = 1337
-
-const SHAPES: ShapeConfig[] = [
-  { position: [-3, 2, -5], color: PRIMARY_COLOR, speed: 1.2, size: 1.5, shape: "sphere", distort: 0.3 },
-  { position: [3.5, -1.5, -4], color: SECONDARY_COLOR, speed: 0.8, size: 1.2, shape: "box", distort: 0.2 },
-  { position: [-2, -2, -6], color: ACCENT_COLOR, speed: 1.5, size: 1, shape: "torus", distort: 0.3 },
-  { position: [2, 3, -7], color: PRIMARY_COLOR, speed: 0.6, size: 0.8, shape: "octahedron", distort: 0.4 },
-  { position: [4, 0, -8], color: SECONDARY_COLOR, speed: 1, size: 1.3, shape: "sphere", distort: 0.3 },
-  { position: [-4, 1, -9], color: ACCENT_COLOR, speed: 0.7, size: 0.9, shape: "box", distort: 0.3 },
+const ORBS: OrbConfig[] = [
+  { size: 260, x: "15%",  y: "20%",  color: PRIMARY_COLOR,   duration: 18, delay: 0 },
+  { size: 200, x: "70%",  y: "60%",  color: SECONDARY_COLOR, duration: 22, delay: 2 },
+  { size: 180, x: "80%",  y: "15%",  color: ACCENT_COLOR,    duration: 20, delay: 4 },
+  { size: 240, x: "30%",  y: "75%",  color: PRIMARY_COLOR,   duration: 25, delay: 1 },
+  { size: 150, x: "55%",  y: "40%",  color: SECONDARY_COLOR, duration: 16, delay: 3 },
+  { size: 120, x: "10%",  y: "50%",  color: ACCENT_COLOR,    duration: 19, delay: 5 },
 ]
 
-const LITE_SHAPES: ShapeConfig[] = [
-  { position: [-2, 1, -4], color: PRIMARY_COLOR, speed: 0.8, size: 1.2, shape: "sphere", distort: 0.2 },
-  { position: [2, -1, -5], color: SECONDARY_COLOR, speed: 0.6, size: 1, shape: "box", distort: 0.15 },
+const LITE_ORBS: OrbConfig[] = [
+  { size: 220, x: "20%",  y: "25%",  color: PRIMARY_COLOR,   duration: 20, delay: 0 },
+  { size: 180, x: "65%",  y: "55%",  color: SECONDARY_COLOR, duration: 24, delay: 2 },
 ]
 
-const createSeededRandom = (seed: number) => {
-  let value = seed
-  return () => {
-    value += 0x6d2b79f5
-    let t = value
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
+// Pre-generate static particle positions (no Math.random at render time)
+const PARTICLE_POSITIONS = [
+  { left: "12%", top: "8%" },  { left: "28%", top: "15%" }, { left: "45%", top: "5%" },
+  { left: "67%", top: "12%" }, { left: "82%", top: "22%" }, { left: "91%", top: "8%" },
+  { left: "5%",  top: "35%" }, { left: "22%", top: "42%" }, { left: "38%", top: "38%" },
+  { left: "55%", top: "30%" }, { left: "73%", top: "45%" }, { left: "88%", top: "35%" },
+  { left: "15%", top: "58%" }, { left: "32%", top: "65%" }, { left: "48%", top: "55%" },
+  { left: "62%", top: "68%" }, { left: "78%", top: "58%" }, { left: "95%", top: "52%" },
+  { left: "8%",  top: "78%" }, { left: "25%", top: "85%" }, { left: "42%", top: "75%" },
+  { left: "58%", top: "88%" }, { left: "75%", top: "82%" }, { left: "92%", top: "72%" },
+  { left: "18%", top: "92%" }, { left: "35%", top: "95%" }, { left: "52%", top: "90%" },
+  { left: "68%", top: "95%" }, { left: "85%", top: "90%" }, { left: "3%",  top: "48%" },
+]
 
-function FloatingShape({ 
-  position, 
-  color, 
-  speed = 1, 
-  distort = 0.3,
-  size = 1,
-  shape = "sphere"
-}: ShapeConfig) {
-  const meshRef = useRef<THREE.Mesh>(null)
-  
-  // Use simple rotation for performance
-  useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.x = state.clock.elapsedTime * speed * 0.2
-      meshRef.current.rotation.y = state.clock.elapsedTime * speed * 0.3
-    }
-  })
-
-  // Reduced geometry segments for better performance
-  const geometry = useMemo(() => {
-    switch (shape) {
-      case "box":
-        return <boxGeometry args={[size, size, size]} />
-      case "torus":
-        // Reduced segments from 16, 32 to 12, 24
-        return <torusGeometry args={[size * 0.6, size * 0.25, 12, 24]} />
-      case "octahedron":
-        return <octahedronGeometry args={[size * 0.7]} />
-      default:
-        // Reduced segments from 32, 32 to 24, 24
-        return <sphereGeometry args={[size * 0.5, 24, 24]} />
-    }
-  }, [shape, size])
-
+function FloatingOrb({ size, x, y, color, duration, delay }: OrbConfig) {
   return (
-    <Float
-      speed={speed}
-      rotationIntensity={0.5}
-      floatIntensity={1.5}
-      floatingRange={[-0.2, 0.2]}
-    >
-      <mesh ref={meshRef} position={position}>
-        {geometry}
-        <MeshDistortMaterial
-          color={color}
-          transparent
-          opacity={0.7}
-          distort={distort}
-          speed={2}
-          roughness={0.2}
-          metalness={0.8}
-        />
-      </mesh>
-    </Float>
+    <div
+      className="absolute rounded-full pointer-events-none"
+      style={{
+        width: size,
+        height: size,
+        left: x,
+        top: y,
+        background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
+        filter: "blur(40px)",
+        animation: `float-orb ${duration}s ease-in-out ${delay}s infinite alternate`,
+        willChange: "transform",
+      }}
+    />
   )
 }
 
-function Particles({ count = 100 }: { count?: number }) {
-  const points = useMemo(() => {
-    const random = createSeededRandom(PARTICLE_SEED + count)
-    const positions = new Float32Array(count * 3)
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = (random() - 0.5) * 20
-      positions[i * 3 + 1] = (random() - 0.5) * 20
-      positions[i * 3 + 2] = (random() - 0.5) * 20
-    }
-    return positions
-  }, [count])
-
-  const pointsRef = useRef<THREE.Points>(null)
-
-  useFrame((state) => {
-    if (pointsRef.current) {
-      pointsRef.current.rotation.y = state.clock.elapsedTime * 0.02
-      pointsRef.current.rotation.x = state.clock.elapsedTime * 0.01
-    }
-  })
-
-  return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[points, 3]}
-        />
-      </bufferGeometry>
-      {/* Use sizeAttenuation=false if possible for perf, but here we want depth */}
-      <pointsMaterial
-        size={0.03}
-        color="#4ade80"
-        transparent
-        opacity={0.6}
-        sizeAttenuation
-      />
-    </points>
-  )
-}
-
-function Scene() {
+function Particles({ count = 30 }: { count?: number }) {
+  const particles = PARTICLE_POSITIONS.slice(0, count)
   return (
     <>
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[10, 10, 5]} intensity={0.8} />
-      <pointLight position={[-10, -10, -5]} intensity={0.4} color={PRIMARY_COLOR} />
-
-      {SHAPES.map((props, i) => (
-        <FloatingShape key={i} {...props} />
+      {particles.map((pos, i) => (
+        <div
+          key={i}
+          className="absolute rounded-full pointer-events-none"
+          style={{
+            width: 3,
+            height: 3,
+            left: pos.left,
+            top: pos.top,
+            backgroundColor: "rgba(74, 222, 128, 0.35)",
+            animation: `twinkle ${2 + (i % 3)}s ease-in-out ${(i * 0.3) % 3}s infinite alternate`,
+          }}
+        />
       ))}
-
-      <Particles count={100} /> {/* Reduced count from 150 */}
     </>
   )
 }
 
 export function ThreeBackground({ className = "" }: { className?: string }) {
   return (
-    <div className={`fixed inset-0 -z-10 ${className}`}>
-      <Canvas
-        camera={{ position: [0, 0, 5], fov: 60 }}
-        dpr={[1, 1.5]} // Keep limited DPR for performance
-        frameloop="demand" // Only render when needed/requested, or use always if animating continually
-        // Actually for floating animation 'always' is smoother, but 'demand' saves battery if nothing moves. 
-        // Since we have useFrame, it will trigger loop. Let's stick to default or 'always' for smooth animation, 
-        // but 'demand' might cause stutter if not handling invalidation correctly. 
-        // However, useFrame usually forces invalidation. 
-        // Let's remove frameloop="demand" to ensure smooth animation for background unless it's strictly static.
-        // Actually, for a background that is always animating, strict 'demand' might miss frames if not driving loop.
-        // But React Three Fiber's default is 'always'.
-        // Let's try explicit 'always' or just remove the prop to fallback to default (always).
-        gl={{ 
-          antialias: true,
-          alpha: true,
-          powerPreference: "high-performance"
-        }}
-        style={{ background: "transparent" }}
-      >
-        <Scene />
-      </Canvas>
+    <div className={`fixed inset-0 -z-10 overflow-hidden ${className}`}>
+      <style>{animationStyles}</style>
+      {ORBS.map((orb, i) => (
+        <FloatingOrb key={i} {...orb} />
+      ))}
+      <Particles count={30} />
     </div>
   )
 }
 
 export function ThreeBackgroundLite({ className = "" }: { className?: string }) {
   return (
-    <div className={`fixed inset-0 -z-10 ${className}`}>
-      <Canvas
-        camera={{ position: [0, 0, 5], fov: 60 }}
-        dpr={1}
-        gl={{ 
-          antialias: false,
-          alpha: true,
-          powerPreference: "low-power"
-        }}
-        style={{ background: "transparent" }}
-      >
-        <ambientLight intensity={0.5} />
-        {LITE_SHAPES.map((props, i) => (
-          <FloatingShape key={i} {...props} />
-        ))}
-        <Particles count={30} />
-      </Canvas>
+    <div className={`fixed inset-0 -z-10 overflow-hidden ${className}`}>
+      <style>{animationStyles}</style>
+      {LITE_ORBS.map((orb, i) => (
+        <FloatingOrb key={i} {...orb} />
+      ))}
+      <Particles count={12} />
     </div>
   )
 }
+
+const animationStyles = `
+  @keyframes float-orb {
+    0% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -20px) scale(1.05); }
+    66% { transform: translate(-20px, 15px) scale(0.95); }
+    100% { transform: translate(10px, -10px) scale(1.02); }
+  }
+  @keyframes twinkle {
+    0% { opacity: 0.2; transform: scale(0.8); }
+    100% { opacity: 0.7; transform: scale(1.2); }
+  }
+`

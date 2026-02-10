@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { authFetchJson } from "@/lib/api-client"
@@ -26,33 +26,77 @@ function parseSuspendedUntil(su: unknown): Date | undefined {
   return undefined
 }
 
-/**
- * โหลดโปรไฟล์ผู้ใช้ผ่าน API (ไม่ใช้ Firestore บน client)
- */
-async function fetchMeProfile(): Promise<{
+type MeProfile = {
   status: UserStatus
   restrictions?: { canPost?: boolean; canExchange?: boolean; canChat?: boolean }
   bannedReason?: string
   warningCount?: number
   suspendedUntil?: Date
-} | null> {
-  try {
-    const res = await authFetchJson<{ user?: Record<string, unknown> }>("/api/users/me", { method: "GET" })
-    const u = res?.data?.user
-    if (!u) return null
-    const status = (u.status as UserStatus) || "ACTIVE"
-    const restrictions = u.restrictions as { canPost?: boolean; canExchange?: boolean; canChat?: boolean } | undefined
-    const suspendedUntil = parseSuspendedUntil(u.suspendedUntil)
-    return {
-      status,
-      restrictions,
-      bannedReason: String(u.bannedReason ?? ""),
-      warningCount: Number(u.warningCount) || 0,
-      suspendedUntil,
-    }
-  } catch {
+}
+
+function toProfileFromAccountStatus(
+  statusInfo: NonNullable<ReturnType<typeof useAuth>["accountStatus"]>
+): MeProfile {
+  return {
+    status: statusInfo.status,
+    restrictions: statusInfo.restrictions,
+    bannedReason: statusInfo.bannedReason,
+    warningCount: statusInfo.warningCount,
+    suspendedUntil: statusInfo.suspendedUntil ?? undefined,
+  }
+}
+
+const PROFILE_CACHE_TTL_MS = 30_000
+const profileCache = new Map<string, { profile: MeProfile; at: number }>()
+const profileRequests = new Map<string, Promise<MeProfile | null>>()
+
+function getCachedProfile(uid: string): MeProfile | null {
+  const cached = profileCache.get(uid)
+  if (!cached) return null
+  if (Date.now() - cached.at > PROFILE_CACHE_TTL_MS) {
+    profileCache.delete(uid)
     return null
   }
+  return cached.profile
+}
+
+function setCachedProfile(uid: string, profile: MeProfile): void {
+  profileCache.set(uid, { profile, at: Date.now() })
+}
+
+/**
+ * โหลดโปรไฟล์ผู้ใช้ผ่าน API (ไม่ใช้ Firestore บน client)
+ */
+async function fetchMeProfile(uid: string): Promise<MeProfile | null> {
+  const cached = getCachedProfile(uid)
+  if (cached) return cached
+
+  const pendingRequest = profileRequests.get(uid)
+  if (pendingRequest) return pendingRequest
+
+  const request = (async (): Promise<MeProfile | null> => {
+    try {
+      const res = await authFetchJson<{ user?: Record<string, unknown> }>("/api/users/me", { method: "GET" })
+      const u = res?.data?.user
+      if (!u) return null
+      const profile: MeProfile = {
+        status: (u.status as UserStatus) || "ACTIVE",
+        restrictions: u.restrictions as { canPost?: boolean; canExchange?: boolean; canChat?: boolean } | undefined,
+        bannedReason: String(u.bannedReason ?? ""),
+        warningCount: Number(u.warningCount) || 0,
+        suspendedUntil: parseSuspendedUntil(u.suspendedUntil),
+      }
+      setCachedProfile(uid, profile)
+      return profile
+    } catch {
+      return null
+    } finally {
+      profileRequests.delete(uid)
+    }
+  })()
+
+  profileRequests.set(uid, request)
+  return request
 }
 
 /**
@@ -60,26 +104,66 @@ async function fetchMeProfile(): Promise<{
  * โหลดผ่าน API ทั้งหมด (ไม่ใช้ Firestore)
  */
 export function useAccountStatus() {
-  const { user } = useAuth()
+  const { user, accountStatus } = useAuth()
   const [userStatus, setUserStatus] = useState<UserStatus>("ACTIVE")
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
     if (!user) {
-      const t = setTimeout(() => setLoading(false), 0)
+      const t = setTimeout(() => {
+        setUserStatus("ACTIVE")
+        setLoading(false)
+      }, 0)
       return () => clearTimeout(t)
     }
+
+    const cachedProfile = getCachedProfile(user.uid)
+    if (cachedProfile) {
+      const t = setTimeout(() => {
+        setUserStatus(cachedProfile.status)
+        setLoading(false)
+      }, 0)
+      return () => clearTimeout(t)
+    }
+    if (accountStatus) {
+      setCachedProfile(user.uid, toProfileFromAccountStatus(accountStatus))
+      const t = setTimeout(() => {
+        setUserStatus(accountStatus.status)
+        setLoading(false)
+      }, 0)
+      return () => clearTimeout(t)
+    }
+
     let cancelled = false
-    fetchMeProfile().then((profile) => {
+    const loadingTimer = setTimeout(() => {
+      if (!cancelled) setLoading(true)
+    }, 0)
+    fetchMeProfile(user.uid).then((profile) => {
       if (cancelled) return
       if (profile) setUserStatus(profile.status)
       setLoading(false)
     }).catch(() => {
       if (!cancelled) setLoading(false)
     })
-    return () => { cancelled = true }
-  }, [user])
+    return () => {
+      cancelled = true
+      clearTimeout(loadingTimer)
+    }
+  }, [user, accountStatus])
+
+  const getProfile = useCallback(async () => {
+    if (!user) return null
+    if (accountStatus) {
+      const derived = toProfileFromAccountStatus(accountStatus)
+      setCachedProfile(user.uid, derived)
+      setUserStatus(derived.status)
+      return derived
+    }
+    const profile = await fetchMeProfile(user.uid)
+    if (profile) setUserStatus(profile.status)
+    return profile
+  }, [user, accountStatus])
 
   /**
    * ตรวจสอบว่าผู้ใช้สามารถโพสต์ของได้หรือไม่
@@ -89,7 +173,7 @@ export function useAccountStatus() {
       router.push("/login")
       return { isAllowed: false, status: "ACTIVE", message: "กรุณาเข้าสู่ระบบก่อน" }
     }
-    const profile = await fetchMeProfile()
+    const profile = await getProfile()
     if (!profile) return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
     const { status, restrictions, bannedReason, suspendedUntil, warningCount } = profile
 
@@ -144,7 +228,7 @@ export function useAccountStatus() {
       router.push("/login")
       return { isAllowed: false, status: "ACTIVE", message: "กรุณาเข้าสู่ระบบก่อน" }
     }
-    const profile = await fetchMeProfile()
+    const profile = await getProfile()
     if (!profile) return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
     const { status, restrictions, bannedReason, suspendedUntil, warningCount } = profile
 
@@ -195,7 +279,7 @@ export function useAccountStatus() {
       router.push("/login")
       return { isAllowed: false, status: "ACTIVE", message: "กรุณาเข้าสู่ระบบก่อน" }
     }
-    const profile = await fetchMeProfile()
+    const profile = await getProfile()
     if (!profile) return { isAllowed: false, status: "ACTIVE", message: "ไม่พบข้อมูลผู้ใช้" }
     const { status, restrictions } = profile
 

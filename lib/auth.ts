@@ -16,9 +16,8 @@ import type { ActionCodeSettings } from "firebase/auth"
 
 /** ลิงก์ยืนยันอีเมลของ Firebase ใช้ได้ 3 วัน (ค่าเริ่มต้นของ Firebase ไม่สามารถปรับใน SDK ได้) */
 export const EMAIL_VERIFICATION_LINK_EXPIRY_DAYS = 3
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"
+import { doc, setDoc, serverTimestamp, deleteDoc } from "firebase/firestore"
 import { getFirebaseAuth, getFirebaseDb } from "./firebase"
-import { SUPPORT_EMAIL } from "./constants"
 
 import { registrationSchema } from "./schemas"
 
@@ -70,11 +69,13 @@ export const registerUser = async (rawEmail: string, password: string) => {
 
   // 3. Atomic Profile Creation
   try {
-    await sendEmailVerification(userCredential.user, getEmailVerificationActionCodeSettings())
-
-    // Create user document in Firestore
     const db = getFirebaseDb()
-    await setDoc(doc(db, "users", userCredential.user.uid), {
+    const userDocRef = doc(db, "users", userCredential.user.uid)
+
+    // Run independent operations in parallel to reduce register latency.
+    await Promise.all([
+      sendEmailVerification(userCredential.user, getEmailVerificationActionCodeSettings()),
+      setDoc(userDocRef, {
       uid: userCredential.user.uid,
       email: email,
       displayName: email.split("@")[0], // Use email prefix as default name
@@ -88,7 +89,8 @@ export const registerUser = async (rawEmail: string, password: string) => {
         canExchange: true,
         canChat: true,
       },
-    })
+      }),
+    ])
 
     return userCredential.user
 
@@ -103,6 +105,13 @@ export const registerUser = async (rawEmail: string, password: string) => {
       // Critical: If rollback fails, we have a major issue (Ghost Account).
       // Ideally, we'd report this to a monitoring service.
       console.error("[Register] CRITICAL: Rollback failed!", deleteError)
+    }
+    // Best-effort cleanup for user doc when partial success happened during parallel operations.
+    try {
+      const db = getFirebaseDb()
+      await deleteDoc(doc(db, "users", userCredential.user.uid))
+    } catch {
+      // ignore cleanup failure
     }
 
     const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError)
@@ -148,30 +157,7 @@ export const loginUser = async (email: string, password: string, remember: boole
       await firebaseSignOut(auth) // Force sign out if not verified
       throw new Error("กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ (Please verify your email)")
     }
-
-    // 2. Strict Profile & Status Check (Firestore)
-    const db = getFirebaseDb()
-    const { getDoc, doc } = await import("firebase/firestore")
-    const userDocRef = doc(db, "users", userCredential.user.uid)
-    const userDoc = await getDoc(userDocRef)
-
-    if (!userDoc.exists()) {
-      // 3. Ghost Account Detection
-      // User exists in Auth but not in Firestore. Strict Rule: Block Access.
-      // Auto-cleanup could be risky here without admin consent, safer to just block.
-      await firebaseSignOut(auth)
-      throw new Error(`บัญชีของคุณไม่สมบูรณ์ หรือถูกลบ (Ghost Account) - กรุณาติดต่อทีมสนับสนุนที่ ${SUPPORT_EMAIL}`)
-    }
-
-    const userData = userDoc.data()
-    
-    // 4. Status Check
-    if (userData?.status === 'BANNED') {
-       await firebaseSignOut(auth)
-       throw new Error(`บัญชีของคุณถูกระงับการใช้งาน (BANNED) - กรุณาติดต่อทีมสนับสนุนที่ ${SUPPORT_EMAIL}`)
-    }
-    
-    // (Optional) Update last login timestamp here if needed
+    // Profile/status policy checks are handled by /api/users/me in AuthProvider.
     
     return userCredential.user
 }
