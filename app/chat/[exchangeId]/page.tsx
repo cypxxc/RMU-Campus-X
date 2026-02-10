@@ -332,7 +332,7 @@ export default function ChatPage({
       await respondToExchange(exchangeId, action, user.uid)
       toast({
         title: action === "accept" ? "ตอบรับแล้ว" : "ปฏิเสธแล้ว",
-        description: action === "accept" ? "การแลกเปลี่ยนได้รับการตอบรับ" : "คำขอถูกปฏิเสธแล้ว",
+        description: action === "accept" ? "เข้าสู่ขั้นตอนกำลังดำเนินการแล้ว" : "คำขอถูกปฏิเสธแล้ว",
       })
       await loadExchange()
     } catch (error: unknown) {
@@ -654,13 +654,7 @@ export default function ChatPage({
                                 </AlertDialogTitle>
                                 <AlertDialogDescription className="space-y-1">
                                   <span>
-                                    {exchange.status === "accepted"
-                                      ? isOwner
-                                        ? "เจ้าของโพส ยืนยันการส่งมอบ"
-                                        : "ผู้ขอรับ ยืนยันการรับของ"
-                                      : isOwner
-                                        ? "ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว"
-                                        : "ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว"}
+                                    {isOwner ? "ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว" : "ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว"}
                                   </span>
                                   <span className="block text-amber-600 dark:text-amber-400 font-medium">
                                     การดำเนินการนี้ไม่สามารถย้อนกลับได้
