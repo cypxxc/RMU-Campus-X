@@ -177,7 +177,7 @@ export default function MyExchangesPage() {
       toast({
         title: action === "accept" ? "ตอบรับแล้ว" : "ปฏิเสธแล้ว",
         description: action === "accept"
-          ? "การแลกเปลี่ยนได้รับการตอบรับ แล้วสามารถเปิดแชทเพื่อนัดหมายได้"
+          ? "เข้าสู่ขั้นตอนกำลังดำเนินการแล้ว สามารถเปิดแชทเพื่อนัดหมายได้"
           : "คำขอถูกปฏิเสธแล้ว",
       })
       await loadExchanges()
@@ -233,7 +233,7 @@ export default function MyExchangesPage() {
   const getStatusBadgeClass = (status: string) => {
     const classes: Record<string, string> = {
       pending: "badge-warning",
-      accepted: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+      accepted: "bg-purple-500/10 text-purple-600 border-purple-500/20",
       in_progress: "bg-purple-500/10 text-purple-600 border-purple-500/20",
       completed: "bg-primary/10 text-primary border-primary/20",
       cancelled: "bg-destructive/10 text-destructive border-destructive/20",

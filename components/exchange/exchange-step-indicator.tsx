@@ -42,7 +42,7 @@ export function ExchangeStepIndicator({
     <div className={`flex items-center gap-1 sm:gap-2 ${className}`} role="list" aria-label="ขั้นตอนการแลกเปลี่ยน">
       {STEPS.map((step, idx) => {
         const isActive = idx === currentIdx
-        const isPast = idx < currentIdx || (isCompleted && idx < STEPS.length - 1)
+        const isPast = idx < currentIdx || (isCompleted && idx === currentIdx)
         const isLast = idx === STEPS.length - 1
 
         return (
