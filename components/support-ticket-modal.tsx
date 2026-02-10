@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
+import { HelpCircle } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
-import { useToast } from "@/hooks/use-toast"
-import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
+import { useI18n } from "@/components/language-provider"
+import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { HelpCircle } from "lucide-react"
+import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
+import { useToast } from "@/hooks/use-toast"
 
 const MIN_DESCRIPTION = 10
 const MAX_SUBJECT = 200
@@ -25,37 +26,60 @@ export function SupportTicketModal({ open, onOpenChange }: SupportTicketModalPro
   const isSubmittingRef = useRef(false)
   const { user } = useAuth()
   const { toast } = useToast()
+  const { tt } = useI18n()
 
   const handleSubmit = async () => {
     if (isSubmittingRef.current) return
+
     if (!user) {
-      toast({ title: "กรุณาเข้าสู่ระบบ", variant: "destructive" })
+      toast({ title: tt("กรุณาเข้าสู่ระบบ", "Please sign in"), variant: "destructive" })
       return
     }
-    const sub = subject.trim()
-    const desc = description.trim()
-    if (!sub.length) {
-      toast({ title: "กรุณาระบุหัวข้อ", variant: "destructive" })
+
+    const normalizedSubject = subject.trim()
+    const normalizedDescription = description.trim()
+
+    if (!normalizedSubject.length) {
+      toast({ title: tt("กรุณาระบุหัวข้อ", "Please enter subject"), variant: "destructive" })
       return
     }
-    if (sub.length > MAX_SUBJECT) {
-      toast({ title: "หัวข้อยาวเกินไป (สูงสุด 200 ตัวอักษร)", variant: "destructive" })
-      return
-    }
-    if (!desc.length) {
-      toast({ title: "กรุณากรอกรายละเอียด", variant: "destructive" })
-      return
-    }
-    if (desc.length < MIN_DESCRIPTION) {
+
+    if (normalizedSubject.length > MAX_SUBJECT) {
       toast({
-        title: "รายละเอียดสั้นเกินไป",
-        description: "กรุณาอธิบายอย่างน้อย 10 ตัวอักษร เพื่อให้ทีมงานช่วยได้ตรงจุด",
+        title: tt(
+          "หัวข้อยาวเกินไป (สูงสุด 200 ตัวอักษร)",
+          "Subject is too long (max 200 characters)"
+        ),
         variant: "destructive",
       })
       return
     }
-    if (desc.length > MAX_DESCRIPTION) {
-      toast({ title: "รายละเอียดยาวเกินไป (สูงสุด 2000 ตัวอักษร)", variant: "destructive" })
+
+    if (!normalizedDescription.length) {
+      toast({ title: tt("กรุณากรอกรายละเอียด", "Please enter details"), variant: "destructive" })
+      return
+    }
+
+    if (normalizedDescription.length < MIN_DESCRIPTION) {
+      toast({
+        title: tt("รายละเอียดสั้นเกินไป", "Description is too short"),
+        description: tt(
+          "กรุณาอธิบายอย่างน้อย 10 ตัวอักษร เพื่อให้ทีมงานช่วยได้ตรงจุด",
+          "Please provide at least 10 characters so support can help effectively."
+        ),
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (normalizedDescription.length > MAX_DESCRIPTION) {
+      toast({
+        title: tt(
+          "รายละเอียดยาวเกินไป (สูงสุด 2000 ตัวอักษร)",
+          "Description is too long (max 2000 characters)"
+        ),
+        variant: "destructive",
+      })
       return
     }
 
@@ -64,38 +88,44 @@ export function SupportTicketModal({ open, onOpenChange }: SupportTicketModalPro
 
     try {
       const token = await user.getIdToken()
-      const res = await fetch("/api/support", {
+      const response = await fetch("/api/support", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          subject: sub,
+          subject: normalizedSubject,
           category: "general",
-          description: desc,
+          description: normalizedDescription,
         }),
       })
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err?.error || "ไม่สามารถส่งคำร้องได้")
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}))
+        throw new Error(errorPayload?.error || tt("ไม่สามารถส่งคำร้องได้", "Unable to send ticket"))
       }
 
       toast({
-        title: "ส่งคำร้องแล้ว",
-        description: "ทีมงานจะอ่านและตอบกลับโดยเร็วที่สุด",
+        title: tt("ส่งคำร้องแล้ว", "Ticket submitted"),
+        description: tt(
+          "ทีมงานจะอ่านและตอบกลับโดยเร็วที่สุด",
+          "Support team will review and reply as soon as possible."
+        ),
       })
       onOpenChange(false)
     } catch (error: unknown) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error instanceof Error ? error.message : "ไม่สามารถส่งคำร้องได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description:
+          error instanceof Error ? error.message : tt("ไม่สามารถส่งคำร้องได้", "Unable to send ticket"),
         variant: "destructive",
       })
     } finally {
       setSubmitting(false)
-      setTimeout(() => { isSubmittingRef.current = false }, 500)
+      setTimeout(() => {
+        isSubmittingRef.current = false
+      }, 500)
     }
   }
 
@@ -117,14 +147,14 @@ export function SupportTicketModal({ open, onOpenChange }: SupportTicketModalPro
       open={open}
       onOpenChange={onOpenChange}
       size="md"
-      title="ส่งคำร้องขอความช่วยเหลือ"
-      description="ปัญหาที่พบ หรือ ข้อเสนอแนะ"
+      title={tt("ส่งคำร้องขอความช่วยเหลือ", "Submit support ticket")}
+      description={tt("ปัญหาที่พบ หรือ ข้อเสนอแนะ", "Issue report or feedback")}
       icon={<HelpCircle className="h-5 w-5" />}
       footer={
         <UnifiedModalActions
           onCancel={() => onOpenChange(false)}
           onSubmit={handleSubmit}
-          submitText="ส่งคำร้อง"
+          submitText={tt("ส่งคำร้อง", "Submit")}
           submitDisabled={!isFormValid}
           loading={submitting}
         />
@@ -133,11 +163,11 @@ export function SupportTicketModal({ open, onOpenChange }: SupportTicketModalPro
       <div className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="support-subject" className="text-sm font-medium">
-            หัวข้อ <span className="text-destructive">*</span>
+            {tt("หัวข้อ", "Subject")} <span className="text-destructive">*</span>
           </Label>
           <Input
             id="support-subject"
-            placeholder="ระบุ ปัญหา หรือ ข้อเสนอแนะ"
+            placeholder={tt("ระบุ ปัญหา หรือ ข้อเสนอแนะ", "Summarize your issue or suggestion")}
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             disabled={submitting}
@@ -152,11 +182,14 @@ export function SupportTicketModal({ open, onOpenChange }: SupportTicketModalPro
 
         <div className="space-y-2">
           <Label htmlFor="support-description" className="text-sm font-medium">
-            รายละเอียด <span className="text-destructive">*</span>
+            {tt("รายละเอียด", "Details")} <span className="text-destructive">*</span>
           </Label>
           <Textarea
             id="support-description"
-            placeholder="อธิบายเพิ่มเติม (อย่างน้อย 10 ตัวอักษร)"
+            placeholder={tt(
+              "อธิบายเพิ่มเติม (อย่างน้อย 10 ตัวอักษร)",
+              "Provide details (minimum 10 characters)"
+            )}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             disabled={submitting}
@@ -166,8 +199,12 @@ export function SupportTicketModal({ open, onOpenChange }: SupportTicketModalPro
             aria-describedby="support-description-meta"
           />
           <p id="support-description-meta" className="text-xs text-muted-foreground flex justify-between">
-            <span>อย่างน้อย {MIN_DESCRIPTION} ตัวอักษร</span>
-            <span>{description.length} / {MAX_DESCRIPTION}</span>
+            <span>
+              {tt("อย่างน้อย", "At least")} {MIN_DESCRIPTION} {tt("ตัวอักษร", "characters")}
+            </span>
+            <span>
+              {description.length} / {MAX_DESCRIPTION}
+            </span>
           </p>
         </div>
       </div>

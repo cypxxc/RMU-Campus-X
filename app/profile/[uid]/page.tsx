@@ -23,6 +23,7 @@ import { resolveImageUrl } from "@/lib/cloudinary-url"
 import { useItems } from "@/hooks/use-items"
 import { ItemCard } from "@/components/item-card"
 import { ItemDetailView } from "@/components/item-detail-view"
+import { OwnerRatingBadge } from "@/components/owner-rating-badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/dialog"
 import { useAuth } from "@/components/auth-provider"
 import type { User, Item } from "@/types"
+import { useI18n } from "@/components/language-provider"
 
 /** แปลงค่า createdAt ที่อาจเป็น Firestore Timestamp, Date หรือ string เป็น Date */
 function toDate(createdAt: unknown): Date | null {
@@ -58,6 +60,7 @@ function isValidProfileUid(uid: unknown): uid is string {
 export default function PublicProfilePage() {
   const params = useParams()
   const { user: currentUser } = useAuth()
+  const { locale, tt } = useI18n()
   const rawUid = params?.uid as string | undefined
   const uid = isValidProfileUid(rawUid) ? rawUid : ""
 
@@ -125,14 +128,14 @@ export default function PublicProfilePage() {
       setIsEditingBio(false)
       
       toast({
-        title: "บันทึกสำเร็จ",
-        description: "อัปเดตคำแนะนำตัวเรียบร้อยแล้ว",
+        title: tt("บันทึกสำเร็จ", "Saved"),
+        description: tt("อัปเดตคำแนะนำตัวเรียบร้อยแล้ว", "Bio updated successfully."),
       })
     } catch (error) {
       console.error("Error saving bio:", error)
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถบันทึกข้อมูลได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: tt("ไม่สามารถบันทึกข้อมูลได้", "Unable to save data"),
         variant: "destructive",
       })
     } finally {
@@ -201,8 +204,8 @@ export default function PublicProfilePage() {
         <div className="inline-flex items-center justify-center p-4 bg-muted rounded-full mb-4">
           <AlertCircle className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h1 className="text-2xl font-bold mb-2">ไม่พบผู้ใช้งาน</h1>
-        <p className="text-muted-foreground mb-6">ผู้ใช้งานนี้อาจถูกลบหรือไม่มีอยู่ในระบบ</p>
+        <h1 className="text-2xl font-bold mb-2">{tt("ไม่พบผู้ใช้งาน", "User not found")}</h1>
+        <p className="text-muted-foreground mb-6">{tt("ผู้ใช้งานนี้อาจถูกลบหรือไม่มีอยู่ในระบบ", "This user may have been removed or does not exist.")}</p>
       </div>
     )
   }
@@ -219,13 +222,13 @@ export default function PublicProfilePage() {
               {/* Profile Image with Ring Animation */}
               <div className="relative shrink-0">
                 <Avatar className="h-28 w-28 sm:h-32 sm:w-32 rounded-full ring-4 ring-background shadow-xl">
-                  <AvatarImage src={resolveImageUrl(profile.photoURL ?? undefined) || undefined} alt={profile.displayName || "ผู้ใช้งาน"} className="object-cover" />
+                  <AvatarImage src={resolveImageUrl(profile.photoURL ?? undefined) || undefined} alt={profile.displayName || tt("ผู้ใช้งาน", "User")} className="object-cover" />
                   <AvatarFallback className="text-3xl bg-primary/5 text-primary">
                     {profile.displayName?.[0] || "?"}
                   </AvatarFallback>
                 </Avatar>
                 {profile.status === 'ACTIVE' && (
-                  <div className="absolute bottom-1 right-1 h-8 w-8 bg-background rounded-full flex items-center justify-center shadow-sm" title="ยืนยันตัวตนแล้ว">
+                  <div className="absolute bottom-1 right-1 h-8 w-8 bg-background rounded-full flex items-center justify-center shadow-sm" title={tt("ยืนยันตัวตนแล้ว", "Verified")}>
                      <ShieldCheck className="h-5 w-5 text-blue-500 fill-blue-500/20" />
                   </div>
                 )}
@@ -234,8 +237,9 @@ export default function PublicProfilePage() {
               {/* User Info - Centered on Mobile, Left on Desktop */}
               <div className="flex-1 text-center sm:text-left space-y-3 pt-2">
                 <div>
-                  <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground/90">
-                    {profile.displayName || "ผู้ใช้งาน"}
+                  <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground/90 inline-flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                    <span>{profile.displayName || tt("ผู้ใช้งาน", "User")}</span>
+                    <OwnerRatingBadge rating={profile.rating} className="text-base sm:text-lg" />
                   </h1>
                 </div>
 
@@ -243,27 +247,27 @@ export default function PublicProfilePage() {
                 <div className="pt-3 max-w-lg mx-auto sm:mx-0">
                   {isEditingBio ? (
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor="bio" className="sr-only">แนะนำตัว</Label>
+                      <Label htmlFor="bio" className="sr-only">{tt("แนะนำตัว", "Bio")}</Label>
                       <Textarea
                         id="bio"
-                        placeholder="แนะนำตัวสั้นๆ หรือบอกเวลาที่สะดวก..."
+                        placeholder={tt("แนะนำตัวสั้นๆ หรือบอกเวลาที่สะดวก...", "Write a short bio or your availability...")}
                         className="bg-background/50 text-sm resize-none min-h-[80px]"
                         value={bioInput}
                         onChange={(e) => setBioInput(e.target.value)}
                         maxLength={300}
                       />
                       <div className="flex gap-2 justify-end">
-                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setIsEditingBio(false)} disabled={isSavingBio}>ยกเลิก</Button>
+                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setIsEditingBio(false)} disabled={isSavingBio}>{tt("ยกเลิก", "Cancel")}</Button>
                          <Button size="sm" className="h-7 text-xs" onClick={handleSaveBio} disabled={isSavingBio}>
                            {isSavingBio ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                           บันทึก
+                           {tt("บันทึก", "Save")}
                          </Button>
                       </div>
                     </div>
                   ) : (
                     <div className="group/bio relative">
                       <p className={`text-sm leading-relaxed ${profile.bio ? "text-foreground/80" : "text-muted-foreground italic"}`}>
-                        {profile.bio || (currentUser?.uid === uid ? "เพิ่มคำแนะนำตัว..." : "ไม่ได้ระบุข้อมูลแนะนำตัว")}
+                        {profile.bio || (currentUser?.uid === uid ? tt("เพิ่มคำแนะนำตัว...", "Add your bio...") : tt("ไม่ได้ระบุข้อมูลแนะนำตัว", "No bio provided"))}
                       </p>
                       
                       {currentUser?.uid === uid && (
@@ -271,11 +275,11 @@ export default function PublicProfilePage() {
                            variant="ghost" 
                            size="icon" 
                            onClick={() => {
-                             setBioInput(profile.bio || "")
+                           setBioInput(profile.bio || "")
                              setIsEditingBio(true)
                            }}
                            className="absolute -right-8 -top-1 h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover/bio:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                           title="แก้ไขคำแนะนำตัว"
+                           title={tt("แก้ไขคำแนะนำตัว", "Edit bio")}
                         >
                            <Edit2 className="h-3.5 w-3.5" />
                         </Button>
@@ -288,12 +292,12 @@ export default function PublicProfilePage() {
                 <div className="flex items-center justify-center sm:justify-start gap-6 pt-4">
                    <div className="text-center sm:text-left">
                       <p className="text-2xl font-bold text-foreground">{items.length}</p>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">โพส</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{tt("โพส", "Posts")}</p>
                    </div>
                    <div className="w-px h-8 bg-border" />
                    <div className="text-center sm:text-left">
                       <p className="text-2xl font-bold text-foreground">{reviews.length}</p>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">รีวิว</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{tt("รีวิว", "Reviews")}</p>
                    </div>
                 </div>
               </div>
@@ -305,16 +309,12 @@ export default function PublicProfilePage() {
         <TabsList className="bg-muted/50 p-1">
           <TabsTrigger value="items" className="gap-2">
             <Package className="h-4 w-4" />
-            รายการโพส ({items.length})
+            {tt("รายการโพส", "Posts")} ({items.length})
           </TabsTrigger>
           <TabsTrigger value="reviews" className="gap-2">
             <Star className="h-4 w-4" />
-            รีวิว ({reviews.length})
+            {tt("รีวิว", "Reviews")} ({reviews.length})
           </TabsTrigger>
-          {/* <TabsTrigger value="history" className="gap-2">
-            <History className="h-4 w-4" />
-            ประวัติการแลกเปลี่ยน
-          </TabsTrigger> */}
         </TabsList>
 
         <TabsContent value="reviews" className="space-y-6">
@@ -344,13 +344,13 @@ export default function PublicProfilePage() {
                               <StarRating rating={review.rating} readOnly size={14} />
                               <p className="text-sm text-muted-foreground mt-1">{review.comment ?? "—"}</p>
                               <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded inline-block mt-2">
-                                แลกเปลี่ยน: {review.itemTitle}
+                                {tt("แลกเปลี่ยน:", "Exchange:")} {review.itemTitle}
                               </div>
                            </div>
                         </div>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {toDate(review.createdAt)
-                            ? toDate(review.createdAt)!.toLocaleString("th-TH", {
+                            ? toDate(review.createdAt)!.toLocaleString(locale === "th" ? "th-TH" : "en-US", {
                                 year: "numeric",
                                 month: "short",
                                 day: "numeric",
@@ -367,8 +367,8 @@ export default function PublicProfilePage() {
            ) : (
              <div className="text-center py-16 bg-muted/20 rounded-xl border border-dashed">
                 <MessageSquare className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-                <h3 className="font-medium">ไม่มีรีวิว</h3>
-                <p className="text-sm text-muted-foreground">ผู้ใช้นี้ยังไม่ได้รับการรีวิว</p>
+                <h3 className="font-medium">{tt("ไม่มีรีวิว", "No reviews")}</h3>
+                <p className="text-sm text-muted-foreground">{tt("ผู้ใช้นี้ยังไม่ได้รับการรีวิว", "This user has not received reviews yet.")}</p>
              </div>
            )}
         </TabsContent>
@@ -396,7 +396,7 @@ export default function PublicProfilePage() {
               {/* Modal รายละเอียดสิ่งของ — เปิดเมื่อคลิกที่การ์ด */}
               <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
                 <DialogContent className="max-w-4xl overflow-hidden border-none shadow-2xl p-0">
-                  <DialogTitle className="sr-only">รายละเอียดสิ่งของ</DialogTitle>
+                  <DialogTitle className="sr-only">{tt("รายละเอียดสิ่งของ", "Item details")}</DialogTitle>
                   <div className="p-4 sm:p-6 md:p-8">
                     {selectedItem && (
                       <ItemDetailView
@@ -417,10 +417,10 @@ export default function PublicProfilePage() {
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                   >
-                    ก่อนหน้า
+                    {tt("ก่อนหน้า", "Previous")}
                   </Button>
                   <span className="text-sm text-muted-foreground">
-                    หน้า {currentPage} จาก {Math.ceil(items.length / 12)}
+                    {tt(`หน้า ${currentPage} จาก ${Math.ceil(items.length / 12)}`, `Page ${currentPage} of ${Math.ceil(items.length / 12)}`)}
                   </span>
                   <Button
                     variant="outline"
@@ -428,7 +428,7 @@ export default function PublicProfilePage() {
                     onClick={() => setCurrentPage(p => Math.min(Math.ceil(items.length / 12), p + 1))}
                     disabled={currentPage >= Math.ceil(items.length / 12)}
                   >
-                    ถัดไป
+                    {tt("ถัดไป", "Next")}
                   </Button>
                 </div>
               )}
@@ -436,8 +436,8 @@ export default function PublicProfilePage() {
           ) : (
             <div className="text-center py-16 bg-muted/20 rounded-xl border border-dashed">
               <Package className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-              <h3 className="font-medium">ไม่มีรายการโพส</h3>
-              <p className="text-sm text-muted-foreground">ผู้ใช้นี้ยังไม่มีรายการโพสที่กำลังลงประกาศ</p>
+              <h3 className="font-medium">{tt("ไม่มีรายการโพส", "No active posts")}</h3>
+              <p className="text-sm text-muted-foreground">{tt("ผู้ใช้นี้ยังไม่มีรายการโพสที่กำลังลงประกาศ", "This user has no currently listed items.")}</p>
             </div>
           )}
         </TabsContent>

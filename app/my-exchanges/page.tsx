@@ -11,15 +11,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, MessageCircle, X, Trash2, AlertTriangle, RefreshCw, CheckCheck, XCircle } from "lucide-react"
 import { format, isToday, isYesterday } from "date-fns"
-import { th } from "date-fns/locale"
+import { th, enUS } from "date-fns/locale"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 const ReportModal = lazy(() => import("@/components/report-modal").then((m) => ({ default: m.ReportModal })))
 import { CancelExchangeDialog, DeleteExchangeDialog } from "@/components/exchange/exchange-action-dialogs"
-import { STATUS_LABELS } from "@/lib/exchange-state-machine"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia } from "@/components/ui/empty"
 import { Package } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 
 export default function MyExchangesPage() {
   const [exchanges, setExchanges] = useState<Exchange[]>([])
@@ -39,6 +39,15 @@ export default function MyExchangesPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+  const { locale, tt } = useI18n()
+  const statusLabels = {
+    pending: tt("รอเจ้าของตอบรับ", "Waiting for owner response"),
+    accepted: tt("กำลังดำเนินการ", "In progress"),
+    in_progress: tt("กำลังดำเนินการ", "In progress"),
+    completed: tt("เสร็จสิ้น", "Completed"),
+    cancelled: tt("ยกเลิกแล้ว", "Cancelled"),
+    rejected: tt("ปฏิเสธแล้ว", "Rejected"),
+  } as const
 
   const loadExchanges = useCallback(async (options?: { silent?: boolean }) => {
     if (!user) return
@@ -48,18 +57,18 @@ export default function MyExchangesPage() {
       const res = await authFetchJson<{ exchanges?: Exchange[] }>("/api/exchanges", { method: "GET" })
       const list = res.data?.exchanges ?? []
       setExchanges(list as Exchange[])
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!silent) {
         toast({
-          title: "เกิดข้อผิดพลาด",
-          description: error?.message || "ไม่สามารถโหลดการแลกเปลี่ยนได้",
+          title: tt("เกิดข้อผิดพลาด", "Error"),
+          description: error instanceof Error ? error.message : tt("ไม่สามารถโหลดการแลกเปลี่ยนได้", "Unable to load exchanges"),
           variant: "destructive",
         })
       }
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [user, toast])
+  }, [user, toast, tt])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -99,18 +108,21 @@ export default function MyExchangesPage() {
       )
 
       toast({
-        title: "ยกเลิกสำเร็จ",
-        description: "การแลกเปลี่ยนถูกยกเลิกแล้ว",
+        title: tt("ยกเลิกสำเร็จ", "Cancelled"),
+        description: tt("การแลกเปลี่ยนถูกยกเลิกแล้ว", "This exchange has been cancelled."),
       })
 
       // Notify the other party
       const recipientId = user.uid === exchangeToCancel.ownerId ? exchangeToCancel.requesterId : exchangeToCancel.ownerId
       
-      const reasonText = reason.trim() ? `. เหตุผล: ${reason.trim()}` : ""
+      const reasonText = reason.trim() ? tt(`. เหตุผล: ${reason.trim()}`, `. Reason: ${reason.trim()}`) : ""
       await createNotification({
         userId: recipientId,
-        title: "การแลกเปลี่ยนถูกยกเลิก",
-        message: `การแลกเปลี่ยน "${exchangeToCancel.itemTitle}" ถูกยกเลิกโดยอีกฝ่าย${reasonText}`,
+        title: tt("การแลกเปลี่ยนถูกยกเลิก", "Exchange cancelled"),
+        message: tt(
+          `การแลกเปลี่ยน "${exchangeToCancel.itemTitle}" ถูกยกเลิกโดยอีกฝ่าย${reasonText}`,
+          `Exchange "${exchangeToCancel.itemTitle}" was cancelled by the other party${reasonText}`
+        ),
         type: "exchange",
         relatedId: exchangeToCancel.id,
         senderId: user.uid,
@@ -140,10 +152,10 @@ export default function MyExchangesPage() {
 
       // Reload exchanges
       await loadExchanges()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error?.message || "ไม่สามารถยกเลิกการแลกเปลี่ยนได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถยกเลิกการแลกเปลี่ยนได้", "Unable to cancel exchange"),
         variant: "destructive",
       })
     } finally {
@@ -175,16 +187,16 @@ export default function MyExchangesPage() {
     try {
       await respondToExchange(exchangeId, action, user.uid)
       toast({
-        title: action === "accept" ? "ตอบรับแล้ว" : "ปฏิเสธแล้ว",
+        title: action === "accept" ? tt("ตอบรับแล้ว", "Accepted") : tt("ปฏิเสธแล้ว", "Rejected"),
         description: action === "accept"
-          ? "เข้าสู่ขั้นตอนกำลังดำเนินการแล้ว สามารถเปิดแชทเพื่อนัดหมายได้"
-          : "คำขอถูกปฏิเสธแล้ว",
+          ? tt("เข้าสู่ขั้นตอนกำลังดำเนินการแล้ว สามารถเปิดแชทเพื่อนัดหมายได้", "Exchange is now in progress. You can open chat to arrange pickup.")
+          : tt("คำขอถูกปฏิเสธแล้ว", "The request has been rejected."),
       })
       await loadExchanges()
     } catch (error: unknown) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error instanceof Error ? error.message : "ไม่สามารถดำเนินการได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถดำเนินการได้", "Unable to proceed"),
         variant: "destructive",
       })
     } finally {
@@ -205,15 +217,15 @@ export default function MyExchangesPage() {
       await hideExchange(exchangeToDelete.id)
 
       toast({
-        title: "ซ่อนจากรายการแล้ว",
-        description: "แชทจะหายจากรายการของคุณ แต่อีกฝ่ายยังเห็นได้",
+        title: tt("ซ่อนจากรายการแล้ว", "Removed from list"),
+        description: tt("แชทจะหายจากรายการของคุณ แต่อีกฝ่ายยังเห็นได้", "This chat is hidden from your list, but still visible to the other party."),
       })
 
       await loadExchanges()
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error?.message || "ไม่สามารถลบการแลกเปลี่ยนได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถลบการแลกเปลี่ยนได้", "Unable to remove exchange"),
         variant: "destructive",
       })
     } finally {
@@ -248,9 +260,9 @@ export default function MyExchangesPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold mb-1">การแลกเปลี่ยนของฉัน</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-1">{tt("การแลกเปลี่ยนของฉัน", "My exchanges")}</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
-              ตรวจสอบรายการแลกเปลี่ยนทั้งหมด ({exchanges.length} รายการ)
+              {tt(`ตรวจสอบรายการแลกเปลี่ยนทั้งหมด (${exchanges.length} รายการ)`, `Review all exchanges (${exchanges.length} items)`)}
             </p>
           </div>
         </div>
@@ -278,9 +290,9 @@ export default function MyExchangesPage() {
               <EmptyMedia variant="icon" className="rounded-2xl size-14 [&_svg]:size-8">
                 <RefreshCw className="text-muted-foreground" />
               </EmptyMedia>
-              <EmptyTitle>ยังไม่มีการแลกเปลี่ยน</EmptyTitle>
+              <EmptyTitle>{tt("ยังไม่มีการแลกเปลี่ยน", "No exchanges yet")}</EmptyTitle>
               <EmptyDescription>
-                เริ่มการแลกเปลี่ยนโดยการขอรับสิ่งของจากหน้าหลัก
+                {tt("เริ่มการแลกเปลี่ยนโดยการขอรับสิ่งของจากหน้าหลัก", "Start an exchange by requesting an item from the dashboard.")}
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
@@ -288,7 +300,7 @@ export default function MyExchangesPage() {
                 <Button asChild>
                   <Link href="/dashboard">
                     <Package className="mr-2 h-4 w-4" />
-                    ไปที่หน้าหลัก
+                    {tt("ไปที่หน้าหลัก", "Go to dashboard")}
                   </Link>
                 </Button>
               </div>
@@ -316,14 +328,14 @@ export default function MyExchangesPage() {
                             {exchange.itemTitle}
                           </CardTitle>
                           <p className="text-sm text-muted-foreground">
-                            {isRequester ? `กับ ${exchange.ownerEmail}` : `กับ ${exchange.requesterEmail}`}
+                            {isRequester ? tt(`กับ ${exchange.ownerEmail}`, `with ${exchange.ownerEmail}`) : tt(`กับ ${exchange.requesterEmail}`, `with ${exchange.requesterEmail}`)}
                           </p>
                         </div>
                         <Badge 
                           variant="outline" 
                           className={`shrink-0 ${getStatusBadgeClass(exchange.status)}`}
                         >
-                          {STATUS_LABELS[exchange.status as keyof typeof STATUS_LABELS] ?? exchange.status}
+                          {statusLabels[exchange.status as keyof typeof statusLabels] ?? exchange.status}
                         </Badge>
                       </div>
                     </CardHeader>
@@ -331,12 +343,15 @@ export default function MyExchangesPage() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="text-xs text-muted-foreground">
                           {isToday(createdDate)
-                            ? format(createdDate, "HH:mm", { locale: th })
+                            ? format(createdDate, "HH:mm", { locale: locale === "th" ? th : enUS })
                             : isYesterday(createdDate)
-                              ? `เมื่อวาน ${format(createdDate, "HH:mm", { locale: th })}`
+                              ? tt(
+                                  `เมื่อวาน ${format(createdDate, "HH:mm", { locale: th })}`,
+                                  `Yesterday ${format(createdDate, "HH:mm", { locale: enUS })}`
+                                )
                               : createdDate.getFullYear() === new Date().getFullYear()
-                                ? format(createdDate, "d MMM HH:mm", { locale: th })
-                                : format(createdDate, "d MMM yyyy HH:mm", { locale: th })}
+                                ? format(createdDate, "d MMM HH:mm", { locale: locale === "th" ? th : enUS })
+                                : format(createdDate, "d MMM yyyy HH:mm", { locale: locale === "th" ? th : enUS })}
                         </div>
                         
                         {/* Actions */}
@@ -355,7 +370,7 @@ export default function MyExchangesPage() {
                                 ) : (
                                   <CheckCheck className="h-4 w-4" />
                                 )}
-                                <span className="hidden sm:inline">ตอบรับ</span>
+                                <span className="hidden sm:inline">{tt("ตอบรับ", "Accept")}</span>
                               </Button>
                               <Button
                                 size="sm"
@@ -365,7 +380,7 @@ export default function MyExchangesPage() {
                                 onClick={() => handleRespond(exchange.id, "reject")}
                               >
                                 <XCircle className="h-4 w-4" />
-                                <span className="hidden sm:inline">ปฏิเสธ</span>
+                                <span className="hidden sm:inline">{tt("ปฏิเสธ", "Reject")}</span>
                               </Button>
                             </>
                           )}
@@ -375,7 +390,7 @@ export default function MyExchangesPage() {
                             <Button asChild size="sm" className="gap-1.5">
                               <Link href={`/chat/${exchange.id}`}>
                                 <MessageCircle className="h-4 w-4" />
-                                <span className="hidden sm:inline">เปิดแชท</span>
+                                <span className="hidden sm:inline">{tt("เปิดแชท", "Open chat")}</span>
                               </Link>
                             </Button>
                           )}
@@ -392,7 +407,7 @@ export default function MyExchangesPage() {
                               className="gap-1.5"
                             >
                               <X className="h-4 w-4" />
-                              <span className="hidden sm:inline">ยกเลิก</span>
+                              <span className="hidden sm:inline">{tt("ยกเลิก", "Cancel")}</span>
                             </Button>
                           )}
 
@@ -407,7 +422,7 @@ export default function MyExchangesPage() {
                             className="gap-1.5"
                           >
                             <AlertTriangle className="h-4 w-4" />
-                            <span className="hidden sm:inline">รายงาน</span>
+                            <span className="hidden sm:inline">{tt("รายงาน", "Report")}</span>
                           </Button>
 
                           {/* Delete Button */}
@@ -439,7 +454,7 @@ export default function MyExchangesPage() {
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                 >
-                  ก่อนหน้า
+                  {tt("ก่อนหน้า", "Previous")}
                 </Button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.ceil(exchanges.length / itemsPerPage) }, (_, i) => i + 1).map(page => (
@@ -460,7 +475,7 @@ export default function MyExchangesPage() {
                   onClick={() => setCurrentPage(p => Math.min(Math.ceil(exchanges.length / itemsPerPage), p + 1))}
                   disabled={currentPage === Math.ceil(exchanges.length / itemsPerPage)}
                 >
-                  ถัดไป
+                  {tt("ถัดไป", "Next")}
                 </Button>
               </div>
             )}
@@ -501,4 +516,3 @@ export default function MyExchangesPage() {
     </div>
   )
 }
-

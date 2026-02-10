@@ -30,7 +30,6 @@ export function useAdminDashboardData() {
       return res.data
     },
     staleTime: 2 * 60 * 1000,
-    refetchInterval: 20 * 1000,
     refetchOnWindowFocus: true,
   })
 
@@ -44,7 +43,6 @@ export function useAdminDashboardData() {
       return (res?.data?.items ?? []) as Item[]
     },
     staleTime: 2 * 60 * 1000,
-    refetchInterval: 15 * 1000,
     refetchOnWindowFocus: true,
   })
 
@@ -58,7 +56,6 @@ export function useAdminDashboardData() {
       return res?.data?.reports ?? []
     },
     staleTime: 2 * 60 * 1000,
-    refetchInterval: 20 * 1000,
     refetchOnWindowFocus: true,
   })
 
@@ -72,7 +69,6 @@ export function useAdminDashboardData() {
       return res?.data?.users ?? []
     },
     staleTime: 2 * 60 * 1000,
-    refetchInterval: 20 * 1000,
     refetchOnWindowFocus: true,
   })
 
@@ -86,7 +82,6 @@ export function useAdminDashboardData() {
       return (res?.data?.tickets ?? []) as SupportTicket[]
     },
     staleTime: 2 * 60 * 1000,
-    refetchInterval: 15 * 1000,
     refetchOnWindowFocus: true,
   })
 

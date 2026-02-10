@@ -46,14 +46,17 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { useI18n } from "@/components/language-provider"
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
 
-const reportReasonLabels: Record<string, string> = {
-  spam: "สแปม / โฆษณา",
-  inappropriate: "เนื้อหาไม่เหมาะสม",
-  harassment: "การคุกคาม / รังแก",
-  scam: "ฉ้อโกง / หลอกลวง",
-  other: "อื่นๆ",
+const reportReasonLabels: Record<string, { th: string; en: string }> = {
+  spam: { th: "สแปม / โฆษณา", en: "Spam / advertising" },
+  inappropriate: { th: "เนื้อหาไม่เหมาะสม", en: "Inappropriate content" },
+  harassment: { th: "การคุกคาม / รังแก", en: "Harassment / bullying" },
+  scam: { th: "ฉ้อโกง / หลอกลวง", en: "Scam / fraud" },
+  other: { th: "อื่นๆ", en: "Other" },
 }
 
 const statusBadgeStyles: Record<string, string> = {
@@ -66,30 +69,30 @@ const statusBadgeStyles: Record<string, string> = {
   rejected: "bg-red-100 text-red-800 border-red-200",
 }
 
-const statusLabels: Record<string, string> = {
-  new: "ใหม่",
-  under_review: "กำลังตรวจสอบ",
-  waiting_user: "รอข้อมูลเพิ่มเติม",
-  action_taken: "ดำเนินการแล้ว",
-  resolved: "แก้ไขแล้ว",
-  closed: "ปิดเคส",
-  rejected: "ปฏิเสธ",
+const statusLabels: Record<string, { th: string; en: string }> = {
+  new: { th: "ใหม่", en: "New" },
+  under_review: { th: "กำลังตรวจสอบ", en: "Under review" },
+  waiting_user: { th: "รอข้อมูลเพิ่มเติม", en: "Waiting for user" },
+  action_taken: { th: "ดำเนินการแล้ว", en: "Action taken" },
+  resolved: { th: "แก้ไขแล้ว", en: "Resolved" },
+  closed: { th: "ปิดเคส", en: "Closed" },
+  rejected: { th: "ปฏิเสธ", en: "Rejected" },
 }
 
 // Report type labels (using reportType like item_report, user_report)
-const reportTypeLabels: Record<string, string> = {
-  item_report: "โพส",
-  exchange_report: "การแลกเปลี่ยน",
-  chat_report: "แชท",
-  user_report: "ผู้ใช้",
+const reportTypeLabels: Record<string, { th: string; en: string }> = {
+  item_report: { th: "โพส", en: "Post" },
+  exchange_report: { th: "การแลกเปลี่ยน", en: "Exchange" },
+  chat_report: { th: "แชท", en: "Chat" },
+  user_report: { th: "ผู้ใช้", en: "User" },
 }
 
 // Target type labels (using targetType like item, user)
-const targetTypeLabels: Record<string, string> = {
-  item: "โพส",
-  exchange: "การแลกเปลี่ยน",
-  chat: "แชท",
-  user: "ผู้ใช้",
+const targetTypeLabels: Record<string, { th: string; en: string }> = {
+  item: { th: "โพส", en: "Post" },
+  exchange: { th: "การแลกเปลี่ยน", en: "Exchange" },
+  chat: { th: "แชท", en: "Chat" },
+  user: { th: "ผู้ใช้", en: "User" },
 }
 
 interface ReportWithDetails extends Report {
@@ -103,11 +106,13 @@ export default function AdminReportsPage() {
   const [selectedReport, setSelectedReport] = useState<ReportWithDetails | null>(null)
   const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [rejectionReason, setRejectionReason] = useState("")
 
   const [processing, setProcessing] = useState(false)
   const [notifyOwnerLoading, setNotifyOwnerLoading] = useState(false)
   
   const { user, loading: authLoading } = useAuth()
+  const { locale, tt } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
   const reportedUserId = searchParams.get("reportedUserId")
@@ -137,7 +142,7 @@ export default function AdminReportsPage() {
           } else if (targetType === 'exchange' || targetType === 'chat') {
             const data = await getDocById("exchanges", report.targetId)
             if (data) {
-              targetData = { ...data, title: (data.itemTitle as string) || 'แชท/การแลกเปลี่ยน' }
+              targetData = { ...data, title: (data.itemTitle as string) || tt("แชท/การแลกเปลี่ยน", "Chat/Exchange") }
             }
           }
 
@@ -159,14 +164,14 @@ export default function AdminReportsPage() {
     } catch (error) {
       console.error("[AdminReports] Error loading data:", error)
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถโหลดข้อมูลรายงานได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: tt("ไม่สามารถโหลดข้อมูลรายงานได้", "Unable to load reports"),
         variant: "destructive",
       })
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, tt])
 
   useEffect(() => {
     if (authLoading) return
@@ -182,8 +187,8 @@ export default function AdminReportsPage() {
         const isAdmin = await checkIsAdmin(user.email ?? undefined)
         if (!isAdmin) {
           toast({
-            title: "ไม่มีสิทธิ์เข้าถึง",
-            description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+            title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
+            description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
             variant: "destructive",
           })
           router.push("/dashboard")
@@ -199,35 +204,32 @@ export default function AdminReportsPage() {
     }
 
     run()
-  }, [authLoading, loadData, router, toast, user])
+  }, [authLoading, loadData, router, toast, user, tt])
 
-  // อัปเดตอัตโนมัติทุก 30 วินาที เฉพาะเมื่อแท็บเปิดอยู่
-  useEffect(() => {
-    if (!isAdmin) return
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
-      loadData()
-    }, 30_000)
-    return () => clearInterval(interval)
-  }, [isAdmin, loadData])
+  useRefreshOnFocus(loadData, { enabled: isAdmin, minIntervalMs: 10_000 })
 
   const handleUpdateStatus = async (status: ReportStatus) => {
     if (!selectedReport || !user) return
 
+    const note = status === "rejected" ? rejectionReason.trim() : undefined
+    if (status === "rejected" && !note) {
+      toast({
+        title: tt("กรุณาระบุเหตุผลการปฏิเสธ", "Please provide a rejection reason"),
+        description: tt("ระบบจะส่งเหตุผลนี้ไปยังผู้แจ้งรายงาน", "This reason will be sent to the reporter"),
+        variant: "destructive",
+      })
+      return
+    }
+
     setProcessing(true)
     try {
-      await updateReportStatus(
-        selectedReport.id,
-        status,
-        user.uid,
-        user.email || ""
-      )
-      
-      toast({ title: "อัปเดตสถานะสำเร็จ" })
+      await updateReportStatus(selectedReport.id, status, user.uid, user.email || "", note)
+      toast({ title: tt("อัปเดตสถานะสำเร็จ", "Status updated") })
       setSelectedReport(null)
+      setRejectionReason("")
       loadData()
     } catch (error: any) {
-      toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
     } finally {
       setProcessing(false)
     }
@@ -237,7 +239,7 @@ export default function AdminReportsPage() {
     if (!selectedReport || !user) return
     const reportedUserId = (selectedReport as any).reportedUserId || selectedReport.targetData?.postedBy
     if (!reportedUserId) {
-      toast({ title: "ไม่พบข้อมูลเจ้าของโพส", variant: "destructive" })
+      toast({ title: tt("ไม่พบข้อมูลเจ้าของโพส", "Owner data not found"), variant: "destructive" })
       return
     }
 
@@ -249,10 +251,10 @@ export default function AdminReportsPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error?.message || "แจ้งเตือนไม่สำเร็จ")
-      toast({ title: "แจ้งเตือนเจ้าของโพสแล้ว" })
+      if (!res.ok) throw new Error(json?.error?.message || tt("แจ้งเตือนไม่สำเร็จ", "Notification failed"))
+      toast({ title: tt("แจ้งเตือนเจ้าของโพสแล้ว", "Owner notified") })
     } catch (error: any) {
-      toast({ title: "แจ้งเตือนไม่สำเร็จ", description: error.message, variant: "destructive" })
+      toast({ title: tt("แจ้งเตือนไม่สำเร็จ", "Notification failed"), description: error.message, variant: "destructive" })
     } finally {
       setNotifyOwnerLoading(false)
     }
@@ -292,6 +294,8 @@ export default function AdminReportsPage() {
   // Update these to use filteredReports instead of reports
   const pendingReports = filteredReports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status))
   const historyReports = filteredReports.filter(r => !['new', 'under_review', 'waiting_user'].includes(r.status))
+  const selectedStatusLabel = selectedReport ? statusLabels[selectedReport.status] : undefined
+  const selectedReasonLabel = selectedReport ? reportReasonLabels[selectedReport.reason] : undefined
 
   return (
     <div className="min-h-screen bg-background py-6">
@@ -302,9 +306,9 @@ export default function AdminReportsPage() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Flag className="h-8 w-8 text-primary" />
-              จัดการรายงาน
+              {tt("จัดการรายงาน", "Manage reports")}
             </h1>
-            <p className="text-muted-foreground">ตรวจสอบและจัดการรายงานความไม่เหมาะสม</p>
+            <p className="text-muted-foreground">{tt("ตรวจสอบและจัดการรายงานความไม่เหมาะสม", "Review and resolve inappropriate reports")}</p>
           </div>
         </div>
       </div>
@@ -315,7 +319,7 @@ export default function AdminReportsPage() {
           <div className="flex items-center gap-2">
             <Filter className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium">
-              แสดงรายงานที่เกี่ยวกับผู้ใช้: <span className="font-mono text-primary">{reportedUserEmail || reportedUserId}</span>
+              {tt("แสดงรายงานที่เกี่ยวกับผู้ใช้:", "Showing reports for user:")} <span className="font-mono text-primary">{reportedUserEmail || reportedUserId}</span>
             </span>
           </div>
           <Button
@@ -325,7 +329,7 @@ export default function AdminReportsPage() {
             className="gap-2 shrink-0"
           >
             <X className="h-4 w-4" />
-            ล้างตัวกรอง
+            {tt("ล้างตัวกรอง", "Clear filter")}
           </Button>
         </div>
       )}
@@ -339,7 +343,7 @@ export default function AdminReportsPage() {
             </div>
             <div>
               <div className="text-2xl font-bold">{reports.length}</div>
-              <p className="text-xs text-muted-foreground">รายงานทั้งหมดในระบบ</p>
+              <p className="text-xs text-muted-foreground">{tt("รายงานทั้งหมดในระบบ", "Total reports in system")}</p>
             </div>
           </CardContent>
         </Card>
@@ -352,7 +356,7 @@ export default function AdminReportsPage() {
               <div className="text-2xl font-bold text-foreground">
                 {reports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status)).length}
               </div>
-              <p className="text-xs text-muted-foreground">รอตรวจสอบ (ยังไม่จบ)</p>
+              <p className="text-xs text-muted-foreground">{tt("รอตรวจสอบ (ยังไม่จบ)", "Pending review (not completed)")}</p>
             </div>
           </CardContent>
         </Card>
@@ -365,7 +369,7 @@ export default function AdminReportsPage() {
               <div className="text-2xl font-bold text-foreground">
                 {reports.filter(r => ['resolved', 'action_taken', 'rejected', 'closed'].includes(r.status)).length}
               </div>
-              <p className="text-xs text-muted-foreground">จบแล้ว (แก้ไข/ปิด/ปฏิเสธ)</p>
+              <p className="text-xs text-muted-foreground">{tt("จบแล้ว (แก้ไข/ปิด/ปฏิเสธ)", "Completed (resolved/closed/rejected)")}</p>
             </div>
           </CardContent>
         </Card>
@@ -377,15 +381,15 @@ export default function AdminReportsPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-yellow-600" />
-              รายการที่ต้องจัดการ
+              {tt("รายการที่ต้องจัดการ", "Reports to manage")}
               <Badge variant="secondary" className="ml-2 px-3 py-1">
-                {filteredReports.length} รายการ
+                {tt(`${filteredReports.length} รายการ`, `${filteredReports.length} records`)}
               </Badge>
             </CardTitle>
             <div className="relative w-full md:w-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="ค้นหารายงาน..."
+                placeholder={tt("ค้นหารายงาน...", "Search reports...")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 bg-background w-full md:w-[300px]"
@@ -398,11 +402,11 @@ export default function AdminReportsPage() {
             <div className="px-6 py-3 border-b bg-muted/30">
               <TabsList className="bg-muted/50 p-1">
                 <TabsTrigger value="pending" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                   รอดำเนินการ 
+                   {tt("รอดำเนินการ", "Pending")}
                    <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-muted-foreground/10 text-foreground">{pendingReports.length}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="history" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                   ประวัติ
+                   {tt("ประวัติ", "History")}
                    <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-muted-foreground/10 text-foreground">{historyReports.length}</Badge>
                 </TabsTrigger>
               </TabsList>
@@ -412,8 +416,12 @@ export default function AdminReportsPage() {
                <ReportsTable 
                  key={`pending-${pendingReports.length}`}
                  data={pendingReports} 
-                 onView={(r) => setSelectedReport(r)} 
-                 emptyMessage="ไม่มีรายการที่รอดำเนินการ"
+                 onView={(r) => {
+                   setSelectedReport(r)
+                   setRejectionReason((r.adminNote as string) || "")
+                 }} 
+                 emptyMessage={tt("ไม่มีรายการที่รอดำเนินการ", "No pending reports")}
+                 locale={locale}
                />
             </TabsContent>
             
@@ -421,8 +429,12 @@ export default function AdminReportsPage() {
                <ReportsTable 
                  key={`history-${historyReports.length}`}
                  data={historyReports} 
-                 onView={(r) => setSelectedReport(r)} 
-                 emptyMessage="ไม่มีประวัติการรายงาน"
+                 onView={(r) => {
+                   setSelectedReport(r)
+                   setRejectionReason((r.adminNote as string) || "")
+                 }} 
+                 emptyMessage={tt("ไม่มีประวัติการรายงาน", "No report history")}
+                 locale={locale}
                />
             </TabsContent>
           </Tabs>
@@ -430,27 +442,35 @@ export default function AdminReportsPage() {
       </Card>
 
       {/* Report Detail Modal */}
-      <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
+      <Dialog
+        open={!!selectedReport}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedReport(null)
+            setRejectionReason("")
+          }
+        }}
+      >
         <DialogContent className="max-w-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[85vh]">
           <DialogHeader className="p-6 pb-4 pr-24 border-b bg-muted/10 shrink-0">
              <div className="flex items-start justify-between gap-4">
                <div className="space-y-1">
                  <div className="flex items-center gap-2">
                     <Flag className="h-5 w-5 text-destructive" />
-                    <DialogTitle className="text-xl font-bold tracking-tight">รายละเอียดการรายงาน</DialogTitle>
+                    <DialogTitle className="text-xl font-bold tracking-tight">{tt("รายละเอียดการรายงาน", "Report details")}</DialogTitle>
                  </div>
                  <div className="flex items-center gap-2 text-sm text-muted-foreground pl-7">
                     <span>ID: {selectedReport?.id}</span>
                     <span className="text-border">•</span>
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {selectedReport && ((selectedReport.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {selectedReport && ((selectedReport.createdAt as any)?.toDate?.() || new Date()).toLocaleString(locale === "th" ? "th-TH" : "en-US", { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                  </div>
                </div>
                {selectedReport && (
                  <Badge className={statusBadgeStyles[selectedReport.status]}>
-                   {statusLabels[selectedReport.status]}
+                   {selectedStatusLabel ? tt(selectedStatusLabel.th, selectedStatusLabel.en) : selectedReport.status}
                  </Badge>
                )}
              </div>
@@ -465,19 +485,21 @@ export default function AdminReportsPage() {
                     <div className="p-4 rounded-lg bg-muted/30 border">
                        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                           <AlertTriangle className="h-4 w-4 text-amber-500" />
-                          ข้อมูลการแจ้ง
+                          {tt("ข้อมูลการแจ้ง", "Report information")}
                        </h3>
                        <div className="space-y-3 text-sm">
                           <div className="grid grid-cols-3 gap-2">
-                             <span className="text-muted-foreground">หัวข้อ:</span>
-                             <span className="col-span-2 font-medium">{reportReasonLabels[selectedReport.reason] || selectedReport.reason}</span>
+                             <span className="text-muted-foreground">{tt("หัวข้อ:", "Reason:")}</span>
+                             <span className="col-span-2 font-medium">
+                               {selectedReasonLabel ? tt(selectedReasonLabel.th, selectedReasonLabel.en) : selectedReport.reason}
+                             </span>
                           </div>
                           <div className="grid grid-cols-3 gap-2">
-                             <span className="text-muted-foreground">รายละเอียด:</span>
+                             <span className="text-muted-foreground">{tt("รายละเอียด:", "Description:")}</span>
                              <span className="col-span-2">{selectedReport.description || "-"}</span>
                           </div>
                           <div className="grid grid-cols-3 gap-2">
-                             <span className="text-muted-foreground">ผู้แจ้ง:</span>
+                             <span className="text-muted-foreground">{tt("ผู้แจ้ง:", "Reporter:")}</span>
                              <span className="col-span-2">{selectedReport.reporterEmail}</span>
                           </div>
                        </div>
@@ -493,7 +515,7 @@ export default function AdminReportsPage() {
                           ) : (
                              <Package className="h-4 w-4 text-blue-500" />
                           )}
-                          เป้าหมาย ({selectedReport.targetType === 'user' ? 'ผู้ใช้' : 'โพส'})
+                          {tt("เป้าหมาย", "Target")} ({selectedReport.targetType === 'user' ? tt("ผู้ใช้", "User") : tt("โพส", "Post")})
                        </h3>
                        <div className="space-y-3 text-sm">
                           <div className="grid grid-cols-3 gap-2">
@@ -504,24 +526,24 @@ export default function AdminReportsPage() {
                              <>
                                 {selectedReport.targetType === 'user' ? (
                                    <div className="grid grid-cols-3 gap-2">
-                                      <span className="text-muted-foreground">อีเมล:</span>
+                                      <span className="text-muted-foreground">{tt("อีเมล:", "Email:")}</span>
                                       <span className="col-span-2 font-medium">{selectedReport.targetData.email}</span>
                                    </div>
                                 ) : (
                                    <>
                                       <div className="grid grid-cols-3 gap-2">
-                                         <span className="text-muted-foreground">ชื่อ:</span>
+                                         <span className="text-muted-foreground">{tt("ชื่อ:", "Title:")}</span>
                                          <span className="col-span-2 font-medium">{selectedReport.targetData.title}</span>
                                       </div>
                                       <div className="grid grid-cols-3 gap-2">
-                                         <span className="text-muted-foreground">ผู้ลง:</span>
+                                         <span className="text-muted-foreground">{tt("ผู้ลง:", "Owner:")}</span>
                                          <span className="col-span-2">{selectedReport.targetData.postedByEmail}</span>
                                       </div>
                                    </>
                                 )}
                              </>
                           ) : (
-                             <div className="col-span-3 text-destructive italic">ไม่พบข้อมูล (อาจถูกลบไปแล้ว)</div>
+                             <div className="col-span-3 text-destructive italic">{tt("ไม่พบข้อมูล (อาจถูกลบไปแล้ว)", "Data not found (possibly deleted)")}</div>
                           )}
                        </div>
                     </div>
@@ -531,7 +553,7 @@ export default function AdminReportsPage() {
               {/* Evidence Image */}
               {selectedReport.evidenceUrls && selectedReport.evidenceUrls.length > 0 && (
                  <div>
-                    <h3 className="text-sm font-semibold mb-2">หลักฐานรูปภาพ (คลิกเพื่อขยาย)</h3>
+                    <h3 className="text-sm font-semibold mb-2">{tt("หลักฐานรูปภาพ (คลิกเพื่อขยาย)", "Evidence images (click to enlarge)")}</h3>
                     <div className="flex flex-wrap gap-3">
                        {selectedReport.evidenceUrls.map((url, i) => (
                           <button
@@ -542,7 +564,7 @@ export default function AdminReportsPage() {
                           >
                              <Image
                                 src={url}
-                                alt={`หลักฐาน ${i + 1}`}
+                                alt={`${tt("หลักฐาน", "Evidence")} ${i + 1}`}
                                 fill
                                 className="object-contain"
                                 unoptimized
@@ -557,41 +579,47 @@ export default function AdminReportsPage() {
 
           {/* Footer Actions */}
           <DialogFooter className="p-4 border-t bg-muted/10 shrink-0 gap-2 sm:gap-0">
-             <div className="flex gap-2 w-full justify-end flex-wrap">
-                {selectedReport && ((selectedReport as any).reportedUserId || selectedReport.targetData?.postedBy) && (
-                   <Button
-                     variant="outline"
-                     size="sm"
-                     onClick={handleNotifyOwner}
-                     disabled={notifyOwnerLoading || processing}
-                     className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/30"
-                   >
-                     {notifyOwnerLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bell className="h-4 w-4 mr-2" />}
-                     แจ้งเตือนเจ้าของโพส
-                   </Button>
-                )}
+             <div className="w-full space-y-3">
                 {selectedReport && ['new', 'under_review', 'waiting_user'].includes(selectedReport.status) && (
-                   <>
-                      <Button 
-                         variant="outline" 
-                         className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                         onClick={() => handleUpdateStatus('rejected')}
-                         disabled={processing}
-                      >
-                         <XCircle className="h-4 w-4 mr-2" />
-                         ปฏิเสธ
-                      </Button>
-                      <Button 
-                         variant="default"
-                         className="bg-green-600 hover:bg-green-700"
-                         onClick={() => handleUpdateStatus('resolved')}
-                         disabled={processing}
-                      >
-                         <CheckCircle2 className="h-4 w-4 mr-2" />
-                         ดำเนินการแล้ว
-                      </Button>
-                   </>
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      {tt("เหตุผลการปฏิเสธ (จำเป็นเมื่อกดปฏิเสธ และจะแจ้งไปยังผู้แจ้งรายงาน)", "Rejection reason (required for reject and sent to reporter)")}
+                    </p>
+                    <Textarea
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder={tt("ระบุเหตุผลที่ปฏิเสธรายงานนี้...", "Specify why this report is rejected...")}
+                      rows={3}
+                      disabled={processing}
+                    />
+                  </div>
                 )}
+
+                <div className="flex gap-2 w-full justify-end flex-wrap">
+                  {selectedReport && ((selectedReport as any).reportedUserId || selectedReport.targetData?.postedBy) && (
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={handleNotifyOwner}
+                       disabled={notifyOwnerLoading || processing}
+                       className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                     >
+                       {notifyOwnerLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bell className="h-4 w-4 mr-2" />}
+                       {tt("แจ้งเตือนเจ้าของโพส", "Notify owner")}
+                     </Button>
+                  )}
+                  {selectedReport && ['new', 'under_review', 'waiting_user'].includes(selectedReport.status) && (
+                    <Button
+                      variant="outline"
+                      className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                      onClick={() => handleUpdateStatus('rejected')}
+                      disabled={processing || !rejectionReason.trim()}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      {tt("ปฏิเสธ", "Reject")}
+                    </Button>
+                  )}
+                </div>
              </div>
           </DialogFooter>
         </DialogContent>
@@ -606,14 +634,14 @@ export default function AdminReportsPage() {
               size="icon"
               className="absolute top-2 right-2 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full"
               onClick={() => setEnlargedImageUrl(null)}
-              aria-label="ปิด"
+              aria-label={tt("ปิด", "Close")}
             >
               <X className="w-5 h-5" />
             </Button>
             {enlargedImageUrl && (
               <Image
                 src={enlargedImageUrl}
-                alt="หลักฐานขยาย"
+                alt={tt("หลักฐานขยาย", "Expanded evidence")}
                 width={1200}
                 height={800}
                 className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
@@ -631,12 +659,16 @@ export default function AdminReportsPage() {
 function ReportsTable({ 
   data, 
   onView, 
-  emptyMessage 
+  emptyMessage,
+  locale,
 }: { 
   data: ReportWithDetails[], 
   onView: (report: ReportWithDetails) => void, 
-  emptyMessage: string 
+  emptyMessage: string,
+  locale?: "th" | "en",
 }) {
+  const { tt } = useI18n()
+  const activeLocale = locale ?? "th"
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   const totalPages = Math.ceil(data.length / itemsPerPage)
@@ -648,13 +680,13 @@ function ReportsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>วันที่แจ้ง</TableHead>
-              <TableHead>ประเภท</TableHead>
-              <TableHead>เป้าหมาย</TableHead>
-              <TableHead>ข้อหา</TableHead>
-              <TableHead>ผู้แจ้ง</TableHead>
-              <TableHead>สถานะ</TableHead>
-              <TableHead className="text-right">จัดการ</TableHead>
+              <TableHead>{tt("วันที่แจ้ง", "Reported at")}</TableHead>
+              <TableHead>{tt("ประเภท", "Type")}</TableHead>
+              <TableHead>{tt("เป้าหมาย", "Target")}</TableHead>
+              <TableHead>{tt("ข้อหา", "Reason")}</TableHead>
+              <TableHead>{tt("ผู้แจ้ง", "Reporter")}</TableHead>
+              <TableHead>{tt("สถานะ", "Status")}</TableHead>
+              <TableHead className="text-right">{tt("จัดการ", "Actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -667,46 +699,57 @@ function ReportsTable({
               </TableRow>
             ) : (
               paginatedData.map((report) => (
-                <TableRow key={report.id}>
-                  <TableCell className="text-nowrap text-muted-foreground">
-                    {((report.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {(report.reportType && reportTypeLabels[report.reportType]) || 
-                       (report.targetType && targetTypeLabels[report.targetType]) || 
-                       report.reportType || report.targetType || '-'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-[200px]">
-                    <div className="truncate font-medium">
-                      {report.targetData 
-                        ? (report.targetType === 'user' ? report.targetData.email : report.targetData.title)
-                        : <span className="text-muted-foreground italic">Unknown ID: {report.targetId}</span>
-                      }
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-medium text-destructive">
-                      {reportReasonLabels[report.reason] || report.reason}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="truncate max-w-[150px] text-muted-foreground">
-                      {report.reporterEmail}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statusBadgeStyles[report.status]}>
-                      {statusLabels[report.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => onView(report)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                (() => {
+                  const reportTypeLabel = report.reportType ? reportTypeLabels[report.reportType] : undefined
+                  const targetTypeLabel = report.targetType ? targetTypeLabels[report.targetType] : undefined
+                  const reasonLabel = reportReasonLabels[report.reason]
+                  const statusLabel = statusLabels[report.status]
+
+                  return (
+                    <TableRow key={report.id}>
+                      <TableCell className="text-nowrap text-muted-foreground">
+                        {((report.createdAt as any)?.toDate?.() || new Date()).toLocaleString(activeLocale === "th" ? "th-TH" : "en-US", { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {(reportTypeLabel && tt(reportTypeLabel.th, reportTypeLabel.en)) ||
+                            (targetTypeLabel && tt(targetTypeLabel.th, targetTypeLabel.en)) ||
+                            report.reportType ||
+                            report.targetType ||
+                            '-'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[200px]">
+                        <div className="truncate font-medium">
+                          {report.targetData
+                            ? (report.targetType === 'user' ? report.targetData.email : report.targetData.title)
+                            : <span className="text-muted-foreground italic">{tt("ไม่พบ ID:", "Unknown ID:")} {report.targetId}</span>
+                          }
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium text-destructive">
+                          {reasonLabel ? tt(reasonLabel.th, reasonLabel.en) : report.reason}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="truncate max-w-[150px] text-muted-foreground">
+                          {report.reporterEmail}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={statusBadgeStyles[report.status]}>
+                          {statusLabel ? tt(statusLabel.th, statusLabel.en) : report.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => onView(report)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })()
               ))
             )}
           </TableBody>
@@ -722,7 +765,7 @@ function ReportsTable({
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
           >
-            ก่อนหน้า
+            {tt("ก่อนหน้า", "Previous")}
           </Button>
           <div className="flex items-center gap-1">
             {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
@@ -746,7 +789,7 @@ function ReportsTable({
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
           >
-            ถัดไป
+            {tt("ถัดไป", "Next")}
           </Button>
         </div>
       )}

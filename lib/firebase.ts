@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app"
 import { getAuth, type Auth } from "firebase/auth"
-import { getFirestore, type Firestore } from "firebase/firestore"
+import { getFirestore, type Firestore, setLogLevel } from "firebase/firestore"
 
 // Firebase config from environment variables
 const firebaseConfig = {
@@ -18,6 +18,7 @@ const firebaseConfig = {
 let firebaseApp: FirebaseApp | null = null
 let firebaseAuth: Auth | null = null
 let firebaseDb: Firestore | null = null
+let firestoreLogLevelConfigured = false
 
 function initApp(): FirebaseApp {
   if (!firebaseApp) {
@@ -49,6 +50,11 @@ export function getFirebaseDb(): Firestore {
   // Allow both client and server usage
   if (!firebaseDb) {
     firebaseDb = getFirestore(initApp())
+  }
+  if (!firestoreLogLevelConfigured && typeof window !== "undefined") {
+    // Reduce noisy transport logs during temporary offline/network switches.
+    setLogLevel("error")
+    firestoreLogLevelConfigured = true
   }
   return firebaseDb
 }

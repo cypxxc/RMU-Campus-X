@@ -1,42 +1,142 @@
-import { ShieldCheck, UserCheck, Ban, MessageSquareWarning, Scale, Gavel, FileText, ShieldAlert, UserX } from "lucide-react"
+"use client"
+
+import {
+  Ban,
+  FileText,
+  Gavel,
+  MessageSquareWarning,
+  Scale,
+  ShieldAlert,
+  ShieldCheck,
+  UserCheck,
+  UserX,
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/constants"
+import { useI18n } from "@/components/language-provider"
 
-const TERMS_LAST_UPDATED = "4 กุมภาพันธ์ 2568"
+type LocalizedText = { th: string; en: string }
 
-const SECTIONS = [
-  { id: "agreement", title: "ข้อตกลงทั่วไป", icon: Scale },
-  { id: "eligibility", title: "คุณสมบัติของผู้ใช้งาน", icon: UserCheck },
-  { id: "prohibited", title: "สิ่งของที่ห้ามโพสต์", icon: Ban },
-  { id: "conduct", title: "การปฏิบัติตนของสมาชิก", icon: MessageSquareWarning },
-  { id: "security", title: "บัญชีและความปลอดภัย", icon: ShieldAlert },
-  { id: "suspension", title: "การระงับและยกเลิกบัญชี", icon: UserX },
-  { id: "liability", title: "ข้อจำกัดความรับผิด", icon: Gavel },
+type TermsSection = {
+  id: string
+  icon: LucideIcon
+  title: LocalizedText
+  points: LocalizedText[]
+}
+
+const TERMS_LAST_UPDATED: LocalizedText = {
+  th: "10 กุมภาพันธ์ 2569",
+  en: "February 10, 2026",
+}
+
+const SECTIONS: TermsSection[] = [
+  {
+    id: "agreement",
+    icon: Scale,
+    title: { th: "1) ข้อตกลงทั่วไป", en: "1) General agreement" },
+    points: [
+      {
+        th: "การใช้งาน RMU-Campus X ถือว่าคุณยอมรับข้อกำหนดนี้และนโยบายความเป็นส่วนตัว",
+        en: "Using RMU-Campus X means you accept these terms and the privacy policy.",
+      },
+      {
+        th: "แพลตฟอร์มนี้มีไว้เพื่อแบ่งปันและแลกเปลี่ยนสิ่งของในชุมชนมหาวิทยาลัย ไม่ใช่เพื่อธุรกิจเชิงพาณิชย์",
+        en: "This platform is for campus sharing/exchange, not for commercial business.",
+      },
+    ],
+  },
+  {
+    id: "eligibility",
+    icon: UserCheck,
+    title: { th: "2) คุณสมบัติผู้ใช้งาน", en: "2) User eligibility" },
+    points: [
+      { th: "ต้องเป็นนักศึกษา บุคลากร หรืออาจารย์ของ RMU", en: "You must be an RMU student or staff member." },
+      { th: "ต้องลงทะเบียนด้วยอีเมลโดเมน @rmu.ac.th", en: "Registration requires an @rmu.ac.th email." },
+      { th: "ต้องยืนยันอีเมลก่อนใช้งานฟังก์ชันหลัก", en: "Email verification is required before full usage." },
+    ],
+  },
+  {
+    id: "prohibited",
+    icon: Ban,
+    title: { th: "3) เนื้อหาและสิ่งของต้องห้าม", en: "3) Prohibited content and items" },
+    points: [
+      { th: "ห้ามโพสต์สิ่งของผิดกฎหมายหรืออันตราย", en: "No illegal or dangerous items." },
+      { th: "ห้ามโพสต์เนื้อหาลามก คุกคาม หรือสร้างความเกลียดชัง", en: "No obscene, harassing, or hateful content." },
+      { th: "ห้ามสแปม โพสต์ซ้ำ หรือให้ข้อมูลหลอกลวง", en: "No spam, duplicate posts, or misleading information." },
+    ],
+  },
+  {
+    id: "conduct",
+    icon: MessageSquareWarning,
+    title: { th: "4) การปฏิบัติตนในชุมชน", en: "4) Community conduct" },
+    points: [
+      { th: "สื่อสารด้วยความสุภาพและให้เกียรติผู้อื่น", en: "Communicate respectfully with other users." },
+      { th: "ปฏิบัติตามกติกาและคำแนะนำความปลอดภัยของระบบ", en: "Follow platform rules and safety guidance." },
+      { th: "ทีมงานมีสิทธิ์ตรวจสอบและดำเนินการเมื่อพบการละเมิด", en: "The admin team may investigate and act on violations." },
+    ],
+  },
+  {
+    id: "security",
+    icon: ShieldAlert,
+    title: { th: "5) บัญชีและความปลอดภัย", en: "5) Account and security" },
+    points: [
+      { th: "คุณต้องดูแลรหัสผ่านและการเข้าถึงบัญชีของตนเอง", en: "You are responsible for your password and account access." },
+      { th: "หากสงสัยว่าบัญชีถูกใช้งานโดยไม่ได้รับอนุญาต ให้เปลี่ยนรหัสผ่านทันที", en: "If you suspect unauthorized access, change your password immediately." },
+      { th: "การกระทำผ่านบัญชีที่ล็อกอินแล้วถือเป็นความรับผิดชอบของเจ้าของบัญชี", en: "Actions made from a signed-in account are the account owner's responsibility." },
+    ],
+  },
+  {
+    id: "suspension",
+    icon: UserX,
+    title: { th: "6) การเตือน ระงับ และแบน", en: "6) Warnings, suspension, and ban" },
+    points: [
+      { th: "เมื่อได้รับคำเตือนครบ 3 ครั้ง ระบบจะระงับการใช้งาน 7 วัน", en: "After 3 warnings, the account is suspended for 7 days." },
+      { th: "หากถูกระงับครบ 2 ครั้ง ระบบอาจแบนถาวรโดยอัตโนมัติ", en: "After 2 suspensions, the account may be permanently banned." },
+      {
+        th: `หากต้องการอุทธรณ์หรือสอบถาม ติดต่อทีมสนับสนุนที่ ${SUPPORT_EMAIL}`,
+        en: `For appeals or questions, contact support at ${SUPPORT_EMAIL}.`,
+      },
+    ],
+  },
+  {
+    id: "liability",
+    icon: Gavel,
+    title: { th: "7) ข้อจำกัดความรับผิด", en: "7) Limitation of liability" },
+    points: [
+      { th: "RMU-Campus X เป็นแพลตฟอร์มกลาง ไม่ใช่คู่สัญญาในการแลกเปลี่ยน", en: "RMU-Campus X is an intermediary platform, not a direct party in exchanges." },
+      { th: "ผู้ใช้ต้องตรวจสอบคู่แลกเปลี่ยนและสภาพสิ่งของก่อนตกลงด้วยตนเอง", en: "Users must verify counterparties and item conditions themselves." },
+      { th: "ควรนัดรับในจุดสาธารณะและปลอดภัยภายในมหาวิทยาลัย", en: "Always meet in safe public campus locations." },
+    ],
+  },
 ]
 
+function pickText(value: LocalizedText, locale: "th" | "en") {
+  return locale === "th" ? value.th : value.en
+}
+
 export default function TermsPage() {
+  const { locale, tt } = useI18n()
+
   return (
     <div className="container mx-auto px-4 py-8 sm:py-10 max-w-3xl">
       <div className="text-center mb-10">
         <div className="inline-flex items-center justify-center p-3 rounded-full bg-primary/10 text-primary mb-4">
           <ShieldCheck className="h-6 w-6" />
         </div>
-        <h1 className="text-3xl font-bold mb-2">ข้อกำหนดและเงื่อนไขการใช้งาน</h1>
-        <p className="text-muted-foreground mb-2">
-          RMU-Campus X — แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม
-        </p>
+        <h1 className="text-3xl font-bold mb-2">{tt("ข้อกำหนดและเงื่อนไขการใช้งาน", "Terms of Service")}</h1>
         <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
           <FileText className="h-3.5 w-3.5" />
-          อัปเดตล่าสุด: {TERMS_LAST_UPDATED}
+          {tt("อัปเดตล่าสุด:", "Last updated:")} {pickText(TERMS_LAST_UPDATED, locale)}
         </p>
       </div>
 
-      <nav className="mb-10 rounded-lg border bg-muted/30 p-4" aria-label="สารบัญ">
-        <p className="text-sm font-medium text-muted-foreground mb-3">สารบัญ</p>
+      <nav className="mb-10 rounded-lg border bg-muted/30 p-4" aria-label={tt("สารบัญ", "Table of contents")}>
+        <p className="text-sm font-medium text-muted-foreground mb-3">{tt("สารบัญ", "Table of contents")}</p>
         <ul className="space-y-1.5 text-sm">
-          {SECTIONS.map((s) => (
-            <li key={s.id}>
-              <a href={`#${s.id}`} className="text-primary hover:underline">
-                {s.title}
+          {SECTIONS.map((section) => (
+            <li key={section.id}>
+              <a href={`#${section.id}`} className="text-primary hover:underline">
+                {pickText(section.title, locale)}
               </a>
             </li>
           ))}
@@ -44,118 +144,39 @@ export default function TermsPage() {
       </nav>
 
       <div className="space-y-6">
-        <section id="agreement" className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
-            <Scale className="h-5 w-5 text-primary shrink-0" />
-            1. ข้อตกลงทั่วไป
-          </h2>
-          <div className="text-muted-foreground leading-relaxed space-y-3">
-            <p>
-              <strong className="text-foreground">ข้อกำหนดและเงื่อนไขการใช้งาน (Terms of Service)</strong> เว็บแอปพลิเคชัน RMU-Campus X
-            </p>
-            <ul className="list-disc list-outside ml-4 space-y-1">
-              <li><strong className="text-foreground">การยอมรับ:</strong> เมื่อท่านลงทะเบียนหรือใช้งานแพลตฟอร์มนี้ ถือว่าท่านได้อ่าน เข้าใจ และยอมรับข้อกำหนดและเงื่อนไขทั้งหมดรวมถึงนโยบายความเป็นส่วนตัว</li>
-              <li><strong className="text-foreground">วัตถุประสงค์ของแพลตฟอร์ม:</strong> จัดทำเพื่อการแลกเปลี่ยน/แบ่งปันสิ่งของระหว่างนักศึกษาและบุคลากรภายในมหาวิทยาลัยเท่านั้น ไม่ใช่ช่องทางขายหรือแสวงหาผลกำไรในเชิงพาณิชย์</li>
-            </ul>
-          </div>
-        </section>
-
-        <section id="eligibility" className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
-            <UserCheck className="h-5 w-5 text-primary shrink-0" />
-            2. คุณสมบัติของผู้ใช้งาน
-          </h2>
-          <div className="text-muted-foreground leading-relaxed space-y-2">
-            <p>เพื่อความปลอดภัยและความน่าเชื่อถือของชุมชน ผู้ใช้ต้องมีคุณสมบัติดังนี้:</p>
-            <ul className="list-disc list-outside ml-4 space-y-1">
-              <li>เป็นนักศึกษา หรือ บุคลากร/อาจารย์ ของมหาวิทยาลัยราชภัฏมหาสารคาม</li>
-              <li>ลงทะเบียนและยืนยันตัวตนด้วยอีเมลโดเมน <code className="bg-muted px-1 rounded">@rmu.ac.th</code> เท่านั้น</li>
-              <li>ยืนยันอีเมล (Email Verification) ตามที่ระบบกำหนด</li>
-            </ul>
-            <p className="text-sm">การสมัครสมาชิกถือเป็นการยืนยันว่าท่านมีคุณสมบัติตามที่กำหนด</p>
-          </div>
-        </section>
-
-        <section id="prohibited" className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
-            <Ban className="h-5 w-5 text-primary shrink-0" />
-            3. สิ่งของที่ห้ามโพสต์
-          </h2>
-          <div className="text-muted-foreground leading-relaxed space-y-2">
-            <p>เพื่อความปลอดภัยและความเรียบร้อย <strong className="text-foreground">ห้ามลงประกาศสิ่งของต่อไปนี้โดยเด็ดขาด:</strong></p>
-            <div className="grid sm:grid-cols-2 gap-2 mt-3">
-              {["สิ่งของผิดกฎหมายทุกชนิด", "ยาเสพติดและสิ่งมึนเมา", "อาวุธและวัตถุอันตราย", "สื่อลามกอนาจาร", "สิ่งของที่ไม่ได้เป็นเจ้าของจริง"].map((item, i) => (
-                <div key={i} className="flex items-center gap-2 bg-muted/30 p-2 rounded border text-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                  {item}
-                </div>
-              ))}
-            </div>
-            <p className="text-sm pt-2">การฝ่าฝืนจะถูกพิจารณาและอาจนำไปสู่การลบโพสต์ การเตือน หรือการระงับบัญชี</p>
-          </div>
-        </section>
-
-        <section id="conduct" className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
-            <MessageSquareWarning className="h-5 w-5 text-primary shrink-0" />
-            4. การปฏิบัติตนของสมาชิก
-          </h2>
-          <div className="text-muted-foreground leading-relaxed space-y-2">
-            <p>ชุมชนของเราดำเนินไปด้วยความเคารพและความรับผิดชอบร่วมกัน ผู้ใช้ต้อง:</p>
-            <ul className="list-disc list-outside ml-4 space-y-1">
-              <li>ใช้ถ้อยคำสุภาพ ไม่ก่อความรำคาญ ไม่รังแก หรือคุกคามผู้อื่น (ทั้งในแชท และ การโพสต์)</li>
-              <li>ปฏิบัติตามแนวทางของระบบ (เช่น ไม่สแปม ไม่โพสต์ซ้ำมากเกินไป)</li>
-            </ul>
-            <p><span className="text-red-600 dark:text-red-400 font-medium">ทางระบบมีสิทธิตรวจสอบและระงับบัญชีทันที</span> หากพบพฤติกรรมที่ไม่เหมาะสม หรือได้รับรายงานจากผู้ใช้ท่านอื่น</p>
-          </div>
-        </section>
-
-        <section id="security" className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
-            <ShieldAlert className="h-5 w-5 text-primary shrink-0" />
-            5. บัญชีและความปลอดภัย
-          </h2>
-          <div className="text-muted-foreground leading-relaxed">
-            <ul className="list-disc list-outside ml-4 space-y-1">
-              <li>ท่านมีหน้าที่รักษาความลับของรหัสผ่านและไม่เปิดเผยให้ผู้อื่นใช้บัญชีของท่าน</li>
-              <li>หากสงสัยว่าบัญชีถูกใช้โดยไม่ได้รับอนุญาต กรุณาเปลี่ยนรหัสผ่านและแจ้งทีมงานผ่านเมนูช่วยเหลือ</li>
-              <li>การกระทำใดๆ ที่เกิดจากบัญชีของท่าน (หลังล็อกอิน) ถือเป็นความรับผิดชอบของท่าน</li>
-            </ul>
-          </div>
-        </section>
-
-        <section id="suspension" className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
-            <UserX className="h-5 w-5 text-primary shrink-0" />
-            6. การระงับและยกเลิกบัญชี
-          </h2>
-          <div className="text-muted-foreground leading-relaxed space-y-2">
-            <p>ทางผู้ให้บริการ (ผู้พัฒนา) ขอสงวนสิทธิ์:</p>
-            <ul className="list-disc list-outside ml-4 space-y-1">
-              <li><strong className="text-foreground">ออกคำเตือน</strong> — บันทึกเหตุผลและจำนวนคำเตือนสะสม ผู้ใช้ยังใช้งานได้ตามปกติ แต่จะเห็นข้อความแจ้งเตือนในระบบ และหากได้รับคำเตือนซ้ำอาจถูกระงับหรือแบนในขั้นถัดไป</li>
-              <li><strong className="text-foreground">ระงับบัญชีชั่วคราว</strong> — ผู้ใช้ยังล็อกอินได้ แต่จะไม่สามารถโพสต์ของ ขอแลกเปลี่ยน หรือแชทได้จนครบกำหนด ระบบจะแสดงวันที่ปลดระงับและปุ่มติดต่อทีมสนับสนุน หากต้องการติดต่อเพิ่มเติม ส่งอีเมลได้ที่ <a href={SUPPORT_MAILTO} className="text-primary hover:underline">{SUPPORT_EMAIL}</a></li>
-              <li><strong className="text-foreground">แบนถาวร</strong> — ผู้ใช้จะไม่สามารถเข้าสู่ระบบได้อีก ระบบจะแสดงเหตุผลและแนะนำให้ติดต่อทีมสนับสนุน หากคิดว่าเป็นข้อผิดพลาด กรุณาส่งอีเมลติดต่อที่ <a href={SUPPORT_MAILTO} className="text-primary hover:underline">{SUPPORT_EMAIL}</a></li>
-              <li>ท่านสามารถยกเลิกบัญชีของท่านได้ผ่านการตั้งค่าในระบบ (ตามฟีเจอร์ที่ระบบรองรับ)</li>
-            </ul>
-          </div>
-        </section>
-
-        <section id="liability" className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
-            <Gavel className="h-5 w-5 text-primary shrink-0" />
-            7. ข้อจำกัดความรับผิด
-          </h2>
-          <div className="p-4 bg-muted/30 rounded-lg border-l-4 border-primary text-muted-foreground text-sm leading-relaxed space-y-2">
-            <p>RMU-Campus X เป็น <strong className="text-foreground">พื้นที่กลาง (platform)</strong> สำหรับการแลกเปลี่ยนข้อมูลระหว่างผู้ใช้ ทางผู้ให้บริการ <strong className="text-foreground">ไม่รับผิดชอบ</strong> ต่อความเสียหายใดๆ ที่เกิดจากการแลกเปลี่ยน การนัดพบ หรือการติดต่อระหว่างผู้ใช้</p>
-            <p>ท่านควร:</p>
-            <ul className="list-disc list-outside ml-4 space-y-1">
-              <li>ตรวจสอบสภาพสิ่งของและความน่าเชื่อถือของคู่แลกเปลี่ยนด้วยตนเองก่อนตกลง</li>
-              <li>นัดพบในที่สาธารณะและปลอดภัย และระมัดระวังเรื่องความปลอดภัยส่วนตัว</li>
-            </ul>
-          </div>
-        </section>
+        {SECTIONS.map((section) => {
+          const Icon = section.icon
+          return (
+            <section key={section.id} id={section.id} className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
+              <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
+                <Icon className="h-5 w-5 text-primary shrink-0" />
+                {pickText(section.title, locale)}
+              </h2>
+              <ul className="list-disc list-outside ml-4 space-y-2 text-muted-foreground leading-relaxed">
+                {section.points.map((point, index) => {
+                  if (section.id === "suspension" && index === section.points.length - 1) {
+                    return (
+                      <li key={index}>
+                        {pickText(
+                          {
+                            th: "หากต้องการอุทธรณ์หรือสอบถาม ติดต่อทีมสนับสนุนที่ ",
+                            en: "For appeals or questions, contact support at ",
+                          },
+                          locale
+                        )}
+                        <a href={SUPPORT_MAILTO} className="text-primary hover:underline">
+                          {SUPPORT_EMAIL}
+                        </a>
+                      </li>
+                    )
+                  }
+                  return <li key={index}>{pickText(point, locale)}</li>
+                })}
+              </ul>
+            </section>
+          )
+        })}
       </div>
-
     </div>
   )
 }

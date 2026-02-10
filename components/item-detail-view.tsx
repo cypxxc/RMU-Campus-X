@@ -29,8 +29,10 @@ import Link from "next/link"
 const ReportModal = lazy(() => import("@/components/report-modal").then((m) => ({ default: m.ReportModal })))
 import { useAccountStatus } from "@/hooks/use-account-status"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
-import { CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS, CATEGORY_OPTIONS, LOCATION_OPTIONS } from "@/lib/constants"
+import { STATUS_COLORS, CATEGORY_OPTIONS, LOCATION_OPTIONS } from "@/lib/constants"
 import { FavoriteButton } from "@/components/favorite-button"
+import { OwnerRatingBadge } from "@/components/owner-rating-badge"
+import { useI18n } from "@/components/language-provider"
 
 interface ItemDetailViewProps {
   item: Item
@@ -70,9 +72,12 @@ export function ItemDetailView({
   const router = useRouter()
   const { toast } = useToast()
   const { canExchange } = useAccountStatus()
+  const { locale, tt } = useI18n()
 
   // Fetch poster profile only if postedByName is not available (for old items)
   useEffect(() => {
+    setPoster(null)
+
     // If postedByName exists, no need to fetch
     if (item.postedByName) {
       setPosterLoading(false)
@@ -120,22 +125,22 @@ export function ItemDetailView({
       })
 
       if (!response.success || !response.data) {
-         throw new Error(response.error || "ไม่สามารถสร้างคำขอได้")
+         throw new Error(response.error || tt("ไม่สามารถสร้างคำขอได้", "Unable to create request"))
       }
       const exchangeId = response.data
 
       // สถานะสิ่งของ + การแจ้งเตือนในแอป + LINE ส่งจาก POST /api/exchanges แล้ว
 
       toast({
-        title: "ส่งคำขอสำเร็จ",
-        description: "คุณสามารถติดต่อเจ้าของได้ในแชท",
+        title: tt("ส่งคำขอสำเร็จ", "Request sent"),
+        description: tt("คุณสามารถติดต่อเจ้าของได้ในแชท", "You can contact the owner in chat."),
       })
 
       router.push(`/chat/${exchangeId}`)
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error.message || "ไม่สามารถส่งคำขอได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถส่งคำขอได้", "Unable to send request"),
         variant: "destructive",
       })
     } finally {
@@ -147,6 +152,34 @@ export function ItemDetailView({
   const postedDate = safeToDate(item.postedAt, new Date(0))
   const isOwner = user?.uid === item.postedBy
   const isAdminMode = variant === "admin"
+  const ownerDisplayName = item.postedByName || poster?.displayName || item.postedByEmail.split("@")[0] || tt("ผู้ใช้งาน", "User")
+  const ownerRating = item.postedByRating ?? poster?.rating
+  const categoryLabelByValue: Record<ItemCategory, string> = {
+    electronics: tt("อิเล็กทรอนิกส์", "Electronics"),
+    books: tt("หนังสือ", "Books"),
+    furniture: tt("เฟอร์นิเจอร์", "Furniture"),
+    clothing: tt("เสื้อผ้า", "Clothing"),
+    sports: tt("อุปกรณ์กีฬา", "Sports"),
+    other: tt("อื่นๆ", "Other"),
+  }
+  const statusLabelByValue: Record<ItemStatus, string> = {
+    available: tt("พร้อมให้", "Available"),
+    pending: tt("รอดำเนินการ", "Pending"),
+    completed: tt("เสร็จสิ้น", "Completed"),
+  }
+  const postedAtText =
+    locale === "th"
+      ? formatPostedAt(postedDate)
+      : postedDate.getTime() > 0
+        ? new Intl.DateTimeFormat("en-US", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(postedDate)
+        : "—"
 
   const openEditModal = () => {
     setEditTitle(item.title)
@@ -165,7 +198,7 @@ export function ItemDetailView({
         const auth = getAuth()
         return auth.currentUser?.getIdToken() ?? null
       })()
-      if (!token) throw new Error("กรุณาเข้าสู่ระบบใหม่")
+      if (!token) throw new Error(tt("กรุณาเข้าสู่ระบบใหม่", "Please sign in again"))
       const res = await fetch(`/api/admin/items/${item.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -177,12 +210,12 @@ export function ItemDetailView({
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error?.message || data.error || "แก้ไขไม่สำเร็จ")
-      toast({ title: "แก้ไขโพสสำเร็จ เจ้าของจะได้รับการแจ้งเตือน" })
+      if (!res.ok) throw new Error(data.error?.message || data.error || tt("แก้ไขไม่สำเร็จ", "Update failed"))
+      toast({ title: tt("แก้ไขโพสสำเร็จ เจ้าของจะได้รับการแจ้งเตือน", "Post updated. Owner has been notified.") })
       setShowEditModal(false)
       onAdminItemUpdated?.({ ...item, title: editTitle, description: editDescription, category: editCategory, location: editLocation })
     } catch (e) {
-      toast({ title: "แก้ไขไม่สำเร็จ", description: e instanceof Error ? e.message : undefined, variant: "destructive" })
+      toast({ title: tt("แก้ไขไม่สำเร็จ", "Update failed"), description: e instanceof Error ? e.message : undefined, variant: "destructive" })
     } finally {
       setEditSaving(false)
     }
@@ -235,7 +268,14 @@ export function ItemDetailView({
                       : 'border-border hover:border-primary/50'
                   }`}
                 >
-                  <Image src={getItemImageUrlAt(item, index, { width: 200 })} alt={`รูปที่ ${index + 1}`} fill className="object-cover" loading="lazy" sizes="64px" />
+                  <Image
+                    src={getItemImageUrlAt(item, index, { width: 200 })}
+                    alt={tt(`รูปที่ ${index + 1}`, `Image ${index + 1}`)}
+                    fill
+                    className="object-cover"
+                    loading="lazy"
+                    sizes="64px"
+                  />
                 </button>
               ))}
             </div>
@@ -252,7 +292,7 @@ export function ItemDetailView({
                 variant="outline"
                 className={`shrink-0 text-[10px] font-bold px-2 py-0.5 mt-1 ${STATUS_COLORS[item.status]}`}
               >
-                {STATUS_LABELS[item.status]}
+                {statusLabelByValue[item.status]}
               </Badge>
             </div>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed whitespace-pre-wrap">{item.description}</p>
@@ -267,8 +307,8 @@ export function ItemDetailView({
                     <Package className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">หมวดหมู่</span>
-                    <p className="font-semibold text-base">{CATEGORY_LABELS[item.category]}</p>
+                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">{tt("หมวดหมู่", "Category")}</span>
+                    <p className="font-semibold text-base">{categoryLabelByValue[item.category]}</p>
                   </div>
                 </div>
                 
@@ -278,7 +318,7 @@ export function ItemDetailView({
                       <MapPin className="h-5 w-5 text-primary" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">สถานที่นัดรับ</span>
+                      <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">{tt("สถานที่นัดรับ", "Pickup location")}</span>
                       <p className="font-semibold text-base wrap-break-word">{item.location}</p>
                     </div>
                   </div>
@@ -289,17 +329,14 @@ export function ItemDetailView({
                     <UserIcon className="h-5 w-5 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">โพสต์โดย</span>
+                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">{tt("โพสต์โดย", "Posted by")}</span>
                     <p className="font-semibold text-base wrap-break-word">
-                      {item.postedByName ? (
-                         <Link href={`/profile/${item.postedBy}`} className="hover:text-primary hover:underline transition-colors block">
-                           {item.postedByName}
-                         </Link>
-                      ) : posterLoading ? (
-                        <span className="text-muted-foreground">กำลังโหลด...</span>
+                      {posterLoading && !item.postedByName ? (
+                        <span className="text-muted-foreground">{tt("กำลังโหลด...", "Loading...")}</span>
                       ) : (
-                        <Link href={`/profile/${item.postedBy}`} className="hover:text-primary hover:underline transition-colors block">
-                           {poster?.displayName || item.postedByEmail.split('@')[0]}
+                        <Link href={`/profile/${item.postedBy}`} className="hover:text-primary hover:underline transition-colors inline-flex items-center gap-1.5 flex-wrap">
+                           <span>{ownerDisplayName}</span>
+                           <OwnerRatingBadge rating={ownerRating} className="text-xs" />
                         </Link>
                       )}
                     </p>
@@ -311,9 +348,9 @@ export function ItemDetailView({
                     <Calendar className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">โพสต์เมื่อ</span>
+                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">{tt("โพสต์เมื่อ", "Posted at")}</span>
                     <p className="font-semibold text-base">
-                      {formatPostedAt(postedDate)}
+                      {postedAtText}
                     </p>
                   </div>
                 </div>
@@ -330,7 +367,7 @@ export function ItemDetailView({
                 disabled={requesting}
               >
                 <HandHeart className="h-5 w-5" />
-                ขอรับสิ่งของนี้
+                {tt("ขอรับสิ่งของนี้", "Request this item")}
               </Button>
               <Button 
                 variant="outline" 
@@ -338,7 +375,7 @@ export function ItemDetailView({
                 onClick={() => setShowReportModal(true)}
               >
                 <AlertTriangle className="h-4 w-4" />
-                รายงาน
+                {tt("รายงาน", "Report")}
               </Button>
               <FavoriteButton item={item} variant="button" className="h-12 w-full sm:w-auto" />
             </div>
@@ -348,13 +385,13 @@ export function ItemDetailView({
           {!isAdminMode && user && !isOwner && item.status !== "available" && (
             <div className="p-4 rounded-xl bg-muted/50 border text-center" role="status">
               <p className="text-sm text-muted-foreground mb-3">
-                {item.status === "pending" && "สิ่งของนี้กำลังอยู่ระหว่างการแลกเปลี่ยน"}
-                {item.status === "completed" && "สิ่งของนี้ถูกแลกเปลี่ยนแล้ว"}
+                {item.status === "pending" && tt("สิ่งของนี้กำลังอยู่ระหว่างการแลกเปลี่ยน", "This item is currently in exchange.")}
+                {item.status === "completed" && tt("สิ่งของนี้ถูกแลกเปลี่ยนแล้ว", "This item has been exchanged.")}
               </p>
               <Button variant="outline" className="gap-2" asChild>
                 <Link href="/dashboard">
                   <Package className="h-4 w-4" />
-                  ดูสิ่งของอื่น
+                  {tt("ดูสิ่งของอื่น", "Browse other items")}
                 </Link>
               </Button>
             </div>
@@ -364,14 +401,14 @@ export function ItemDetailView({
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-center gap-2">
               <Package className="h-4 w-4 text-primary" />
               <p className="text-sm font-bold text-primary">
-                นี่คือสิ่งของของคุณ
+                {tt("นี่คือสิ่งของของคุณ", "This is your item")}
               </p>
             </div>
           )}
 
           {!isAdminMode && !user && (
             <Button className="w-full h-12 font-bold rounded-xl" asChild>
-              <Link href="/login">เข้าสู่ระบบเพื่อขอรับสิ่งของ</Link>
+              <Link href="/login">{tt("เข้าสู่ระบบเพื่อขอรับสิ่งของ", "Sign in to request this item")}</Link>
             </Button>
           )}
 
@@ -379,12 +416,12 @@ export function ItemDetailView({
           {isAdminMode && onAdminStatusChange && onAdminDelete && (
             <div className="p-4 border-t bg-muted/20 rounded-xl flex flex-wrap items-center justify-between gap-3">
               <Button variant="ghost" size="sm" onClick={_onClose} className="text-muted-foreground hover:text-foreground">
-                ปิด
+                {tt("ปิด", "Close")}
               </Button>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={openEditModal} disabled={adminProcessing} className="gap-2">
                   <Pencil className="h-4 w-4" />
-                  แก้ไข
+                  {tt("แก้ไข", "Edit")}
                 </Button>
                 <Button
                   variant="outline"
@@ -394,7 +431,7 @@ export function ItemDetailView({
                   className="border-green-200 hover:bg-green-50 text-green-700 dark:border-green-900 dark:hover:bg-green-950/50 dark:text-green-400"
                 >
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  พร้อมให้
+                  {tt("พร้อมให้", "Available")}
                 </Button>
                 <Button
                   variant="outline"
@@ -404,7 +441,7 @@ export function ItemDetailView({
                   className="border-blue-200 hover:bg-blue-50 text-blue-700 dark:border-blue-900 dark:hover:bg-blue-950/50 dark:text-blue-400"
                 >
                   <Clock className="h-4 w-4 mr-2" />
-                  รอดำเนินการ
+                  {tt("รอดำเนินการ", "Pending")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -414,7 +451,7 @@ export function ItemDetailView({
                   disabled={adminProcessing}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
-                  ลบโพส
+                  {tt("ลบโพส", "Delete post")}
                 </Button>
               </div>
             </div>
@@ -461,24 +498,24 @@ export function ItemDetailView({
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-4 space-y-1 border-b bg-muted/30">
-            <DialogTitle className="text-xl font-bold">แก้ไขโพส (ผู้ดูแล)</DialogTitle>
+            <DialogTitle className="text-xl font-bold">{tt("แก้ไขโพส (ผู้ดูแล)", "Edit post (Admin)")}</DialogTitle>
             <DialogDescription asChild>
               <p className="text-sm text-muted-foreground flex items-center gap-2 pt-1">
                 <Info className="h-4 w-4 shrink-0 text-primary" />
-                เจ้าของโพสจะได้รับการแจ้งเตือนทั้งในเว็บและ LINE
+                {tt("เจ้าของโพสจะได้รับการแจ้งเตือนทั้งในเว็บและ LINE", "The owner will be notified via web and LINE.")}
               </p>
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-5 px-6 py-5">
             <div className="grid gap-2">
               <Label htmlFor="edit-title" className="text-sm font-medium text-foreground">
-                ชื่อสิ่งของ
+                {tt("ชื่อสิ่งของ", "Item name")}
               </Label>
               <Input
                 id="edit-title"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="ชื่อสิ่งของ"
+                placeholder={tt("ชื่อสิ่งของ", "Item name")}
                 minLength={3}
                 maxLength={100}
                 className="h-10 border-2 bg-background focus-visible:ring-2"
@@ -486,13 +523,13 @@ export function ItemDetailView({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-description" className="text-sm font-medium text-foreground">
-                รายละเอียด
+                {tt("รายละเอียด", "Description")}
               </Label>
               <Textarea
                 id="edit-description"
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="อธิบายสิ่งของ"
+                placeholder={tt("อธิบายสิ่งของ", "Describe this item")}
                 rows={4}
                 minLength={10}
                 maxLength={1000}
@@ -500,7 +537,7 @@ export function ItemDetailView({
               />
             </div>
             <div className="grid gap-2">
-              <Label className="text-sm font-medium text-foreground">หมวดหมู่</Label>
+              <Label className="text-sm font-medium text-foreground">{tt("หมวดหมู่", "Category")}</Label>
               <Select value={editCategory} onValueChange={(v) => setEditCategory(v as ItemCategory)}>
                 <SelectTrigger className="h-10 border-2 bg-background">
                   <SelectValue />
@@ -508,17 +545,17 @@ export function ItemDetailView({
                 <SelectContent>
                   {CATEGORY_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                      {categoryLabelByValue[opt.value]}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label className="text-sm font-medium text-foreground">สถานที่นัดรับ</Label>
+              <Label className="text-sm font-medium text-foreground">{tt("สถานที่นัดรับ", "Pickup location")}</Label>
               <Select value={editLocation || ""} onValueChange={setEditLocation}>
                 <SelectTrigger className="h-10 border-2 bg-background">
-                  <SelectValue placeholder="เลือกสถานที่" />
+                  <SelectValue placeholder={tt("เลือกสถานที่", "Select location")} />
                 </SelectTrigger>
                 <SelectContent>
                   {LOCATION_OPTIONS.map((loc) => (
@@ -532,14 +569,14 @@ export function ItemDetailView({
           </div>
           <DialogFooter className="px-6 py-4 border-t bg-muted/20 gap-3 sm:gap-2">
             <Button variant="outline" onClick={() => setShowEditModal(false)} disabled={editSaving} className="min-w-[100px]">
-              ยกเลิก
+              {tt("ยกเลิก", "Cancel")}
             </Button>
             <Button
               onClick={handleAdminEditSubmit}
               disabled={editSaving || editTitle.trim().length < 3 || editDescription.trim().length < 10 || !editLocation.trim()}
               className="min-w-[120px]"
             >
-              {editSaving ? "กำลังบันทึก..." : "บันทึก"}
+              {editSaving ? tt("กำลังบันทึก...", "Saving...") : tt("บันทึก", "Save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -550,14 +587,20 @@ export function ItemDetailView({
         open={showRequestDialog}
         onOpenChange={setShowRequestDialog}
         size="md"
-        title="ยืนยันการขอรับสิ่งของ"
-        description={<>คุณต้องการขอรับ <span className="font-bold text-foreground">&quot;{item.title}&quot;</span> ใช่หรือไม่?</>}
+        title={tt("ยืนยันการขอรับสิ่งของ", "Confirm item request")}
+        description={
+          <>
+            {tt("คุณต้องการขอรับ ", "Do you want to request ")}
+            <span className="font-bold text-foreground">&quot;{item.title}&quot;</span>
+            {tt(" ใช่หรือไม่?", "?")}
+          </>
+        }
         icon={<HandHeart className="h-5 w-5" />}
         footer={
           <UnifiedModalActions
             onCancel={() => setShowRequestDialog(false)}
             onSubmit={handleRequestItem}
-            submitText="ยืนยันขอรับสิ่งของ"
+            submitText={tt("ยืนยันขอรับสิ่งของ", "Confirm request")}
             loading={requesting}
             submitDisabled={requesting}
           />
@@ -567,7 +610,10 @@ export function ItemDetailView({
           <p className="text-sm text-muted-foreground flex gap-2">
             <Info className="h-4 w-4 shrink-0 mt-0.5" />
             <span>
-              ระบบจะเปิดห้องแชทระหว่างคุณกับเจ้าของสิ่งของโดยอัตโนมัติ เพื่อให้คุณสามารถสอบถามรายละเอียดและนัดหมายการรับของได้
+              {tt(
+                "ระบบจะเปิดห้องแชทระหว่างคุณกับเจ้าของสิ่งของโดยอัตโนมัติ เพื่อให้คุณสามารถสอบถามรายละเอียดและนัดหมายการรับของได้",
+                "A chat room between you and the owner will be opened automatically so you can discuss details and schedule pickup."
+              )}
             </span>
           </p>
         </div>

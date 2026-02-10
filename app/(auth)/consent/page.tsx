@@ -1,17 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { useAuth } from "@/components/auth-provider"
-import { acceptTerms } from "@/lib/db/users-profile"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
-import { Loader2, ShieldCheck, FileText } from "lucide-react"
-import { Logo } from "@/components/logo"
+import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { FileText, Loader2, ShieldCheck } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
+import { useI18n } from "@/components/language-provider"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useToast } from "@/hooks/use-toast"
+import { acceptTerms } from "@/lib/db/users-profile"
 
 const ThreeBackground = dynamic(
   () => import("@/components/three-background").then((mod) => mod.ThreeBackground),
@@ -26,13 +26,13 @@ export default function ConsentPage() {
   const [show3D, setShow3D] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  const { tt } = useI18n()
 
   useEffect(() => {
     const timer = setTimeout(() => setShow3D(true), 800)
     return () => clearTimeout(timer)
   }, [])
 
-  // Already accepted → go to dashboard
   useEffect(() => {
     if (authLoading) return
     if (!user) {
@@ -42,34 +42,40 @@ export default function ConsentPage() {
     if (termsAccepted) {
       router.push("/dashboard")
     }
-  }, [user, authLoading, termsAccepted, router])
+  }, [authLoading, router, termsAccepted, user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!acceptTermsCheck || !acceptPrivacyCheck) {
       toast({
-        title: "กรุณายอมรับทั้งสองข้อ",
-        description: "ต้องยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวก่อนใช้งาน",
+        title: tt("กรุณายอมรับทั้งสองข้อ", "Please accept both policies"),
+        description: tt(
+          "ต้องยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวก่อนใช้งาน",
+          "You must accept the terms and privacy policy before using the platform."
+        ),
         variant: "destructive",
       })
       return
     }
     if (!user) return
+
     setLoading(true)
     try {
       await acceptTerms(user.uid)
       markTermsAccepted()
       refreshUserProfile().catch(() => {})
       toast({
-        title: "ยอมรับเรียบร้อย",
-        description: "คุณสามารถใช้งานแพลตฟอร์มได้แล้ว",
+        title: tt("ยอมรับเรียบร้อย", "Accepted"),
+        description: tt("คุณสามารถใช้งานแพลตฟอร์มได้แล้ว", "You can now use the platform."),
       })
       router.replace("/dashboard")
-    } catch (error) {
-      console.error("Accept terms error:", error)
+    } catch {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถบันทึกการยอมรับได้ กรุณาลองใหม่อีกครั้ง",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: tt(
+          "ไม่สามารถบันทึกการยอมรับได้ กรุณาลองใหม่อีกครั้ง",
+          "Unable to save your consent. Please try again."
+        ),
         variant: "destructive",
       })
     } finally {
@@ -91,16 +97,16 @@ export default function ConsentPage() {
       <div className="w-full max-w-lg relative z-10">
         <Card className="shadow-soft border-border/60">
           <CardHeader className="text-center space-y-4 pb-2">
-            <div className="flex justify-center">
-              <Logo size="lg" showIcon={true} href={undefined} />
-            </div>
             <div className="space-y-1">
               <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
                 <ShieldCheck className="h-7 w-7 text-primary" />
-                ยอมรับข้อกำหนดและนโยบาย
+                {tt("ยอมรับข้อกำหนดและนโยบาย", "Terms and privacy consent")}
               </CardTitle>
               <CardDescription className="text-muted-foreground">
-                ก่อนใช้งาน กรุณาอ่านและยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัว
+                {tt(
+                  "ก่อนใช้งาน กรุณาอ่านและยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัว",
+                  "Please review and accept the terms and privacy policy before continuing."
+                )}
               </CardDescription>
             </div>
           </CardHeader>
@@ -114,13 +120,18 @@ export default function ConsentPage() {
                     className="mt-0.5"
                   />
                   <span className="text-sm leading-relaxed">
-                    ข้าพเจ้ายอมรับ{" "}
-                    <Link href="/terms?standalone=1" target="_blank" className="font-medium text-primary hover:underline">
-                      ข้อกำหนดและเงื่อนไขการใช้งาน
+                    {tt("ข้าพเจ้ายอมรับ ", "I accept the ")}
+                    <Link
+                      href="/terms?standalone=1"
+                      target="_blank"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {tt("ข้อกำหนดและเงื่อนไขการใช้งาน", "terms of use")}
                     </Link>{" "}
-                    ของ RMU-Campus X
+                    {tt("ของ RMU-Campus X", "for RMU-Campus X")}
                   </span>
                 </label>
+
                 <label className="flex items-start gap-3 rounded-lg border border-border/60 p-4 hover:bg-muted/50 cursor-pointer transition-colors">
                   <Checkbox
                     checked={acceptPrivacyCheck}
@@ -128,39 +139,45 @@ export default function ConsentPage() {
                     className="mt-0.5"
                   />
                   <span className="text-sm leading-relaxed">
-                    ข้าพเจ้ายอมรับ{" "}
-                    <Link href="/privacy?standalone=1" target="_blank" className="font-medium text-primary hover:underline">
-                      นโยบายความเป็นส่วนตัว
+                    {tt("ข้าพเจ้ายอมรับ ", "I accept the ")}
+                    <Link
+                      href="/privacy?standalone=1"
+                      target="_blank"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {tt("นโยบายความเป็นส่วนตัว", "privacy policy")}
                     </Link>{" "}
-                    และการเก็บรวบรวมข้อมูลตามที่ระบุ
+                    {tt("และการเก็บรวบรวมข้อมูลตามที่ระบุ", "and related data processing terms.")}
                   </span>
                 </label>
               </div>
+
               <div className="flex gap-2 text-xs text-muted-foreground">
                 <FileText className="h-4 w-4 shrink-0" />
                 <span>
-                  อ่านฉบับเต็มได้ที่ หน้า{" "}
-                  <Link href="/terms?standalone=1" target="_blank" className="text-primary hover:underline">ข้อกำหนดการใช้งาน</Link>
-                  {" "}และ{" "}
-                  <Link href="/privacy?standalone=1" target="_blank" className="text-primary hover:underline">นโยบายความเป็นส่วนตัว</Link>
+                  {tt("อ่านฉบับเต็มได้ที่หน้า ", "Read full documents at ")}
+                  <Link href="/terms?standalone=1" target="_blank" className="text-primary hover:underline">
+                    {tt("ข้อกำหนดการใช้งาน", "Terms")}
+                  </Link>{" "}
+                  {tt("และ", "and")}{" "}
+                  <Link href="/privacy?standalone=1" target="_blank" className="text-primary hover:underline">
+                    {tt("นโยบายความเป็นส่วนตัว", "Privacy")}
+                  </Link>
                 </span>
               </div>
+
               <Button
                 type="submit"
                 className="w-full h-11 font-medium"
                 disabled={loading || !acceptTermsCheck || !acceptPrivacyCheck}
               >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "ยอมรับและใช้งาน"
-                )}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : tt("ยอมรับและใช้งาน", "Accept and continue")}
               </Button>
             </form>
           </CardContent>
         </Card>
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          มหาวิทยาลัยราชภัฏมหาสารคาม
+          {tt("มหาวิทยาลัยราชภัฏมหาสารคาม", "Rajabhat Maha Sarakham University")}
         </p>
       </div>
     </div>

@@ -116,24 +116,26 @@ export async function verifyAdminAccess(request: NextRequest): Promise<{
       }
     }
     
-    const userEmail = decodedToken.email
-    if (!userEmail) {
-       return {
-        authorized: false,
-        error: errorResponse(
-          AdminErrorCode.FORBIDDEN,
-          'Token has no email',
-          403
-        ),
+    const userEmail = decodedToken.email ?? null
+
+    // 3. Check Admin status in Firestore.
+    // Preferred structure: admins/{uid}. Fallback to email lookup for legacy data.
+    const db = getAdminDb()
+    const adminsRef = db.collection('admins')
+    const adminDocByUid = await adminsRef.doc(decodedToken.uid).get()
+
+    let adminData: FirebaseFirestore.DocumentData | undefined
+
+    if (adminDocByUid.exists) {
+      adminData = adminDocByUid.data()
+    } else if (userEmail) {
+      const snapshot = await adminsRef.where('email', '==', userEmail).limit(1).get()
+      if (!snapshot.empty) {
+        adminData = snapshot.docs[0]?.data()
       }
     }
 
-    // 3. Check Admin Status in Firestore (using Admin SDK)
-    const db = getAdminDb()
-    const adminsRef = db.collection('admins')
-    const snapshot = await adminsRef.where('email', '==', userEmail).get()
-
-    if (snapshot.empty) {
+    if (!adminData) {
       return {
         authorized: false,
         error: errorResponse(
@@ -144,15 +146,11 @@ export async function verifyAdminAccess(request: NextRequest): Promise<{
       }
     }
 
-    // 4. Get Role (Optional, for granular permissions)
-    const adminData = snapshot.docs[0]?.data() || {}
-    // You could attach adminData.role to returns if needed
-
     return {
       authorized: true,
       user: { 
         uid: decodedToken.uid,
-        email: userEmail,
+        email: userEmail ?? adminData.email,
         ...adminData 
       },
     }

@@ -1,12 +1,12 @@
 /**
  * Admin Announcements API
- * GET: รายการประกาศทั้งหมด
- * POST: สร้างประกาศใหม่
+ * GET: list all announcements
+ * POST: create a new announcement
  */
 
 import { NextRequest } from "next/server"
-import { getAdminDb } from "@/lib/firebase-admin"
 import { FieldValue, Timestamp } from "firebase-admin/firestore"
+import { getAdminDb } from "@/lib/firebase-admin"
 import {
   verifyAdminAccess,
   successResponse,
@@ -14,6 +14,24 @@ import {
   AdminErrorCode,
 } from "@/lib/admin-api"
 import type { AnnouncementType } from "@/types"
+
+const VALID_TYPES: AnnouncementType[] = ["info", "warning", "critical"]
+
+function parseOptionalDate(input: unknown): Date | null {
+  if (!input) return null
+  const date = new Date(String(input))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function parseOptionalText(input: unknown): string | null {
+  if (typeof input !== "string") return null
+  const value = input.trim()
+  return value.length > 0 ? value : null
+}
+
+function parseType(input: unknown): AnnouncementType {
+  return VALID_TYPES.includes(input as AnnouncementType) ? (input as AnnouncementType) : "info"
+}
 
 export async function GET(request: NextRequest) {
   const { authorized, error } = await verifyAdminAccess(request)
@@ -33,12 +51,13 @@ export async function GET(request: NextRequest) {
         id: doc.id,
         title: data.title ?? "",
         message: data.message ?? "",
-        type: (data.type as AnnouncementType) ?? "info",
+        type: parseType(data.type),
         isActive: data.isActive ?? true,
         startAt: data.startAt ?? null,
         endAt: data.endAt ?? null,
         linkUrl: data.linkUrl ?? null,
         linkLabel: data.linkLabel ?? null,
+        imagePublicId: data.imagePublicId ?? null,
         createdBy: data.createdBy ?? "",
         createdByEmail: data.createdByEmail ?? undefined,
         createdAt: data.createdAt,
@@ -53,8 +72,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-const VALID_TYPES: AnnouncementType[] = ["info", "warning", "critical"]
-
 export async function POST(request: NextRequest) {
   const { authorized, error, user } = await verifyAdminAccess(request)
   if (!authorized) return error!
@@ -63,27 +80,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const title = typeof body.title === "string" ? body.title.trim() : ""
     const message = typeof body.message === "string" ? body.message.trim() : ""
-    const type = VALID_TYPES.includes(body.type) ? body.type : "info"
+    const type = parseType(body.type)
     const isActive = body.isActive !== false
-    const linkUrl = typeof body.linkUrl === "string" ? body.linkUrl.trim() || null : null
-    const linkLabel = typeof body.linkLabel === "string" ? body.linkLabel.trim() || null : null
-
-    let startAt: Date | null = null
-    let endAt: Date | null = null
-    if (body.startAt) {
-      const d = new Date(body.startAt)
-      if (!isNaN(d.getTime())) startAt = d
-    }
-    if (body.endAt) {
-      const d = new Date(body.endAt)
-      if (!isNaN(d.getTime())) endAt = d
-    }
+    const startAt = parseOptionalDate(body.startAt)
+    const endAt = parseOptionalDate(body.endAt)
+    const linkUrl = parseOptionalText(body.linkUrl)
+    const linkLabel = parseOptionalText(body.linkLabel)
+    const imagePublicId = parseOptionalText(body.imagePublicId)
 
     if (!title) {
       return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุหัวข้อประกาศ", 400)
     }
     if (!message) {
       return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุเนื้อหาประกาศ", 400)
+    }
+    if (startAt && endAt && endAt < startAt) {
+      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "วันหมดอายุต้องมากกว่าวันเริ่มแสดง", 400)
     }
 
     const db = getAdminDb()
@@ -96,15 +108,17 @@ export async function POST(request: NextRequest) {
       endAt: endAt ? Timestamp.fromDate(endAt) : null,
       linkUrl,
       linkLabel,
+      imagePublicId,
       createdBy: user?.uid ?? "",
       createdByEmail: user?.email ?? "",
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     })
 
-    return successResponse({ id: ref.id }, undefined as any)
+    return successResponse({ id: ref.id })
   } catch (err) {
     console.error("[Admin API] Announcements POST Error:", err)
     return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to create announcement", 500)
   }
 }
+

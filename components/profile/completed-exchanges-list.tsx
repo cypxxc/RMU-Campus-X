@@ -6,16 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, History, CheckCircle } from "lucide-react"
-
-function formatExchangeTime(date: Date): string {
-  return date.toLocaleString("th-TH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
+import { useI18n } from "@/components/language-provider"
 
 interface CompletedExchangesListProps {
   exchanges: Exchange[]
@@ -26,12 +17,22 @@ interface CompletedExchangesListProps {
 export function CompletedExchangesList({ exchanges, loading, currentUserId }: CompletedExchangesListProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  const { locale, tt } = useI18n()
+  const formatExchangeTime = (date: Date): string =>
+    date.toLocaleString(locale === "th" ? "th-TH" : "en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
 
   if (loading) {
     return (
       <div className="py-20 text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-        <p className="text-sm text-muted-foreground mt-4">กำลังโหลดประวัติ...</p>
+        <p className="text-sm text-muted-foreground mt-4">{tt("กำลังโหลดประวัติ...", "Loading history...")}</p>
       </div>
     )
   }
@@ -44,9 +45,9 @@ export function CompletedExchangesList({ exchanges, loading, currentUserId }: Co
             <History className="h-10 w-10 text-muted-foreground/30" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-bold">ยังไม่มีประวัติการแลกเปลี่ยน</h3>
+            <h3 className="text-lg font-bold">{tt("ยังไม่มีประวัติการแลกเปลี่ยน", "No exchange history yet")}</h3>
             <p className="text-muted-foreground text-sm max-w-xs">
-              เมื่อคุณแลกเปลี่ยนสิ่งของสำเร็จ ประวัติจะแสดงที่นี่
+              {tt("เมื่อคุณแลกเปลี่ยนสิ่งของสำเร็จ ประวัติจะแสดงที่นี่", "Your completed exchanges will appear here.")}
             </p>
           </div>
         </CardContent>
@@ -79,12 +80,12 @@ export function CompletedExchangesList({ exchanges, loading, currentUserId }: Co
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold truncate">{exchange.itemTitle}</h4>
                     <p className="text-sm text-muted-foreground">
-                      {isOwner ? "คุณให้สิ่งของนี้" : "คุณได้รับสิ่งของนี้"}
+                      {isOwner ? tt("คุณให้สิ่งของนี้", "You gave this item") : tt("คุณได้รับสิ่งของนี้", "You received this item")}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
-                      สำเร็จ
+                      {tt("สำเร็จ", "Completed")}
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">
                       {formatExchangeTime(createdAt instanceof Date ? createdAt : new Date(createdAt))}
@@ -106,7 +107,7 @@ export function CompletedExchangesList({ exchanges, loading, currentUserId }: Co
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
           >
-            ก่อนหน้า
+            {tt("ก่อนหน้า", "Previous")}
           </Button>
           <div className="flex items-center gap-1">
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
@@ -127,7 +128,7 @@ export function CompletedExchangesList({ exchanges, loading, currentUserId }: Co
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
           >
-            ถัดไป
+            {tt("ถัดไป", "Next")}
           </Button>
         </div>
       )}

@@ -7,6 +7,7 @@ import { Package, Menu, Shield, LayoutDashboard, Users, MessageSquare, AlertTria
 import { useState } from "react"
 
 import { AuthGuard } from "@/components/auth-guard"
+import { useI18n } from "@/components/language-provider"
 import { Navbar } from "@/components/navbar"
 import { BreadcrumbBar } from "@/components/breadcrumb-bar"
 import { Button } from "@/components/ui/button"
@@ -16,16 +17,17 @@ import { cn } from "@/lib/utils"
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const { tt } = useI18n()
  
   const navItems = [
-    { href: "/admin", label: "ภาพรวม", icon: LayoutDashboard },
-    { href: "/admin/announcements", label: "ประกาศ", icon: Megaphone },
-    { href: "/admin/items", label: "จัดการโพส", icon: Package },
-    { href: "/admin/users", label: "จัดการผู้ใช้", icon: Users },
-    { href: "/admin/exchanges", label: "จัดการการแลกเปลี่ยน", icon: RefreshCw },
-    { href: "/admin/support", label: "จัดการคำร้อง", icon: MessageSquare },
-    { href: "/admin/reports", label: "รายงานความไม่เหมาะสม", icon: AlertTriangle },
-    { href: "/admin/logs", label: "ประวัติกิจกรรม", icon: History },
+    { href: "/admin", label: tt("ภาพรวม", "Overview"), icon: LayoutDashboard },
+    { href: "/admin/announcements", label: tt("ประกาศ", "Announcements"), icon: Megaphone },
+    { href: "/admin/items", label: tt("จัดการโพส", "Manage items"), icon: Package },
+    { href: "/admin/users", label: tt("จัดการผู้ใช้", "Manage users"), icon: Users },
+    { href: "/admin/exchanges", label: tt("จัดการการแลกเปลี่ยน", "Manage exchanges"), icon: RefreshCw },
+    { href: "/admin/support", label: tt("จัดการคำร้อง", "Manage support"), icon: MessageSquare },
+    { href: "/admin/reports", label: tt("รายงานความไม่เหมาะสม", "Reports"), icon: AlertTriangle },
+    { href: "/admin/logs", label: tt("ประวัติกิจกรรม", "Activity logs"), icon: History },
   ]
  
   const NavLink = ({ item, onClick }: { item: typeof navItems[0], onClick?: () => void }) => {
@@ -75,7 +77,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
              <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-primary" />
                 <span className="text-sm font-bold truncate">
-                   {navItems.find(i => i.href === pathname)?.label || "Admin Panel"}
+                   {navItems.find(i => i.href === pathname)?.label || tt("แผงผู้ดูแลระบบ", "Admin panel")}
                 </span>
              </div>
              
@@ -86,7 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                    </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-[300px] p-0 border-none shadow-2xl">
-                   <SheetTitle className="sr-only">Admin Navigation</SheetTitle>
+                   <SheetTitle className="sr-only">{tt("เมนูผู้ดูแลระบบ", "Admin navigation")}</SheetTitle>
                    <div className="p-6 bg-primary/5 h-16 border-b flex items-center">
                       <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">

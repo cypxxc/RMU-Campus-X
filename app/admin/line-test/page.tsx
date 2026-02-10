@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
+import { useI18n } from "@/components/language-provider"
 import { authFetchJson } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
 import type { LucideIcon } from "lucide-react"
@@ -24,25 +25,31 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { LineTestType } from "@/app/api/admin/line-test/route"
 
-const TEST_BUTTONS: { type: LineTestType; label: string; icon: LucideIcon; group: string }[] = [
-  { type: "exchange_request", label: "มีคนขอรับของ", icon: Package, group: "การแลกเปลี่ยน" },
-  { type: "exchange_status", label: "อัปเดตสถานะการแลกเปลี่ยน", icon: RefreshCw, group: "การแลกเปลี่ยน" },
-  { type: "exchange_completed", label: "แลกเปลี่ยนสำเร็จ", icon: UserCheck, group: "การแลกเปลี่ยน" },
-  { type: "admin_report", label: "รายงานใหม่ (แอดมิน)", icon: AlertTriangle, group: "แจ้งเตือนแอดมิน" },
-  { type: "admin_support_ticket", label: "Support Ticket ใหม่", icon: FileText, group: "แจ้งเตือนแอดมิน" },
-  { type: "item_posted", label: "โพสต์สำเร็จ", icon: Package, group: "โพสต์" },
-  { type: "item_updated", label: "แก้ไขโพสต์สำเร็จ", icon: Package, group: "โพสต์" },
-  { type: "item_deleted", label: "ลบโพสต์สำเร็จ", icon: Package, group: "โพสต์" },
-  { type: "chat_message", label: "ข้อความแชทใหม่", icon: MessageCircle, group: "แชท" },
-  { type: "user_reported", label: "ผู้ใช้ถูกรายงาน", icon: AlertTriangle, group: "ผู้ใช้" },
-  { type: "user_warning", label: "คำเตือนผู้ใช้", icon: Bell, group: "ผู้ใช้" },
-  { type: "account_status", label: "อัปเดตสถานะบัญชี", icon: UserCheck, group: "ผู้ใช้" },
-  { type: "item_edited_by_admin", label: "แอดมินแก้ไขโพส", icon: Send, group: "ผู้ใช้" },
-  { type: "link_success", label: "เชื่อมบัญชี LINE สำเร็จ", icon: Link2, group: "บัญชี" },
+const TEST_BUTTONS: {
+  type: LineTestType
+  label: { th: string; en: string }
+  icon: LucideIcon
+  group: { th: string; en: string }
+}[] = [
+  { type: "exchange_request", label: { th: "มีคนขอรับของ", en: "New exchange request" }, icon: Package, group: { th: "การแลกเปลี่ยน", en: "Exchange" } },
+  { type: "exchange_status", label: { th: "อัปเดตสถานะการแลกเปลี่ยน", en: "Exchange status update" }, icon: RefreshCw, group: { th: "การแลกเปลี่ยน", en: "Exchange" } },
+  { type: "exchange_completed", label: { th: "แลกเปลี่ยนสำเร็จ", en: "Exchange completed" }, icon: UserCheck, group: { th: "การแลกเปลี่ยน", en: "Exchange" } },
+  { type: "admin_report", label: { th: "รายงานใหม่ (แอดมิน)", en: "New report (admin)" }, icon: AlertTriangle, group: { th: "แจ้งเตือนแอดมิน", en: "Admin alerts" } },
+  { type: "admin_support_ticket", label: { th: "Support Ticket ใหม่", en: "New support ticket" }, icon: FileText, group: { th: "แจ้งเตือนแอดมิน", en: "Admin alerts" } },
+  { type: "item_posted", label: { th: "โพสต์สำเร็จ", en: "Item posted" }, icon: Package, group: { th: "โพสต์", en: "Items" } },
+  { type: "item_updated", label: { th: "แก้ไขโพสต์สำเร็จ", en: "Item updated" }, icon: Package, group: { th: "โพสต์", en: "Items" } },
+  { type: "item_deleted", label: { th: "ลบโพสต์สำเร็จ", en: "Item deleted" }, icon: Package, group: { th: "โพสต์", en: "Items" } },
+  { type: "chat_message", label: { th: "ข้อความแชทใหม่", en: "New chat message" }, icon: MessageCircle, group: { th: "แชท", en: "Chat" } },
+  { type: "user_reported", label: { th: "ผู้ใช้ถูกรายงาน", en: "User reported" }, icon: AlertTriangle, group: { th: "ผู้ใช้", en: "Users" } },
+  { type: "user_warning", label: { th: "คำเตือนผู้ใช้", en: "User warning" }, icon: Bell, group: { th: "ผู้ใช้", en: "Users" } },
+  { type: "account_status", label: { th: "อัปเดตสถานะบัญชี", en: "Account status update" }, icon: UserCheck, group: { th: "ผู้ใช้", en: "Users" } },
+  { type: "item_edited_by_admin", label: { th: "แอดมินแก้ไขโพส", en: "Admin edited item" }, icon: Send, group: { th: "ผู้ใช้", en: "Users" } },
+  { type: "link_success", label: { th: "เชื่อมบัญชี LINE สำเร็จ", en: "LINE linked successfully" }, icon: Link2, group: { th: "บัญชี", en: "Account" } },
 ]
 
 export default function AdminLineTestPage() {
   const { user, loading: authLoading, isAdmin } = useAuth()
+  const { locale, tt } = useI18n()
   const router = useRouter()
   const { toast } = useToast()
   const [profile, setProfile] = useState<{ lineUserId?: string } | null>(null)
@@ -57,13 +64,13 @@ export default function AdminLineTestPage() {
     }
     if (!isAdmin) {
       toast({
-        title: "ไม่มีสิทธิ์เข้าถึง",
-        description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+        title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
+        description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
         variant: "destructive",
       })
       router.push("/dashboard")
     }
-  }, [authLoading, user, isAdmin, router, toast])
+  }, [authLoading, user, isAdmin, router, toast, tt])
 
   useEffect(() => {
     if (!user || !isAdmin) return
@@ -94,13 +101,13 @@ export default function AdminLineTestPage() {
         body: { type },
       })
       toast({
-        title: "ส่งแล้ว",
-        description: res.data?.message ?? "ข้อความทดสอบส่งไปที่ LINE ของคุณแล้ว",
+        title: tt("ส่งแล้ว", "Sent"),
+        description: res.data?.message ?? tt("ข้อความทดสอบส่งไปที่ LINE ของคุณแล้ว", "A test message was sent to your LINE."),
       })
     } catch (e) {
       toast({
-        title: "ส่งไม่สำเร็จ",
-        description: e instanceof Error ? e.message : "เกิดข้อผิดพลาด",
+        title: tt("ส่งไม่สำเร็จ", "Send failed"),
+        description: e instanceof Error ? e.message : tt("เกิดข้อผิดพลาด", "Error"),
         variant: "destructive",
       })
     } finally {
@@ -116,7 +123,7 @@ export default function AdminLineTestPage() {
     )
   }
 
-  const groups = Array.from(new Set(TEST_BUTTONS.map((b) => b.group)))
+  const groups = Array.from(new Set(TEST_BUTTONS.map((b) => (locale === "th" ? b.group.th : b.group.en))))
 
   return (
     <div className="min-h-screen bg-background py-6">
@@ -124,10 +131,10 @@ export default function AdminLineTestPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <MessageSquare className="h-8 w-8 text-primary" />
-            ห้องทดสอบ LINE Bot
+            {tt("ห้องทดสอบ LINE Bot", "LINE Bot test center")}
           </h1>
           <p className="text-muted-foreground mt-1">
-            ส่งข้อความทดสอบแจ้งเตือนไปที่ LINE ของแอดมินที่ล็อกอิน (บัญชีที่เชื่อมกับ LINE)
+            {tt("ส่งข้อความทดสอบแจ้งเตือนไปที่ LINE ของแอดมินที่ล็อกอิน (บัญชีที่เชื่อมกับ LINE)", "Send test notifications to the logged-in admin's linked LINE account.")}
           </p>
         </div>
 
@@ -140,25 +147,27 @@ export default function AdminLineTestPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
                 <AlertTriangle className="h-5 w-5" />
-                ยังไม่ได้เชื่อมบัญชี LINE
+                {tt("ยังไม่ได้เชื่อมบัญชี LINE", "LINE account not linked")}
               </CardTitle>
               <CardDescription>
-                เพื่อรับข้อความทดสอบ คุณต้องเชื่อมบัญชี LINE กับบัญชีแอดมินก่อน
-                ไปที่หน้าโปรไฟล์ → เชื่อมบัญชี LINE (หรือสแกน QR / พิมพ์ &quot;เชื่อมบัญชี&quot; ในแชท LINE Official Account)
+                {tt(
+                  "เพื่อรับข้อความทดสอบ คุณต้องเชื่อมบัญชี LINE กับบัญชีแอดมินก่อน ไปที่หน้าโปรไฟล์ → เชื่อมบัญชี LINE (หรือสแกน QR / พิมพ์ \"เชื่อมบัญชี\" ในแชท LINE Official Account)",
+                  "To receive test messages, link your LINE account first via Profile → LINE settings (or scan QR / type \"link\" in LINE OA chat)."
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button asChild variant="outline">
-                <Link href="/profile">ไปที่โปรไฟล์</Link>
+                <Link href="/profile">{tt("ไปที่โปรไฟล์", "Go to profile")}</Link>
               </Button>
             </CardContent>
           </Card>
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>ประเภทการแจ้งเตือน</CardTitle>
+              <CardTitle>{tt("ประเภทการแจ้งเตือน", "Notification types")}</CardTitle>
               <CardDescription>
-                กดปุ่มด้านล่างเพื่อส่งข้อความทดสอบไปที่ LINE ของคุณ (บัญชีที่เชื่อมแล้ว)
+                {tt("กดปุ่มด้านล่างเพื่อส่งข้อความทดสอบไปที่ LINE ของคุณ (บัญชีที่เชื่อมแล้ว)", "Use the buttons below to send test messages to your linked LINE account.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
@@ -168,7 +177,9 @@ export default function AdminLineTestPage() {
                     {group}
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {TEST_BUTTONS.filter((b) => b.group === group).map(({ type, label, icon: Icon }) => (
+                    {TEST_BUTTONS
+                      .filter((b) => (locale === "th" ? b.group.th : b.group.en) === group)
+                      .map(({ type, label, icon: Icon }) => (
                       <Button
                         key={type}
                         variant="outline"
@@ -181,7 +192,7 @@ export default function AdminLineTestPage() {
                         ) : (
                           <Icon className="h-4 w-4 mr-2" />
                         )}
-                        {label}
+                        {locale === "th" ? label.th : label.en}
                       </Button>
                     ))}
                   </div>

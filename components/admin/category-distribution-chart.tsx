@@ -1,9 +1,10 @@
 "use client"
 
-import { useMemo, memo } from "react"
+import { useCallback, useMemo, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
 import { Package } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 import type { Item } from "@/types"
 import { CATEGORY_LABELS } from "@/lib/constants"
 
@@ -20,21 +21,32 @@ const COLORS: Record<string, string> = {
   other: '#6b7280',
 }
 
+const CATEGORY_LABELS_EN: Record<string, string> = {
+  electronics: "Electronics",
+  books: "Books",
+  furniture: "Furniture",
+  clothing: "Clothing",
+  sports: "Sports",
+  other: "Other",
+}
+
 function CategoryTooltip({
   active,
   payload,
   total,
+  itemLabel,
 }: {
   active?: boolean
   payload?: any[]
   total: number
+  itemLabel: string
 }) {
   if (active && payload && payload.length) {
     return (
       <div className="bg-card border rounded-lg p-3 shadow-lg">
         <p className="font-medium">{payload[0].name}</p>
         <p className="text-sm text-muted-foreground">
-          {payload[0].value} รายการ ({((payload[0].value / total) * 100).toFixed(1)}%)
+          {payload[0].value} {itemLabel} ({((payload[0].value / total) * 100).toFixed(1)}%)
         </p>
       </div>
     )
@@ -45,6 +57,15 @@ function CategoryTooltip({
 export const CategoryDistributionChart = memo(function CategoryDistributionChart({ 
   items 
 }: CategoryDistributionChartProps) {
+  const { locale, tt } = useI18n()
+  const resolveCategoryLabel = useCallback(
+    (category: string) =>
+      locale === "th"
+        ? CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] || category
+        : CATEGORY_LABELS_EN[category] || category,
+    [locale]
+  )
+
   // Memoized chart data - only recomputes when items change
   const chartData = useMemo(() => {
     const categoryCounts: Record<string, number> = {}
@@ -55,11 +76,11 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
     })
     
     return Object.entries(categoryCounts).map(([category, count]) => ({
-      name: CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] || category,
+      name: resolveCategoryLabel(category),
       value: count,
       category,
     }))
-  }, [items]) // Only recompute when items array changes
+  }, [items, resolveCategoryLabel]) // Only recompute when items array changes
 
 
   // Handle empty state
@@ -69,14 +90,14 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5 text-primary" />
-            การกระจายตามหมวดหมู่
+            {tt("การกระจายตามหมวดหมู่", "Category distribution")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
             <div className="text-center">
               <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">ยังไม่มีข้อมูลโพส</p>
+              <p className="text-sm">{tt("ยังไม่มีข้อมูลโพส", "No item data yet")}</p>
             </div>
           </div>
         </CardContent>
@@ -89,7 +110,7 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Package className="h-5 w-5 text-primary" />
-          การกระจายตามหมวดหมู่
+          {tt("การกระจายตามหมวดหมู่", "Category distribution")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -112,7 +133,7 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
                 />
               ))}
             </Pie>
-            <Tooltip content={<CategoryTooltip total={items.length} />} />
+            <Tooltip content={<CategoryTooltip total={items.length} itemLabel={tt("รายการ", "items")} />} />
             <Legend />
           </PieChart>
         </ResponsiveContainer>

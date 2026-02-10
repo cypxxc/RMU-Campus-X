@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useState, useRef, useEffect, useMemo } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { getItems, type GetItemsResult } from "@/lib/firestore"
 import type { ItemCategory, ItemStatus } from "@/types"
 
 const PAGE_SIZE = 12
-const STALE_TIME_MS = 30_000
-const REFETCH_ON_WINDOW_FOCUS = true
+const STALE_TIME_MS = 2 * 60_000
+const REFETCH_ON_WINDOW_FOCUS = false
 
 export interface UseItemsOptions {
   categories?: ItemCategory[]
@@ -15,6 +15,7 @@ export interface UseItemsOptions {
   searchQuery?: string
   postedBy?: string
   pageSize?: number
+  includeFavoriteStatus?: boolean
   enabled?: boolean
 }
 
@@ -25,29 +26,37 @@ export function useItems(options: UseItemsOptions) {
     searchQuery = "",
     postedBy,
     pageSize = PAGE_SIZE,
+    includeFavoriteStatus = true,
     enabled = true,
   } = options
 
   const [currentPage, setCurrentPage] = useState(1)
   const lastIdsRef = useRef<Map<number, string | null>>(new Map([[1, null]]))
+  const normalizedSearchQuery = searchQuery.trim()
+  const normalizedCategories = useMemo(
+    () => [...categories].sort((a, b) => a.localeCompare(b)),
+    [categories]
+  )
+  const categoriesKey = normalizedCategories.join(",")
 
   // รีเซ็ตเป็นหน้า 1 เมื่อตัวกรองเปลี่ยน
   useEffect(() => {
     setCurrentPage(1)
     lastIdsRef.current = new Map([[1, null]])
-  }, [categories, status, searchQuery.trim(), postedBy])
+  }, [categoriesKey, status, normalizedSearchQuery, postedBy, includeFavoriteStatus])
 
   const query = useQuery({
-    queryKey: ["items", categories, status, searchQuery.trim(), postedBy, currentPage] as const,
+    queryKey: ["items", categoriesKey, status, normalizedSearchQuery, postedBy, includeFavoriteStatus, currentPage] as const,
     queryFn: async (): Promise<GetItemsResult & { page: number }> => {
       const lastId = currentPage === 1 ? null : lastIdsRef.current.get(currentPage) ?? undefined
       const result = await getItems({
         pageSize,
         lastId: lastId ?? undefined,
-        categories: categories.length > 0 ? categories : undefined,
+        categories: normalizedCategories.length > 0 ? normalizedCategories : undefined,
         status: status !== "all" ? status : undefined,
-        searchQuery: searchQuery.trim() || undefined,
+        searchQuery: normalizedSearchQuery || undefined,
         postedBy,
+        includeFavoriteStatus,
       })
       if (!result.success || !result.data) {
         throw new Error(result.error || "Failed to load items")
@@ -57,8 +66,7 @@ export function useItems(options: UseItemsOptions) {
     enabled,
     staleTime: STALE_TIME_MS,
     refetchOnWindowFocus: REFETCH_ON_WINDOW_FOCUS,
-    refetchInterval: 25_000, // poll ทุก 25 วินาทีเมื่อแท็บเปิดอยู่
-    refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
   })
 
   const data = query.data

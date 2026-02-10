@@ -25,9 +25,15 @@ export const checkIsFavorite = async (_userId: string, itemId: string): Promise<
   }
 }
 
-export const toggleFavorite = async (userId: string, item: Item): Promise<boolean> => {
+export const toggleFavorite = async (
+  userId: string,
+  item: Item,
+  currentFavoriteState?: boolean
+): Promise<boolean> => {
   try {
-    const isFav = await checkIsFavorite(userId, item.id)
+    const isFav = typeof currentFavoriteState === "boolean"
+      ? currentFavoriteState
+      : await checkIsFavorite(userId, item.id)
     if (isFav) {
       await authFetchJson(`/api/favorites/${encodeURIComponent(item.id)}`, { method: "DELETE" })
       return false
@@ -52,7 +58,10 @@ export const getFavoriteItems = async (_userId: string): Promise<Item[]> => {
     const list = j.data?.favorites ?? []
     if (list.length === 0) return []
     const results = await Promise.all(list.map((fav) => getItemById(fav.itemId)))
-    const items = results.map((r) => r.data).filter((item): item is Item => item != null)
+    const items = results
+      .map((r) => r.data)
+      .filter((item): item is Item => item != null)
+      .map((item) => ({ ...item, isFavorite: true }))
     return items
   } catch {
     return []

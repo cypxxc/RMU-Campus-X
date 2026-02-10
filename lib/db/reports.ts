@@ -9,7 +9,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  limit
+  limit,
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
 import type { Report, ReportStatus, ReportType } from "@/types"
@@ -17,8 +17,10 @@ import { apiCall, TIMEOUT_CONFIG, type ApiResponse } from "@/lib/api-wrapper"
 import { createNotification } from "./notifications"
 import { createAdminLog } from "./logs"
 
-// Reports – บน client ใช้ POST /api/reports
-export const createReport = async (reportData: Omit<Report, "id" | "createdAt" | "updatedAt" | "status">) => {
+// Reports - บน client ใช้ POST /api/reports
+export const createReport = async (
+  reportData: Omit<Report, "id" | "createdAt" | "updatedAt" | "status">
+) => {
   if (typeof window !== "undefined") {
     const { authFetchJson } = await import("@/lib/api-client")
     const res = await authFetchJson<{ reportId?: string }>("/api/reports", {
@@ -55,8 +57,13 @@ export const updateReportStatus = async (
   status: ReportStatus,
   adminId: string,
   adminEmail: string,
-  note?: string,
+  note?: string
 ) => {
+  const normalizedNote = typeof note === "string" ? note.trim() : ""
+  if (status === "rejected" && normalizedNote.length === 0) {
+    throw new Error("กรุณาระบุเหตุผลการปฏิเสธ")
+  }
+
   const db = getFirebaseDb()
   const updates: any = {
     status,
@@ -65,8 +72,8 @@ export const updateReportStatus = async (
     updatedAt: serverTimestamp(),
   }
 
-  if (note) {
-    updates.adminNote = note
+  if (normalizedNote) {
+    updates.adminNote = normalizedNote
   }
 
   if (status === "resolved" || status === "closed") {
@@ -75,29 +82,41 @@ export const updateReportStatus = async (
 
   await updateDoc(doc(db, "reports", reportId), updates)
 
-  // Notify the reporter
   const reportDoc = await getDoc(doc(db, "reports", reportId))
   const reportData = reportDoc.data() as Report
-  const statusText = status === "resolved" ? "ดำเนินการแล้ว" : status === "action_taken" ? "ลงโทษผู้กระทำผิดแล้ว" : status === "closed" ? "ปิดเคส" : "กำลังตรวจสอบ"
+  const statusText =
+    status === "resolved"
+      ? "ดำเนินการแล้ว"
+      : status === "action_taken"
+        ? "ลงโทษผู้กระทำผิดแล้ว"
+        : status === "closed"
+          ? "ปิดเคส"
+          : status === "rejected"
+            ? "ปฏิเสธ"
+            : "กำลังตรวจสอบ"
+
+  const message =
+    status === "rejected"
+      ? `รายงานที่คุณแจ้งถูกปฏิเสธ เหตุผล: ${normalizedNote}`
+      : `รายงานที่คุณแจ้งได้รับการอัปเดต สถานะล่าสุด: ${statusText}${normalizedNote ? ` (${normalizedNote})` : ""}`
 
   await createNotification({
     userId: reportData.reporterId,
     title: "อัปเดตสถานะรายงาน",
-    message: `รายงานที่คุณแจ้งได้รับการดำเนินการแล้ว สถานะล่าสุด: ${statusText}`,
+    message,
     type: "report",
-    relatedId: reportId
+    relatedId: reportId,
   })
 
-  // Log admin action (adminId/adminEmail extracted from token server-side)
   await createAdminLog({
-    actionType: status === 'resolved' ? 'report_resolve' : 'report_status_change',
-    targetType: 'report',
+    actionType: status === "resolved" ? "report_resolve" : "report_status_change",
+    targetType: "report",
     targetId: reportId,
     targetInfo: reportData.targetTitle || reportData.reportType,
-    description: `เปลี่ยนสถานะรายงานเป็น: ${status}${note ? ` - ${note}` : ''}`,
-    status: 'success',
-    reason: note,
-    metadata: { status, note: note || null, reportType: reportData.reportType }
+    description: `เปลี่ยนสถานะรายงานเป็น: ${status}${normalizedNote ? ` - ${normalizedNote}` : ""}`,
+    status: "success",
+    reason: normalizedNote,
+    metadata: { status, note: normalizedNote || null, reportType: reportData.reportType },
   })
 }
 
@@ -107,7 +126,10 @@ export const getReportsByStatus = async (status?: ReportStatus) => {
       const { authFetchJson } = await import("@/lib/api-client")
       const params = new URLSearchParams()
       if (status) params.set("status", status)
-      const res = await authFetchJson<{ reports?: Report[] }>(`/api/admin/reports?${params.toString()}`, { method: "GET" })
+      const res = await authFetchJson<{ reports?: Report[] }>(
+        `/api/admin/reports?${params.toString()}`,
+        { method: "GET" }
+      )
       return res?.data?.reports ?? []
     } catch {
       return []
@@ -118,31 +140,31 @@ export const getReportsByStatus = async (status?: ReportStatus) => {
     ? query(collection(db, "reports"), where("status", "==", status), orderBy("createdAt", "desc"))
     : query(collection(db, "reports"), orderBy("createdAt", "desc"))
   const snapshot = await getDocs(q)
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Report)
+  return snapshot.docs.map((reportDoc) => ({ id: reportDoc.id, ...reportDoc.data() }) as Report)
 }
 
-
-export const getReportStatistics = async (): Promise<ApiResponse<{
-  total: number
-  new: number
-  under_review: number
-  waiting_user: number
-  action_taken: number
-  resolved: number
-  closed: number
-  rejected: number
-  byType: {
-    item_report: number
-    exchange_report: number
-    user_report: number
-  }
-}>> => {
+export const getReportStatistics = async (): Promise<
+  ApiResponse<{
+    total: number
+    new: number
+    under_review: number
+    waiting_user: number
+    action_taken: number
+    resolved: number
+    closed: number
+    rejected: number
+    byType: {
+      item_report: number
+      exchange_report: number
+      user_report: number
+    }
+  }>
+> => {
   return apiCall(
     async () => {
       const startTime = performance.now()
       const db = getFirebaseDb()
-      
-      // Initialize stats
+
       const stats = {
         total: 0,
         new: 0,
@@ -159,16 +181,14 @@ export const getReportStatistics = async (): Promise<ApiResponse<{
         },
       }
 
-      // Use aggregation queries for better performance
-      // Count by status
       const statusQueries = [
-        { status: 'new' as ReportStatus, field: 'new' as const },
-        { status: 'under_review' as ReportStatus, field: 'under_review' as const },
-        { status: 'waiting_user' as ReportStatus, field: 'waiting_user' as const },
-        { status: 'action_taken' as ReportStatus, field: 'action_taken' as const },
-        { status: 'resolved' as ReportStatus, field: 'resolved' as const },
-        { status: 'closed' as ReportStatus, field: 'closed' as const },
-        { status: 'rejected' as ReportStatus, field: 'rejected' as const },
+        { status: "new" as ReportStatus, field: "new" as const },
+        { status: "under_review" as ReportStatus, field: "under_review" as const },
+        { status: "waiting_user" as ReportStatus, field: "waiting_user" as const },
+        { status: "action_taken" as ReportStatus, field: "action_taken" as const },
+        { status: "resolved" as ReportStatus, field: "resolved" as const },
+        { status: "closed" as ReportStatus, field: "closed" as const },
+        { status: "rejected" as ReportStatus, field: "rejected" as const },
       ]
 
       const statusCounts = await Promise.all(
@@ -184,11 +204,10 @@ export const getReportStatistics = async (): Promise<ApiResponse<{
         stats.total += count
       })
 
-      // Count by type
       const typeQueries = [
-        { type: 'item_report' as ReportType, field: 'item_report' as const },
-        { type: 'exchange_report' as ReportType, field: 'exchange_report' as const },
-        { type: 'user_report' as ReportType, field: 'user_report' as const },
+        { type: "item_report" as ReportType, field: "item_report" as const },
+        { type: "exchange_report" as ReportType, field: "exchange_report" as const },
+        { type: "user_report" as ReportType, field: "user_report" as const },
       ]
 
       const typeCounts = await Promise.all(
@@ -203,15 +222,14 @@ export const getReportStatistics = async (): Promise<ApiResponse<{
         stats.byType[field] = count
       })
 
-      // Log performance
       const duration = performance.now() - startTime
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.log(`[Query] getReportStatistics: ${duration.toFixed(2)}ms`)
       }
 
       return stats
     },
-    'getReportStatistics',
+    "getReportStatistics",
     TIMEOUT_CONFIG.HEAVY
   )
 }
@@ -220,7 +238,10 @@ export const getReports = async (maxResults: number = 200) => {
   if (typeof window !== "undefined") {
     try {
       const { authFetchJson } = await import("@/lib/api-client")
-      const res = await authFetchJson<{ reports?: Report[] }>(`/api/admin/reports?limit=${maxResults}`, { method: "GET" })
+      const res = await authFetchJson<{ reports?: Report[] }>(
+        `/api/admin/reports?limit=${maxResults}`,
+        { method: "GET" }
+      )
       return res?.data?.reports ?? []
     } catch {
       return []
@@ -229,5 +250,5 @@ export const getReports = async (maxResults: number = 200) => {
   const db = getFirebaseDb()
   const q = query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(maxResults))
   const snapshot = await getDocs(q)
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Report)
+  return snapshot.docs.map((reportDoc) => ({ id: reportDoc.id, ...reportDoc.data() }) as Report)
 }

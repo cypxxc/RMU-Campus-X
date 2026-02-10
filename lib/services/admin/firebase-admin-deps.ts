@@ -45,6 +45,7 @@ function toUserData(
     email: data.email,
     status: data.status,
     warningCount: data.warningCount,
+    suspensionCount: data.suspensionCount,
     suspendedUntil: data.suspendedUntil?.toDate?.() ?? data.suspendedUntil,
     bannedReason: data.bannedReason,
     restrictions: data.restrictions,

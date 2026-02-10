@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, Download } from 'lucide-react'
+import { useI18n } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 
 interface ImageGalleryProps {
@@ -24,9 +25,11 @@ export function ImageGallery({
   initialIndex = 0,
   showThumbnails = true,
 }: ImageGalleryProps) {
+  const { tt } = useI18n()
   const [currentIndex, setCurrentIndex] = useState(initialIndex)
   const [isOpen, setIsOpen] = useState(false)
   const [zoom, setZoom] = useState(1)
+  const effectiveAlt = alt || tt('รูปภาพ', 'Image')
 
   const handleOpen = useCallback(() => {
     setZoom(1)
@@ -89,7 +92,7 @@ export function ImageGallery({
   if (images.length === 0) {
     return (
       <div className={cn('aspect-square bg-muted rounded-lg flex items-center justify-center', className)}>
-        <span className="text-muted-foreground">ไม่มีรูปภาพ</span>
+        <span className="text-muted-foreground">{tt('ไม่มีรูปภาพ', 'No image')}</span>
       </div>
     )
   }
@@ -104,7 +107,7 @@ export function ImageGallery({
         >
           <Image
             src={images[currentIndex] || ''}
-            alt={`${alt} ${currentIndex + 1}`}
+            alt={`${effectiveAlt} ${currentIndex + 1}`}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             sizes="(max-width: 768px) 100vw, 50vw"
@@ -130,6 +133,7 @@ export function ImageGallery({
               variant="ghost"
               size="icon"
               className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label={tt('รูปก่อนหน้า', 'Previous image')}
               onClick={(e) => {
                 e.stopPropagation()
                 handlePrevious()
@@ -141,6 +145,7 @@ export function ImageGallery({
               variant="ghost"
               size="icon"
               className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label={tt('รูปถัดไป', 'Next image')}
               onClick={(e) => {
                 e.stopPropagation()
                 handleNext()
@@ -172,7 +177,7 @@ export function ImageGallery({
             >
               <Image
                 src={image}
-                alt={`${alt} thumbnail ${index + 1}`}
+                alt={`${effectiveAlt} thumbnail ${index + 1}`}
                 fill
                 className="object-cover"
                 sizes="64px"
@@ -191,6 +196,7 @@ export function ImageGallery({
               variant="ghost"
               size="icon"
               className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full"
+              aria-label={tt('ปิดตัวอย่างรูป', 'Close image preview')}
               onClick={() => setIsOpen(false)}
             >
               <X className="w-5 h-5" />
@@ -202,6 +208,7 @@ export function ImageGallery({
                 variant="ghost"
                 size="icon"
                 className="bg-black/50 hover:bg-black/70 text-white rounded-full"
+                aria-label={tt('ซูมออก', 'Zoom out')}
                 onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}
                 disabled={zoom <= 0.5}
               >
@@ -211,6 +218,7 @@ export function ImageGallery({
                 variant="ghost"
                 size="icon"
                 className="bg-black/50 hover:bg-black/70 text-white rounded-full"
+                aria-label={tt('ซูมเข้า', 'Zoom in')}
                 onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}
                 disabled={zoom >= 3}
               >
@@ -220,6 +228,7 @@ export function ImageGallery({
                 variant="ghost"
                 size="icon"
                 className="bg-black/50 hover:bg-black/70 text-white rounded-full"
+                aria-label={tt('ดาวน์โหลดรูป', 'Download image')}
                 onClick={handleDownload}
               >
                 <Download className="w-5 h-5" />
@@ -236,7 +245,7 @@ export function ImageGallery({
             >
               <Image
                 src={images[currentIndex] || ''}
-                alt={`${alt} ${currentIndex + 1}`}
+                alt={`${effectiveAlt} ${currentIndex + 1}`}
                 fill
                 className="object-contain transition-transform duration-200"
                 style={{ transform: `scale(${zoom})` }}

@@ -12,7 +12,7 @@
  */
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
-import { getAuth, type Auth } from 'firebase-admin/auth'
+import { getAuth, type Auth, type DecodedIdToken } from 'firebase-admin/auth'
 
 let adminApp: App | null = null
 let adminDb: Firestore | null = null
@@ -85,6 +85,8 @@ export function getAdminAuth(): Auth {
 /** Cache ผลตรวจสถานะ user (ลดการอ่าน Firestore ทุก request) — TTL 30 วินาที */
 const USER_STATUS_CACHE_TTL_MS = 30_000
 const userStatusCache = new Map<string, { status: string; at: number }>()
+const TOKEN_CACHE_TTL_MS = 60_000
+const tokenCache = new Map<string, { decoded: DecodedIdToken; at: number }>()
 
 function getCachedUserStatus(uid: string): string | null {
   const entry = userStatusCache.get(uid)
@@ -104,6 +106,30 @@ function setCachedUserStatus(uid: string, status: string): void {
   }
 }
 
+function isDecodedTokenExpired(decoded: DecodedIdToken): boolean {
+  // Guard against using a token that is about to expire.
+  return decoded.exp * 1000 <= Date.now() + 1000
+}
+
+function getCachedDecodedToken(token: string): DecodedIdToken | null {
+  const entry = tokenCache.get(token)
+  if (!entry) return null
+  if (Date.now() - entry.at > TOKEN_CACHE_TTL_MS || isDecodedTokenExpired(entry.decoded)) {
+    tokenCache.delete(token)
+    return null
+  }
+  return entry.decoded
+}
+
+function setCachedDecodedToken(token: string, decoded: DecodedIdToken): void {
+  if (isDecodedTokenExpired(decoded)) return
+  tokenCache.set(token, { decoded, at: Date.now() })
+  if (tokenCache.size > 500) {
+    const oldest = [...tokenCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
+    if (oldest) tokenCache.delete(oldest[0])
+  }
+}
+
 /**
  * Verify Firebase ID token from request
  * @param token - Firebase ID token from Authorization header
@@ -112,7 +138,9 @@ function setCachedUserStatus(uid: string, status: string): void {
 export async function verifyIdToken(token: string, checkStatus: boolean = false) {
   try {
     const auth = getAdminAuth()
-    const decodedToken = await auth.verifyIdToken(token)
+    const cachedDecoded = getCachedDecodedToken(token)
+    const decodedToken = cachedDecoded ?? await auth.verifyIdToken(token)
+    if (!cachedDecoded) setCachedDecodedToken(token, decodedToken)
 
     if (checkStatus) {
       const uid = decodedToken.uid

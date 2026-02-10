@@ -9,7 +9,7 @@ import { authFetchJson } from "@/lib/api-client"
 import { updateUserPassword, deleteUserAccount } from "@/lib/auth"
 import type { Item, Exchange } from "@/types"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -40,6 +40,7 @@ import { Settings } from "lucide-react"
 import { LineNotificationSettings } from "@/components/line-notification-settings"
 import { UnifiedModal } from "@/components/ui/unified-modal"
 import { ProfileBadges } from "@/components/profile/profile-badges"
+import { useI18n } from "@/components/language-provider"
 
 // Refactored Components
 import { MyItemsList } from "@/components/profile/my-items-list"
@@ -77,12 +78,13 @@ export default function ProfilePage() {
   const { user, loading: authLoading, refreshUserProfile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+  const { tt } = useI18n()
   const mountedRef = useRef(true)
 
   const statusLabels: Record<string, string> = {
-    available: "พร้อมให้",
-    pending: "รอดำเนินการ",
-    completed: "เสร็จสิ้น",
+    available: tt("พร้อมให้", "Available"),
+    pending: tt("รอดำเนินการ", "Pending"),
+    completed: tt("เสร็จสิ้น", "Completed"),
   }
 
   const statusColors: Record<string, string> = {
@@ -173,7 +175,7 @@ export default function ProfilePage() {
     const maxImages = IMAGE_UPLOAD_CONFIG.maxImages
     const remaining = maxImages - editImageUrls.length
     if (remaining <= 0) {
-      toast({ title: "เพิ่มรูปได้สูงสุด 5 รูป", variant: "destructive" })
+      toast({ title: tt("เพิ่มรูปได้สูงสุด 5 รูป", "You can upload up to 5 images"), variant: "destructive" })
       e.target.value = ""
       return
     }
@@ -185,16 +187,16 @@ export default function ProfilePage() {
       for (const file of Array.from(files).slice(0, remaining)) {
         const valid = validateImageFile(file)
         if (!valid.valid) {
-          toast({ title: "ไฟล์ไม่ถูกต้อง", description: `${file.name}: ${valid.error}`, variant: "destructive" })
+          toast({ title: tt("ไฟล์ไม่ถูกต้อง", "Invalid file"), description: `${file.name}: ${valid.error}`, variant: "destructive" })
           continue
         }
         const publicId = await uploadToCloudinary(file, "item", token)
         added.push(publicId)
       }
       if (added.length) setEditImageUrls((prev) => [...prev, ...added].slice(0, maxImages))
-      if (added.length) toast({ title: `เพิ่ม ${added.length} รูปสำเร็จ` })
+      if (added.length) toast({ title: tt(`เพิ่ม ${added.length} รูปสำเร็จ`, `${added.length} image(s) added`) })
     } catch (err: any) {
-      toast({ title: "อัปโหลดไม่สำเร็จ", description: err?.message, variant: "destructive" })
+      toast({ title: tt("อัปโหลดไม่สำเร็จ", "Upload failed"), description: err?.message, variant: "destructive" })
     } finally {
       setUploadingItemImage(false)
       e.target.value = ""
@@ -204,11 +206,11 @@ export default function ProfilePage() {
   const handleSaveItemEdit = async () => {
     if (!selectedItem || !user) return
     if (!editTitle.trim()) {
-      toast({ title: "กรุณากรอกชื่อสิ่งของ", variant: "destructive" })
+      toast({ title: tt("กรุณากรอกชื่อสิ่งของ", "Please enter an item name"), variant: "destructive" })
       return
     }
     if (!editLocation.trim()) {
-      toast({ title: "กรุณาเลือกสถานที่นัดรับ", variant: "destructive" })
+      toast({ title: tt("กรุณาเลือกสถานที่นัดรับ", "Please select a pickup location"), variant: "destructive" })
       return
     }
     setSavingItem(true)
@@ -236,11 +238,11 @@ export default function ProfilePage() {
       } catch (lineErr) {
         console.warn("[LINE] Notify item updated:", lineErr)
       }
-      toast({ title: "บันทึกสำเร็จ" })
+      toast({ title: tt("บันทึกสำเร็จ", "Saved") })
       refetchMyItems()
       setSelectedItem(null)
     } catch (error: any) {
-      toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
     } finally {
       setSavingItem(false)
     }
@@ -261,11 +263,11 @@ export default function ProfilePage() {
       setUserProfile((prev: typeof userProfile) =>
         prev ? { ...prev, displayName: newDisplayName, bio: newBio } : prev
       )
-      toast({ title: "อัปเดตโปรไฟล์สำเร็จ" })
+      toast({ title: tt("อัปเดตโปรไฟล์สำเร็จ", "Profile updated") })
       loadProfile()
     } catch (error: any) {
       console.error(error)
-      toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
       throw error
     }
   }
@@ -284,10 +286,10 @@ export default function ProfilePage() {
         photoURL: cloudinaryUrl,
       })
       await refreshUserProfile()
-      toast({ title: "อัปโหลดรูปโปรไฟล์สำเร็จ" })
+      toast({ title: tt("อัปโหลดรูปโปรไฟล์สำเร็จ", "Profile image uploaded") })
       loadProfile()
     } catch (error: any) {
-      toast({ title: "เกิดข้อผิดพลาดในการอัปโหลด", description: error.message, variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาดในการอัปโหลด", "Upload error"), description: error.message, variant: "destructive" })
     } finally {
       setUploadingImage(false)
     }
@@ -313,10 +315,10 @@ export default function ProfilePage() {
       } catch (lineErr) {
         console.warn("[LINE] Notify item deleted:", lineErr)
       }
-      toast({ title: "ลบสิ่งของสำเร็จ" })
+      toast({ title: tt("ลบสิ่งของสำเร็จ", "Item deleted") })
       refetchMyItems()
     } catch (error: any) {
-      toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
     } finally {
       setDeleteDialog({ open: false, itemId: null })
       setSelectedItem(null)
@@ -326,17 +328,17 @@ export default function ProfilePage() {
   const handleChangePassword = async (password: string) => {
     if (!user) return
     try {
-      await updateUserPassword(user, password)
+     await updateUserPassword(user, password)
       // Note: updateUserPassword might throw if re-auth needed
     } catch (error: any) {
        if (error.code === 'auth/requires-recent-login') {
-        toast({ 
-          title: "ต้องเข้าสู่ระบบใหม่", 
-          description: "เพื่อความปลอดภัย กรุณาออกจากระบบและเข้าสู่ระบบใหม่ก่อนเปลี่ยนรหัสผ่าน",
+         toast({ 
+          title: tt("ต้องเข้าสู่ระบบใหม่", "Re-authentication required"), 
+          description: tt("เพื่อความปลอดภัย กรุณาออกจากระบบและเข้าสู่ระบบใหม่ก่อนเปลี่ยนรหัสผ่าน", "For security, please sign out and sign in again before changing password."),
           variant: "destructive" 
         })
       } else {
-        toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+        toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
       }
       throw error // Re-throw to let component stop loading state
     }
@@ -348,17 +350,17 @@ export default function ProfilePage() {
     setDeletingAccount(true)
     try {
       await deleteUserAccount(user)
-      toast({ title: "ลบบัญชีผู้ใช้เรียบร้อยแล้ว" })
+      toast({ title: tt("ลบบัญชีผู้ใช้เรียบร้อยแล้ว", "Account deleted successfully") })
       router.push("/login")
     } catch (error: any) {
       if (error.code === 'auth/requires-recent-login') {
         toast({ 
-          title: "ต้องเข้าสู่ระบบใหม่", 
-          description: "เพื่อความปลอดภัย กรุณาออกจากระบบและเข้าสู่ระบบใหม่ก่อนลบบัญชี",
+          title: tt("ต้องเข้าสู่ระบบใหม่", "Re-authentication required"), 
+          description: tt("เพื่อความปลอดภัย กรุณาออกจากระบบและเข้าสู่ระบบใหม่ก่อนลบบัญชี", "For security, please sign out and sign in again before deleting your account."),
           variant: "destructive" 
         })
       } else {
-        toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+        toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
       }
     } finally {
       setDeletingAccount(false)
@@ -409,7 +411,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="mt-4 space-y-1">
-                  <h2 className="text-xl font-bold">{userProfile?.displayName || "ผู้ใช้งาน"}</h2>
+                  <h2 className="text-xl font-bold">{userProfile?.displayName || tt("ผู้ใช้งาน", "User")}</h2>
                   <p className="text-sm text-muted-foreground truncate max-w-full px-4">{user.email}</p>
                   
                   <Button 
@@ -417,7 +419,7 @@ export default function ProfilePage() {
                     className="text-primary h-auto p-0 text-xs mt-1"
                     onClick={() => router.push(`/profile/${user.uid}`)}
                   >
-                    ดูมุมมองสาธารณะ
+                    {tt("ดูมุมมองสาธารณะ", "View public profile")}
                   </Button>
                 </div>
 
@@ -434,13 +436,13 @@ export default function ProfilePage() {
                 <div className="mt-8 pt-8 border-t grid grid-cols-2 gap-4">
                   <div className="text-center">
                     <p className="text-2xl font-black text-primary">{myItems.length}</p>
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">โพส</p>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">{tt("โพส", "Posts")}</p>
                   </div>
                   <div className="text-center border-l">
                     <p className="text-2xl font-black text-primary">
                       {completedExchanges.length}
                     </p>
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">แลกเปลี่ยนสำเร็จ</p>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">{tt("แลกเปลี่ยนสำเร็จ", "Completed exchanges")}</p>
                   </div>
                 </div>
               </CardContent>
@@ -453,16 +455,16 @@ export default function ProfilePage() {
               <TabsList className="bg-muted/50 p-1 border h-12 w-full sm:w-auto justify-start inline-flex flex-nowrap overflow-x-auto scrollbar-hide">
                 <TabsTrigger value="items" className="px-4 gap-2 h-full shrink-0">
                   <Package className="h-4 w-4 shrink-0" />
-                  โพส
+                  {tt("โพส", "Posts")}
                 </TabsTrigger>
                 <TabsTrigger value="history" className="px-4 gap-2 h-full shrink-0">
                   <History className="h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline">ประวัติแลกเปลี่ยน</span>
-                  <span className="sm:hidden">ประวัติ</span>
+                  <span className="hidden sm:inline">{tt("ประวัติแลกเปลี่ยน", "Exchange history")}</span>
+                  <span className="sm:hidden">{tt("ประวัติ", "History")}</span>
                 </TabsTrigger>
                 <TabsTrigger value="settings" className="px-4 gap-2 h-full shrink-0">
                   <Settings className="h-4 w-4 shrink-0" />
-                  ตั้งค่า
+                  {tt("ตั้งค่า", "Settings")}
                 </TabsTrigger>
               </TabsList>
 
@@ -498,8 +500,8 @@ export default function ProfilePage() {
 
                 <PasswordChangeForm 
                   onCheckPassword={(pass, confirm) => {
-                    if (pass !== confirm) return "รหัสผ่านไม่ตรงกัน"
-                    if (pass.length < 6) return "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร"
+                    if (pass !== confirm) return tt("รหัสผ่านไม่ตรงกัน", "Passwords do not match")
+                    if (pass.length < 6) return tt("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร", "Password must be at least 6 characters")
                     return null
                   }}
                   onSubmit={handleChangePassword}
@@ -507,25 +509,18 @@ export default function ProfilePage() {
 
                 {/* Danger Zone */}
                 <Card className="border-destructive/20 shadow-none bg-destructive/5 mt-8">
-                  <CardHeader>
-                    <CardTitle className="text-lg text-destructive flex items-center gap-2">
-                       <AlertTriangle className="h-5 w-5" />
-                       พื้นที่อันตราย (Danger Zone)
-                    </CardTitle>
-                    <CardDescription>การดำเนินการด้านล่างไม่สามารถย้อนกลับได้ กรุณาตรวจสอบให้ดีก่อนกดดำเนินการ</CardDescription>
-                  </CardHeader>
                   <CardContent>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 border border-destructive/20 rounded-lg bg-background/50">
                       <div>
-                        <h4 className="font-medium text-destructive">ลบบัญชีผู้ใช้</h4>
-                        <p className="text-sm text-muted-foreground">บัญชี ข้อความ การแลกเปลี่ยน และสิ่งของทั้งหมดจะถูกลบถาวร</p>
+                        <h4 className="font-medium text-destructive">{tt("ลบบัญชีผู้ใช้", "Delete account")}</h4>
+                        <p className="text-sm text-muted-foreground">{tt("บัญชี ข้อความ การแลกเปลี่ยน และสิ่งของทั้งหมดจะถูกลบถาวร", "Your account, messages, exchanges, and items will be permanently deleted.")}</p>
                       </div>
                       <Button 
                         variant="destructive" 
                         onClick={() => setDeleteAccountDialog(true)}
                         className="shrink-0 w-full sm:w-auto"
                       >
-                        ลบบัญชี
+                        {tt("ลบบัญชี", "Delete account")}
                       </Button>
                     </div>
                   </CardContent>
@@ -541,8 +536,8 @@ export default function ProfilePage() {
         open={!!selectedItem}
         onOpenChange={(open) => !open && setSelectedItem(null)}
         size="lg"
-        title="แก้ไขสิ่งของ"
-        description="แก้ไขข้อมูลสิ่งของของคุณ"
+        title={tt("แก้ไขสิ่งของ", "Edit item")}
+        description={tt("แก้ไขข้อมูลสิ่งของของคุณ", "Update your item details")}
         icon={<Edit className="h-5 w-5" />}
         footer={
           <div className="space-y-3 w-full">
@@ -552,8 +547,8 @@ export default function ProfilePage() {
                 <Trash2 className="h-4 w-4 text-destructive" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-destructive">ลบสิ่งของนี้</p>
-                <p className="text-xs text-muted-foreground">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+                <p className="text-sm font-medium text-destructive">{tt("ลบสิ่งของนี้", "Delete this item")}</p>
+                <p className="text-xs text-muted-foreground">{tt("การดำเนินการนี้ไม่สามารถย้อนกลับได้", "This action cannot be undone.")}</p>
               </div>
               <Button 
                 variant="ghost"
@@ -564,7 +559,7 @@ export default function ProfilePage() {
                 className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
               >
                 <Trash2 className="h-4 w-4" />
-                ลบ
+                {tt("ลบ", "Delete")}
               </Button>
             </div>
 
@@ -574,7 +569,7 @@ export default function ProfilePage() {
                 variant="outline" 
                 onClick={() => setSelectedItem(null)}
               >
-                ยกเลิก
+                {tt("ยกเลิก", "Cancel")}
               </Button>
               <Button 
                 onClick={handleSaveItemEdit} 
@@ -584,12 +579,12 @@ export default function ProfilePage() {
                 {savingItem ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    กำลังบันทึก...
+                    {tt("กำลังบันทึก...", "Saving...")}
                   </>
                 ) : (
                   <>
                     <Save className="h-4 w-4" />
-                    บันทึกการเปลี่ยนแปลง
+                    {tt("บันทึกการเปลี่ยนแปลง", "Save changes")}
                   </>
                 )}
               </Button>
@@ -603,23 +598,29 @@ export default function ProfilePage() {
             <div className="space-y-2">
               <Label className="text-sm font-semibold flex items-center gap-2">
                 <ImagePlus className="h-4 w-4 text-primary" />
-                รูปภาพ ({editImageUrls.length}/{IMAGE_UPLOAD_CONFIG.maxImages})
+                {tt("รูปภาพ", "Images")} ({editImageUrls.length}/{IMAGE_UPLOAD_CONFIG.maxImages})
               </Label>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {editImageUrls.map((ref, index) => (
                   <div key={`${ref}-${index}`} className="relative aspect-square rounded-lg overflow-hidden bg-muted border group">
-                    <Image src={resolveImageUrl(ref, { width: 200 })} alt={`รูปที่ ${index + 1}`} fill className="object-cover" sizes="120px" />
+                    <Image
+                      src={resolveImageUrl(ref, { width: 200 })}
+                      alt={tt(`รูปที่ ${index + 1}`, `Image ${index + 1}`)}
+                      fill
+                      className="object-cover"
+                      sizes="120px"
+                    />
                     <button
                       type="button"
                       onClick={() => setEditImageUrls((prev) => prev.filter((_, i) => i !== index))}
                       className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      aria-label="ลบรูป"
+                      aria-label={tt("ลบรูป", "Remove image")}
                     >
                       <X className="h-3 w-3" />
                     </button>
                     {index === 0 && (
                       <span className="absolute bottom-1 left-1 text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded font-medium">
-                        หลัก
+                        {tt("หลัก", "Primary")}
                       </span>
                     )}
                   </div>
@@ -631,7 +632,7 @@ export default function ProfilePage() {
                     ) : (
                       <>
                         <ImagePlus className="h-5 w-5 text-muted-foreground" />
-                        <span className="text-[10px] text-muted-foreground">เพิ่มรูป</span>
+                        <span className="text-[10px] text-muted-foreground">{tt("เพิ่มรูป", "Add image")}</span>
                       </>
                     )}
                     <input
@@ -645,7 +646,9 @@ export default function ProfilePage() {
                   </label>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">สูงสุด {IMAGE_UPLOAD_CONFIG.maxImages} รูป (JPEG, PNG)</p>
+              <p className="text-xs text-muted-foreground">
+                {tt(`สูงสุด ${IMAGE_UPLOAD_CONFIG.maxImages} รูป (JPEG, PNG)`, `Up to ${IMAGE_UPLOAD_CONFIG.maxImages} images (JPEG, PNG)`)}
+              </p>
             </div>
 
             {/* Title Input */}
@@ -653,7 +656,7 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between">
                 <Label htmlFor="edit-title" className="text-sm font-semibold flex items-center gap-2">
                   <Package className="h-4 w-4 text-primary" />
-                  ชื่อสิ่งของ
+                  {tt("ชื่อสิ่งของ", "Item name")}
                   <span className="text-destructive">*</span>
                 </Label>
                 <span className="text-xs text-muted-foreground tabular-nums">
@@ -664,11 +667,11 @@ export default function ProfilePage() {
                 id="edit-title"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value.slice(0, 100))}
-                placeholder="ระบุชื่อสิ่งของ..."
+                placeholder={tt("ระบุชื่อสิ่งของ...", "Enter item name...")}
                 maxLength={100}
               />
               <p className="text-xs text-muted-foreground">
-                ชื่อที่ชัดเจนจะช่วยให้คนอื่นเข้าใจง่ายขึ้น
+                {tt("ชื่อที่ชัดเจนจะช่วยให้คนอื่นเข้าใจง่ายขึ้น", "A clear title helps others understand your item quickly.")}
               </p>
             </div>
             
@@ -677,7 +680,7 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between">
                 <Label htmlFor="edit-description" className="text-sm font-semibold flex items-center gap-2">
                   <Edit className="h-4 w-4 text-primary" />
-                  คำอธิบาย
+                  {tt("คำอธิบาย", "Description")}
                 </Label>
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {editDescription.length}/1000
@@ -687,12 +690,12 @@ export default function ProfilePage() {
                 id="edit-description"
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value.slice(0, 1000))}
-                placeholder="อธิบายรายละเอียด สภาพ หรือข้อมูลเพิ่มเติม..."
+                placeholder={tt("อธิบายรายละเอียด สภาพ หรือข้อมูลเพิ่มเติม...", "Describe condition and extra details...")}
                 rows={4}
                 maxLength={1000}
               />
               <p className="text-xs text-muted-foreground">
-                รายละเอียดที่ดีจะช่วยเพิ่มโอกาสในการแลกเปลี่ยน
+                {tt("รายละเอียดที่ดีจะช่วยเพิ่มโอกาสในการแลกเปลี่ยน", "A good description increases exchange chances.")}
               </p>
             </div>
 
@@ -700,11 +703,11 @@ export default function ProfilePage() {
             <div className="space-y-2">
               <Label className="text-sm font-semibold flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-primary" />
-                สถานที่นัดรับ <span className="text-destructive">*</span>
+                {tt("สถานที่นัดรับ", "Pickup location")} <span className="text-destructive">*</span>
               </Label>
               <Select value={editLocation} onValueChange={setEditLocation} disabled={savingItem}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="เลือกสถานที่" />
+                  <SelectValue placeholder={tt("เลือกสถานที่", "Select location")} />
                 </SelectTrigger>
                 <SelectContent>
                   {LOCATION_OPTIONS.map((loc) => (
@@ -715,7 +718,7 @@ export default function ProfilePage() {
                 </SelectContent>
               </Select>
               <Input
-                placeholder="รายละเอียดสถานที่ (ไม่บังคับ)"
+                placeholder={tt("รายละเอียดสถานที่ (ไม่บังคับ)", "Location detail (optional)")}
                 value={editLocationDetail}
                 onChange={(e) => setEditLocationDetail(e.target.value.slice(0, 200))}
                 maxLength={200}
@@ -728,7 +731,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-sm font-medium text-muted-foreground">สถานะปัจจุบัน</span>
+                <span className="text-sm font-medium text-muted-foreground">{tt("สถานะปัจจุบัน", "Current status")}</span>
               </div>
               <Badge variant="outline" className={statusColors[selectedItem.status]}>
                 {statusLabels[selectedItem.status]}
@@ -747,20 +750,20 @@ export default function ProfilePage() {
                 <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <AlertDialogTitle>ยืนยันการลบ</AlertDialogTitle>
+                <AlertDialogTitle>{tt("ยืนยันการลบ", "Confirm deletion")}</AlertDialogTitle>
                 <AlertDialogDescription className="mt-1">
-                  คุณแน่ใจหรือไม่ว่าต้องการลบสิ่งของนี้?
+                  {tt("คุณแน่ใจหรือไม่ว่าต้องการลบสิ่งของนี้?", "Are you sure you want to delete this item?")}
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
           <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400">
-            ⚠️ การดำเนินการนี้ไม่สามารถย้อนกลับได้
+            ⚠️ {tt("การดำเนินการนี้ไม่สามารถย้อนกลับได้", "This action cannot be undone")}
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogCancel>{tt("ยกเลิก", "Cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteItem} className="bg-destructive hover:bg-destructive/90">
-              ลบสิ่งของ
+              {tt("ลบสิ่งของ", "Delete item")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -778,9 +781,12 @@ export default function ProfilePage() {
                 <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <AlertDialogTitle className="text-destructive">ลบบัญชีถาวร</AlertDialogTitle>
+                <AlertDialogTitle className="text-destructive">{tt("ลบบัญชีถาวร", "Delete account permanently")}</AlertDialogTitle>
                 <AlertDialogDescription className="mt-1">
-                  การกระทำนี้จะลบข้อมูลบัญชีของคุณ ข้อมูลส่วนตัว และประวัติทั้งหมดออกจากระบบ **ไม่สามารถกู้คืนได้**
+                  {tt(
+                    "การกระทำนี้จะลบข้อมูลบัญชีของคุณ ข้อมูลส่วนตัว และประวัติทั้งหมดออกจากระบบ **ไม่สามารถกู้คืนได้**",
+                    "This action will permanently remove your account, personal data, and history. **It cannot be recovered.**"
+                  )}
                 </AlertDialogDescription>
               </div>
             </div>
@@ -788,7 +794,7 @@ export default function ProfilePage() {
           
           <div className="space-y-4 py-2">
             <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive font-medium">
-              พิมพ์คำว่า <span className="font-bold select-all">DELETE</span> เพื่อยืนยัน
+              {tt("พิมพ์คำว่า ", "Type ")}<span className="font-bold select-all">DELETE</span>{tt(" เพื่อยืนยัน", " to confirm")}
             </div>
             <Input 
               value={deleteConfirmText}
@@ -799,7 +805,7 @@ export default function ProfilePage() {
           </div>
 
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingAccount}>ยกเลิก</AlertDialogCancel>
+            <AlertDialogCancel disabled={deletingAccount}>{tt("ยกเลิก", "Cancel")}</AlertDialogCancel>
             <Button 
               variant="destructive" 
               onClick={handleDeleteAccount} 
@@ -808,10 +814,10 @@ export default function ProfilePage() {
               {deletingAccount ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  กำลังลบ...
+                  {tt("กำลังลบ...", "Deleting...")}
                 </>
               ) : (
-                "ยืนยันการลบบัญชี"
+                tt("ยืนยันการลบบัญชี", "Confirm account deletion")
               )}
             </Button>
           </AlertDialogFooter>

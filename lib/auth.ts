@@ -80,6 +80,7 @@ export const registerUser = async (rawEmail: string, password: string) => {
       displayName: email.split("@")[0], // Use email prefix as default name
       status: "ACTIVE",
       warningCount: 0,
+      suspensionCount: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       restrictions: {

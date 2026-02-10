@@ -3,12 +3,7 @@
 import { Check } from "lucide-react"
 import type { ExchangeStatus } from "@/types"
 import { normalizeExchangePhaseStatus } from "@/lib/exchange-state-machine"
-
-const STEPS: { status: ExchangeStatus; label: string }[] = [
-  { status: "pending", label: "รอตอบรับ" },
-  { status: "in_progress", label: "กำลังดำเนินการ" },
-  { status: "completed", label: "เสร็จสิ้น" },
-]
+import type { Locale } from "@/lib/i18n/config"
 
 const STEP_ORDER: ExchangeStatus[] = ["pending", "in_progress", "completed"]
 
@@ -22,6 +17,7 @@ interface ExchangeStepIndicatorProps {
   ownerConfirmed?: boolean
   requesterConfirmed?: boolean
   className?: string
+  locale?: Locale
 }
 
 export function ExchangeStepIndicator({
@@ -29,7 +25,20 @@ export function ExchangeStepIndicator({
   ownerConfirmed = false,
   requesterConfirmed = false,
   className = "",
+  locale = "th",
 }: ExchangeStepIndicatorProps) {
+  const labelByStatus: Record<ExchangeStatus, string> = {
+    pending: locale === "th" ? "รอตอบรับ" : "Pending",
+    accepted: locale === "th" ? "กำลังดำเนินการ" : "In progress",
+    in_progress: locale === "th" ? "กำลังดำเนินการ" : "In progress",
+    completed: locale === "th" ? "เสร็จสิ้น" : "Completed",
+    cancelled: locale === "th" ? "ยกเลิกแล้ว" : "Cancelled",
+    rejected: locale === "th" ? "ปฏิเสธแล้ว" : "Rejected",
+  }
+  const steps = STEP_ORDER.map((stepStatus) => ({
+    status: stepStatus,
+    label: labelByStatus[stepStatus],
+  }))
   const effectiveStatus = normalizeExchangePhaseStatus(status)
   const currentIdx = stepIndex(effectiveStatus)
   const isCompleted = effectiveStatus === "completed"
@@ -39,11 +48,15 @@ export function ExchangeStepIndicator({
     !isCompleted
 
   return (
-    <div className={`flex items-center gap-1 sm:gap-2 ${className}`} role="list" aria-label="ขั้นตอนการแลกเปลี่ยน">
-      {STEPS.map((step, idx) => {
+    <div
+      className={`flex items-center gap-1 sm:gap-2 ${className}`}
+      role="list"
+      aria-label={locale === "th" ? "ขั้นตอนการแลกเปลี่ยน" : "Exchange progress steps"}
+    >
+      {steps.map((step, idx) => {
         const isActive = idx === currentIdx
         const isPast = idx < currentIdx || (isCompleted && idx === currentIdx)
-        const isLast = idx === STEPS.length - 1
+        const isLast = idx === steps.length - 1
 
         return (
           <div key={step.status} className="flex items-center" role="listitem">
@@ -76,7 +89,7 @@ export function ExchangeStepIndicator({
       })}
       {waitingOther && (
         <span className="ml-2 text-xs text-amber-600 dark:text-amber-400 font-medium animate-pulse" role="status">
-          รออีกฝ่ายยืนยัน
+          {locale === "th" ? "รออีกฝ่ายยืนยัน" : "Waiting for the other party"}
         </span>
       )}
     </div>

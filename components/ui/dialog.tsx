@@ -59,6 +59,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        data-lenis-prevent
         aria-describedby={undefined}
         className={cn(
           'bg-background fixed top-[50%] left-[50%] z-50 flex h-auto max-h-[min(90vh,calc(100dvh-2rem))] w-[95vw] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-2xl border shadow-2xl',

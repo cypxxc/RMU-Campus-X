@@ -13,6 +13,7 @@ import { itemsCollection, usersCollection } from "@/lib/db/collections"
 import { itemSchema, itemStatusSchema } from "@/lib/schemas"
 import { generateKeywords, refineItemsBySearchTerms } from "@/lib/db/items-helpers"
 import { parseItemFromFirestore } from "@/lib/schemas-firestore"
+import { normalizeRatingSummary, type RatingSummary } from "@/lib/rating"
 import type { Item } from "@/types"
 
 const createItemSchema = itemSchema.extend({
@@ -21,6 +22,36 @@ const createItemSchema = itemSchema.extend({
 })
 
 type CreateItemBody = z.infer<typeof createItemSchema>
+
+type PosterProfileSummary = {
+  name: string
+  rating?: RatingSummary
+}
+
+const POSTER_PROFILE_CACHE_TTL_MS = 5 * 60_000
+const posterProfileCache = new Map<string, { profile: PosterProfileSummary; at: number }>()
+
+function getCachedPosterProfile(uid: string): PosterProfileSummary | null {
+  const entry = posterProfileCache.get(uid)
+  if (!entry) return null
+  if (Date.now() - entry.at > POSTER_PROFILE_CACHE_TTL_MS) {
+    posterProfileCache.delete(uid)
+    return null
+  }
+  return entry.profile
+}
+
+function setCachedPosterProfile(uid: string, profile: PosterProfileSummary): void {
+  posterProfileCache.set(uid, { profile, at: Date.now() })
+  if (posterProfileCache.size > 1_000) {
+    const oldest = [...posterProfileCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
+    if (oldest) posterProfileCache.delete(oldest[0])
+  }
+}
+
+function fallbackPostedByName(item: Item): string | null {
+  return item.postedByName ?? item.postedByEmail?.split("@")[0] ?? item.postedBy ?? null
+}
 
 /** POST /api/items – สร้าง item */
 export const POST = withValidation(
@@ -81,11 +112,13 @@ const listQuerySchema = z.object({
   pageSize: z.coerce.number().min(1).max(100).default(20),
   lastId: z.string().optional(),
   postedBy: z.string().optional(),
+  includeFavoriteStatus: z.coerce.boolean().default(true),
 })
 
 /** GET /api/items – list items (filter, search, pagination). ต้องล็อกอิน */
 export async function GET(request: NextRequest) {
   try {
+    const db = getAdminDb()
     const authHeader = request.headers.get("Authorization")
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null
     if (!token) {
@@ -105,8 +138,9 @@ export async function GET(request: NextRequest) {
       pageSize: searchParams.get("pageSize") ?? 20,
       lastId: searchParams.get("lastId") ?? undefined,
       postedBy: rawPostedBy,
+      includeFavoriteStatus: searchParams.get("includeFavoriteStatus") ?? true,
     })
-    const query = parsed.success ? parsed.data : { pageSize: 20 }
+    const query = parsed.success ? parsed.data : { pageSize: 20, includeFavoriteStatus: true }
     // สำคัญ: ถ้า client ส่ง postedBy มา ต้องใช้เสมอ — อย่าทิ้งเมื่อ parse ล้มเหลว (ไม่งั้นจะได้รายการของทุกคน)
     if (rawPostedBy && !query.postedBy) (query as { postedBy?: string }).postedBy = rawPostedBy
 
@@ -148,21 +182,70 @@ export async function GET(request: NextRequest) {
 
     // แสดงชื่อปัจจุบันจากโปรไฟล์ (ถ้า user เปลี่ยนชื่อแล้ว จะได้ชื่อล่าสุด)
     const postedByIds = [...new Set(page.map((it) => it.postedBy).filter(Boolean))]
-    const nameByUid = new Map<string, string>()
-    if (postedByIds.length > 0) {
-      const userRefs = postedByIds.map((uid) => usersCollection().doc(uid))
-      const userSnaps = await getAdminDb().getAll(...userRefs)
-      userSnaps.forEach((snap, i) => {
-        const uid = postedByIds[i]
-        if (!uid) return
-        const data = snap.data()
-        const name = (data?.displayName as string) || (data?.email as string)?.split("@")[0] || uid
-        nameByUid.set(uid, name)
-      })
-    }
-    const pageWithCurrentNames = page.map((it) => ({
+    const profileByUid = new Map<string, PosterProfileSummary>()
+    const missingProfileUids: string[] = []
+    postedByIds.forEach((uid) => {
+      const cachedProfile = getCachedPosterProfile(uid)
+      if (cachedProfile) {
+        profileByUid.set(uid, cachedProfile)
+      } else {
+        missingProfileUids.push(uid)
+      }
+    })
+
+    const favoriteItemIds = new Set<string>()
+    const shouldCheckFavorites =
+      query.includeFavoriteStatus !== false &&
+      page.length > 0 &&
+      query.postedBy !== decoded.uid
+    const posterProfileTask =
+      missingProfileUids.length === 0
+        ? Promise.resolve()
+        : (async () => {
+            const userRefs = missingProfileUids.map((uid) => usersCollection().doc(uid))
+            const userSnaps = await db.getAll(...userRefs)
+            userSnaps.forEach((snap, i) => {
+              const uid = missingProfileUids[i]
+              if (!uid) return
+              const data = snap.data()
+              const name = (data?.displayName as string) || (data?.email as string)?.split("@")[0] || uid
+              const rating = normalizeRatingSummary(data?.rating)
+              const profile = {
+                name,
+                ...(rating ? { rating } : {}),
+              }
+              profileByUid.set(uid, profile)
+              setCachedPosterProfile(uid, profile)
+            })
+          })()
+
+    const favoriteTask =
+      !shouldCheckFavorites
+        ? Promise.resolve()
+        : (async () => {
+            const favoriteRefs = page.map((it) => db.collection("favorites").doc(`${decoded.uid}_${it.id}`))
+            const favoriteSnaps = await db.getAll(...favoriteRefs)
+            favoriteSnaps.forEach((snap, idx) => {
+              if (!snap.exists) return
+              const itemId = page[idx]?.id
+              if (itemId) favoriteItemIds.add(itemId)
+            })
+          })()
+
+    await Promise.all([posterProfileTask, favoriteTask])
+
+    const pageWithCurrentPosterInfo = page.map((it) => {
+      const profile = profileByUid.get(it.postedBy)
+      return {
+        ...it,
+        postedByName: profile?.name ?? fallbackPostedByName(it),
+        postedByRating: profile?.rating,
+      }
+    })
+
+    const pageWithFavoriteStatus = pageWithCurrentPosterInfo.map((it) => ({
       ...it,
-      postedByName: nameByUid.get(it.postedBy) ?? it.postedByName ?? it.postedByEmail?.split("@")[0] ?? null,
+      isFavorite: favoriteItemIds.has(it.id),
     }))
 
     let totalCount = 0
@@ -172,7 +255,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      items: pageWithCurrentNames,
+      items: pageWithFavoriteStatus,
       lastId: page.length ? page[page.length - 1]?.id ?? null : null,
       hasMore,
       totalCount,

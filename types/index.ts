@@ -30,6 +30,7 @@ export interface User {
   // User Status & Restrictions
   status: UserStatus
   warningCount: number
+  suspensionCount?: number
   lastWarningDate?: Timestamp | FieldValue
   suspendedUntil?: Timestamp | FieldValue
   bannedReason?: string
@@ -76,6 +77,11 @@ export interface Item {
   postedBy: string
   postedByEmail: string
   postedByName?: string // Display name of poster (cached for fast display)
+  postedByRating?: {
+    average: number
+    count: number
+  }
+  isFavorite?: boolean // Client convenience field (derived by API for current user)
   postedAt: Timestamp
   updatedAt: Timestamp
   searchKeywords?: string[] // For server-side simple search
@@ -189,6 +195,7 @@ export interface Announcement {
   endAt?: Timestamp | FieldValue | null
   linkUrl?: string | null
   linkLabel?: string | null
+  imagePublicId?: string | null
   createdBy: string
   createdByEmail?: string
   createdAt: Timestamp | FieldValue
@@ -330,4 +337,3 @@ export interface SupportMessage {
   content: string
   createdAt: Timestamp | FieldValue
 }
-

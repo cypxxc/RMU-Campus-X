@@ -14,7 +14,7 @@ import {
 } from "@/lib/services/client-firestore"
 import { createNotification, getItemById, confirmExchange, getUserProfile, respondToExchange } from "@/lib/firestore"
 import { authFetchJson } from "@/lib/api-client"
-import type { Exchange, ChatMessage, Item } from "@/types"
+import type { Exchange, ChatMessage, Item, ItemCategory } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,18 +40,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { format, isToday, isYesterday } from "date-fns"
-import { th } from "date-fns/locale"
+import { th, enUS } from "date-fns/locale"
 const ReportModal = lazy(() => import("@/components/report-modal").then((m) => ({ default: m.ReportModal })))
 const ReviewModal = lazy(() => import("@/components/review-modal").then((m) => ({ default: m.ReviewModal })))
 import { checkExchangeReviewed } from "@/lib/db/reviews"
 import { Star } from "lucide-react"
 import {
-  getConfirmButtonLabel,
-  getWaitingOtherConfirmationMessage,
   normalizeExchangePhaseStatus,
 } from "@/lib/exchange-state-machine"
 import { getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
 import { ExchangeStepIndicator } from "@/components/exchange/exchange-step-indicator"
+import { useI18n } from "@/components/language-provider"
 
 
 export default function ChatPage({
@@ -100,8 +99,23 @@ export default function ChatPage({
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+  const { locale, tt } = useI18n()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const categoryLabelByValue: Record<ItemCategory, string> = {
+    electronics: tt("อิเล็กทรอนิกส์", "Electronics"),
+    books: tt("หนังสือ", "Books"),
+    furniture: tt("เฟอร์นิเจอร์", "Furniture"),
+    clothing: tt("เสื้อผ้า", "Clothing"),
+    sports: tt("อุปกรณ์กีฬา", "Sports"),
+    other: tt("อื่นๆ", "Other"),
+  }
+  const getLocalizedConfirmButtonLabel = (role: "owner" | "requester") =>
+    role === "owner" ? tt("ยืนยันส่งมอบแล้ว", "Confirm handoff") : tt("ยืนยันรับของแล้ว", "Confirm received")
+  const getLocalizedWaitingMessage = (role: "owner" | "requester") =>
+    role === "owner"
+      ? tt("คุณยืนยันส่งมอบแล้ว - รออีกฝ่ายยืนยันรับของ", "You confirmed handoff. Waiting for the other party to confirm receipt.")
+      : tt("คุณยืนยันรับของแล้ว - รออีกฝ่ายยืนยันส่งมอบ", "You confirmed receipt. Waiting for the other party to confirm handoff.")
 
   useEffect(() => {
     mountedRef.current = true
@@ -127,7 +141,7 @@ export default function ChatPage({
       (nextExchange) => {
         if (!mountedRef.current) return
         if (!nextExchange) {
-          toast({ title: "Exchange not found", variant: "destructive" })
+          toast({ title: tt("ไม่พบการแลกเปลี่ยน", "Exchange not found"), variant: "destructive" })
           router.push("/dashboard")
           return
         }
@@ -135,13 +149,13 @@ export default function ChatPage({
       },
       () => {
         if (mountedRef.current) {
-          toast({ title: "Realtime status sync failed", variant: "destructive" })
+          toast({ title: tt("ซิงก์สถานะแบบเรียลไทม์ไม่สำเร็จ", "Realtime status sync failed"), variant: "destructive" })
         }
       }
     )
 
     return unsub
-  }, [exchangeId, user?.uid, toast, router])
+  }, [exchangeId, user?.uid, toast, router, tt])
 
   useEffect(() => {
     if (!user || !exchangeId) return
@@ -155,11 +169,11 @@ export default function ChatPage({
         setHasMoreOlder(ordered.length >= MESSAGE_PAGE_SIZE)
       },
       () => {
-        if (mountedRef.current) toast({ title: "โหลดข้อความไม่สำเร็จ", variant: "destructive" })
+        if (mountedRef.current) toast({ title: tt("โหลดข้อความไม่สำเร็จ", "Unable to load messages"), variant: "destructive" })
       }
     )
     return unsub
-  }, [exchangeId, user, toast])
+  }, [exchangeId, user, toast, tt])
 
   useEffect(() => {
     scrollToBottom()
@@ -182,14 +196,14 @@ export default function ChatPage({
           if (itemRes.success && itemRes.data) setItem(itemRes.data)
         }
       } else {
-        toast({ title: "ไม่พบการแลกเปลี่ยน", variant: "destructive" })
+        toast({ title: tt("ไม่พบการแลกเปลี่ยน", "Exchange not found"), variant: "destructive" })
         router.push("/dashboard")
       }
     } catch (error: unknown) {
       if (!mountedRef.current) return
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error instanceof Error ? error.message : "ไม่สามารถโหลดการแลกเปลี่ยนได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถโหลดการแลกเปลี่ยนได้", "Unable to load exchange"),
         variant: "destructive",
       })
     } finally {
@@ -245,7 +259,7 @@ export default function ChatPage({
       if (docs.length < LOAD_MORE_SIZE) setHasMoreOlder(false)
       if (docs.length > 0) oldestMessageRef.current = docs[0] ?? null
     } catch (err) {
-      toast({ title: "โหลดข้อความเก่าไม่สำเร็จ", variant: "destructive" })
+      toast({ title: tt("โหลดข้อความเก่าไม่สำเร็จ", "Unable to load older messages"), variant: "destructive" })
     } finally {
       setLoadingOlder(false)
     }
@@ -292,11 +306,11 @@ export default function ChatPage({
         `/api/chat/${exchangeId}/messages/${msg.id}`,
         { method: "PATCH", body: { message: newText.trim() } }
       )
-      if (!res?.data?.updated) throw new Error(res?.error ?? "แก้ไขไม่สำเร็จ")
+      if (!res?.data?.updated) throw new Error(res?.error ?? tt("แก้ไขไม่สำเร็จ", "Update failed"))
       setEditingMessageId(null)
       setEditDraft("")
     } catch {
-      toast({ title: "แก้ไขไม่สำเร็จ", variant: "destructive" })
+      toast({ title: tt("แก้ไขไม่สำเร็จ", "Update failed"), variant: "destructive" })
     }
   }
 
@@ -307,10 +321,10 @@ export default function ChatPage({
         `/api/chat/${exchangeId}/messages/${msg.id}`,
         { method: "DELETE" }
       )
-      if (!res?.data?.deleted) throw new Error(res?.error ?? "ลบไม่สำเร็จ")
+      if (!res?.data?.deleted) throw new Error(res?.error ?? tt("ลบไม่สำเร็จ", "Delete failed"))
       setEditingMessageId(null)
     } catch {
-      toast({ title: "ลบไม่สำเร็จ", variant: "destructive" })
+      toast({ title: tt("ลบไม่สำเร็จ", "Delete failed"), variant: "destructive" })
     }
   }
 
@@ -331,14 +345,17 @@ export default function ChatPage({
     try {
       await respondToExchange(exchangeId, action, user.uid)
       toast({
-        title: action === "accept" ? "ตอบรับแล้ว" : "ปฏิเสธแล้ว",
-        description: action === "accept" ? "เข้าสู่ขั้นตอนกำลังดำเนินการแล้ว" : "คำขอถูกปฏิเสธแล้ว",
+        title: action === "accept" ? tt("ตอบรับแล้ว", "Accepted") : tt("ปฏิเสธแล้ว", "Rejected"),
+        description:
+          action === "accept"
+            ? tt("เข้าสู่ขั้นตอนกำลังดำเนินการแล้ว", "Exchange is now in progress.")
+            : tt("คำขอถูกปฏิเสธแล้ว", "The request has been rejected."),
       })
       await loadExchange()
     } catch (error: unknown) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error instanceof Error ? error.message : "ไม่สามารถดำเนินการได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถดำเนินการได้", "Unable to proceed"),
         variant: "destructive",
       })
     } finally {
@@ -381,11 +398,14 @@ export default function ChatPage({
 
       // Create notification for recipient
       const recipientId = user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
-      const notificationMessage = `ส่งข้อความถึงคุณ: ${messageText.substring(0, 30)}${messageText.length > 30 ? "..." : ""}`
+      const notificationMessage = tt(
+        `ส่งข้อความถึงคุณ: ${messageText.substring(0, 30)}${messageText.length > 30 ? "..." : ""}`,
+        `Sent you a message: ${messageText.substring(0, 30)}${messageText.length > 30 ? "..." : ""}`
+      )
 
       await createNotification({
         userId: recipientId,
-        title: "ข้อความใหม่จาก " + (user.displayName || user.email?.split('@')[0]),
+        title: tt("ข้อความใหม่จาก ", "New message from ") + (user.displayName || user.email?.split('@')[0]),
         message: notificationMessage,
         type: "chat",
         relatedId: exchangeId,
@@ -403,7 +423,7 @@ export default function ChatPage({
           },
           body: JSON.stringify({
             recipientId,
-            senderName: user.email?.split('@')[0] || 'ผู้ใช้',
+            senderName: user.email?.split('@')[0] || tt("ผู้ใช้", "User"),
             itemTitle: exchange.itemTitle,
             messagePreview: messageText,
             exchangeId
@@ -415,8 +435,8 @@ export default function ChatPage({
     } catch (error: unknown) {
       console.error('Send message error:', error)
       toast({
-        title: "ส่งข้อความไม่สำเร็จ",
-        description: error instanceof Error ? error.message : "โปรดลองใหม่อีกครั้ง",
+        title: tt("ส่งข้อความไม่สำเร็จ", "Message failed"),
+        description: error instanceof Error ? error.message : tt("โปรดลองใหม่อีกครั้ง", "Please try again."),
         variant: "destructive",
       })
     } finally {
@@ -429,8 +449,11 @@ export default function ChatPage({
     const phaseStatus = normalizeExchangePhaseStatus(exchange.status)
     if (phaseStatus !== "in_progress") {
       toast({
-        title: "ไม่สามารถยืนยันได้",
-        description: "การแลกเปลี่ยนต้องได้รับการตอบรับจากเจ้าของก่อน จึงจะกดยืนยันได้",
+        title: tt("ไม่สามารถยืนยันได้", "Unable to confirm"),
+        description: tt(
+          "การแลกเปลี่ยนต้องได้รับการตอบรับจากเจ้าของก่อน จึงจะกดยืนยันได้",
+          "The owner must accept the exchange before confirmation."
+        ),
         variant: "destructive",
       })
       return
@@ -441,13 +464,13 @@ export default function ChatPage({
       const result = await confirmExchange(exchangeId, role)
       
       if (!result.success) {
-        throw new Error(result.error || "ไม่สามารถยืนยันได้")
+        throw new Error(result.error || tt("ไม่สามารถยืนยันได้", "Unable to confirm"))
       }
 
       if (result.data?.status === "completed") {
         toast({
-          title: "เสร็จสิ้น",
-          description: "การแลกเปลี่ยนเสร็จสมบูรณ์",
+          title: tt("เสร็จสิ้น", "Completed"),
+          description: tt("การแลกเปลี่ยนเสร็จสมบูรณ์", "Exchange completed successfully."),
         })
 
         // Notify both parties about completion via LINE (async, best effort)
@@ -492,16 +515,16 @@ export default function ChatPage({
         }
       } else {
         toast({
-          title: "ยืนยันแล้ว",
-          description: "รอให้อีกฝ่ายยืนยันเพื่อให้การแลกเปลี่ยนเสร็จสมบูรณ์",
+          title: tt("ยืนยันแล้ว", "Confirmed"),
+          description: tt("รอให้อีกฝ่ายยืนยันเพื่อให้การแลกเปลี่ยนเสร็จสมบูรณ์", "Waiting for the other party to confirm."),
         })
       }
 
       loadExchange()
     } catch (error: unknown) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error instanceof Error ? error.message : "ไม่สามารถยืนยันได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถยืนยันได้", "Unable to confirm"),
         variant: "destructive",
       })
     }
@@ -558,7 +581,7 @@ export default function ChatPage({
                     {exchange.itemTitle}
                     {item && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary ml-2 border border-primary/20">
-                        {item.category}
+                        {categoryLabelByValue[item.category as ItemCategory] ?? item.category}
                       </span>
                     )}
                   </p>
@@ -575,8 +598,8 @@ export default function ChatPage({
                   }}
                 >
                   <AlertTriangle className="h-4 w-4" />
-                  <span className="hidden sm:inline">รายงานผู้ใช้</span>
-                  <span className="sm:hidden">รายงาน</span>
+                  <span className="hidden sm:inline">{tt("รายงานผู้ใช้", "Report user")}</span>
+                  <span className="sm:hidden">{tt("รายงาน", "Report")}</span>
                 </Button>
 
                 {exchange.status === "completed" && (
@@ -587,8 +610,8 @@ export default function ChatPage({
                       className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-500/10 text-green-600 border border-green-500/20 text-sm font-bold h-9"
                     >
                       <CheckCheck className="h-4 w-4" />
-                      <span className="hidden sm:inline">แลกเปลี่ยนสำเร็จ</span>
-                      <span className="sm:hidden">สำเร็จ</span>
+                      <span className="hidden sm:inline">{tt("แลกเปลี่ยนสำเร็จ", "Exchange complete")}</span>
+                      <span className="sm:hidden">{tt("สำเร็จ", "Done")}</span>
                     </div>
                     {!hasReviewed && (
                       <Button 
@@ -597,8 +620,8 @@ export default function ChatPage({
                         onClick={() => setShowReviewModal(true)}
                       >
                         <Star className="h-4 w-4 fill-black/20" />
-                        <span className="hidden sm:inline">เขียนรีวิว</span>
-                        <span className="sm:hidden">รีวิว</span>
+                        <span className="hidden sm:inline">{tt("เขียนรีวิว", "Write review")}</span>
+                        <span className="sm:hidden">{tt("รีวิว", "Review")}</span>
                       </Button>
                     )}
                   </div>
@@ -613,7 +636,7 @@ export default function ChatPage({
                         onClick={() => handleRespondToRequest("accept")}
                       >
                         {responding ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
-                        <span className="hidden sm:inline">ตอบรับ</span>
+                        <span className="hidden sm:inline">{tt("ตอบรับ", "Accept")}</span>
                       </Button>
                       <Button
                         size="sm"
@@ -623,12 +646,12 @@ export default function ChatPage({
                         onClick={() => handleRespondToRequest("reject")}
                       >
                         <XCircle className="h-4 w-4" />
-                        <span className="hidden sm:inline">ปฏิเสธ</span>
+                        <span className="hidden sm:inline">{tt("ปฏิเสธ", "Reject")}</span>
                       </Button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/80 text-muted-foreground text-xs sm:text-sm h-9 border border-border/50" role="status">
-                      <span>รอเจ้าของตอบรับคำขอ — แชทเพื่อสอบถามได้</span>
+                      <span>{tt("รอเจ้าของตอบรับคำขอ — แชทเพื่อสอบถามได้", "Waiting for owner approval. You can still chat for details.")}</span>
                     </div>
                   )
                 )}
@@ -639,7 +662,7 @@ export default function ChatPage({
                         <AlertDialogTrigger asChild>
                           <Button size="sm" className="h-9 font-bold bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md transition-all">
                             <CheckCheck className="h-4 w-4 mr-2" />
-                            {getConfirmButtonLabel(phaseStatus, isOwner ? "owner" : "requester")}
+                            {getLocalizedConfirmButtonLabel(isOwner ? "owner" : "requester")}
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent className="max-w-md">
@@ -650,27 +673,29 @@ export default function ChatPage({
                               </div>
                               <div>
                                 <AlertDialogTitle>
-                                  {getConfirmButtonLabel(phaseStatus, isOwner ? "owner" : "requester")}
+                                  {getLocalizedConfirmButtonLabel(isOwner ? "owner" : "requester")}
                                 </AlertDialogTitle>
                                 <AlertDialogDescription className="space-y-1">
                                   <span>
-                                    {isOwner ? "ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว" : "ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว"}
+                                    {isOwner
+                                      ? tt("ยืนยันว่าคุณได้ส่งมอบสิ่งของให้ผู้รับแล้ว", "Confirm that you have handed over the item.")
+                                      : tt("ยืนยันว่าคุณได้รับสิ่งของจากผู้ให้แล้ว", "Confirm that you have received the item.")}
                                   </span>
                                   <span className="block text-amber-600 dark:text-amber-400 font-medium">
-                                    การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                    {tt("การดำเนินการนี้ไม่สามารถย้อนกลับได้", "This action cannot be undone.")}
                                   </span>
                                 </AlertDialogDescription>
                               </div>
                             </div>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                            <AlertDialogCancel>{tt("ยกเลิก", "Cancel")}</AlertDialogCancel>
                             <AlertDialogAction 
                               onClick={() => handleConfirm(isOwner ? "owner" : "requester")}
                               className="bg-green-600 hover:bg-green-700 font-bold"
                             >
                               <CheckCheck className="h-4 w-4 mr-2" />
-                              {getConfirmButtonLabel(phaseStatus, isOwner ? "owner" : "requester")}
+                              {getLocalizedConfirmButtonLabel(isOwner ? "owner" : "requester")}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -679,7 +704,7 @@ export default function ChatPage({
                     {hasConfirmed && (
                       <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-sm font-bold h-9" role="status">
                         <CheckCheck className="h-4 w-4 shrink-0" />
-                        {getWaitingOtherConfirmationMessage(isOwner ? "owner" : "requester")}
+                        {getLocalizedWaitingMessage(isOwner ? "owner" : "requester")}
                       </div>
                     )}
                   </>
@@ -693,6 +718,7 @@ export default function ChatPage({
                   status={phaseStatus}
                   ownerConfirmed={exchange.ownerConfirmed}
                   requesterConfirmed={exchange.requesterConfirmed}
+                  locale={locale}
                 />
               </div>
             )}
@@ -705,9 +731,11 @@ export default function ChatPage({
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                     <MessageCircle className="h-6 w-6 text-primary" />
                   </div>
-                  <h3 className="font-semibold mb-1">เริ่มการสนทนา</h3>
+                  <h3 className="font-semibold mb-1">{tt("เริ่มการสนทนา", "Start conversation")}</h3>
                   <p className="text-sm text-muted-foreground max-w-xs">
-                    ส่งข้อความถึง{isOwner ? 'ผู้ขอรับ' : 'เจ้าของสิ่งของ'}เพื่อนัดหมายการรับของ
+                    {tt("ส่งข้อความถึง", "Send a message to ")}
+                    {isOwner ? tt("ผู้ขอรับ", "the requester") : tt("เจ้าของสิ่งของ", "the owner")}
+                    {tt("เพื่อนัดหมายการรับของ", " to arrange pickup.")}
                   </p>
                 </div>
               ) : (
@@ -722,7 +750,11 @@ export default function ChatPage({
                         disabled={loadingOlder || !hasMoreOlder}
                         className="text-muted-foreground"
                       >
-                        {loadingOlder ? <Loader2 className="h-4 w-4 animate-spin" /> : hasMoreOlder ? "โหลดข้อความเก่า" : "ไม่มีข้อความเก่าเพิ่ม"}
+                        {loadingOlder
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : hasMoreOlder
+                            ? tt("โหลดข้อความเก่า", "Load older messages")
+                            : tt("ไม่มีข้อความเก่าเพิ่ม", "No more messages")}
                       </Button>
                     </div>
                   )}
@@ -771,16 +803,21 @@ export default function ChatPage({
                                 <div className="flex items-center gap-1.5 mt-1">
                                   <p className={`text-[10px] ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
                                     {isToday(msgDate)
-                                      ? format(msgDate, "HH:mm", { locale: th })
+                                      ? format(msgDate, "HH:mm", { locale: locale === "th" ? th : enUS })
                                       : isYesterday(msgDate)
-                                        ? `เมื่อวาน ${format(msgDate, "HH:mm", { locale: th })}`
+                                        ? tt(
+                                            `เมื่อวาน ${format(msgDate, "HH:mm", { locale: th })}`,
+                                            `Yesterday ${format(msgDate, "HH:mm", { locale: enUS })}`
+                                          )
                                         : msgDate.getFullYear() === new Date().getFullYear()
-                                          ? format(msgDate, "d MMM HH:mm", { locale: th })
-                                          : format(msgDate, "d MMM yyyy HH:mm", { locale: th })}
-                                    {msg.updatedAt && " (แก้ไข)"}
+                                          ? format(msgDate, "d MMM HH:mm", { locale: locale === "th" ? th : enUS })
+                                          : format(msgDate, "d MMM yyyy HH:mm", { locale: locale === "th" ? th : enUS })}
+                                    {msg.updatedAt && tt(" (แก้ไข)", " (edited)")}
                                   </p>
                                   {isOwnMessage && msg.readAt && (
-                                    <span className="text-[10px] text-primary-foreground/70" title="อ่านแล้ว">อ่านแล้ว</span>
+                                    <span className="text-[10px] text-primary-foreground/70" title={tt("อ่านแล้ว", "Read")}>
+                                      {tt("อ่านแล้ว", "Read")}
+                                    </span>
                                   )}
                                 </div>
                               </>
@@ -801,16 +838,16 @@ export default function ChatPage({
                                   }}
                                 >
                                   <Pencil className="h-4 w-4 mr-2" />
-                                  แก้ไข
+                                  {tt("แก้ไข", "Edit")}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-destructive focus:text-destructive"
                                   onClick={() => {
-                                    if (confirm("ลบข้อความนี้?")) handleDeleteMessage(msg)
+                                    if (confirm(tt("ลบข้อความนี้?", "Delete this message?"))) handleDeleteMessage(msg)
                                   }}
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" />
-                                  ลบ
+                                  {tt("ลบ", "Delete")}
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -822,7 +859,7 @@ export default function ChatPage({
                 </>
               )}
               {otherTyping && (
-                <p className="text-xs text-muted-foreground animate-pulse">กำลังพิมพ์...</p>
+                <p className="text-xs text-muted-foreground animate-pulse">{tt("กำลังพิมพ์...", "Typing...")}</p>
               )}
               <div ref={messagesEndRef} />
             </div>
@@ -830,10 +867,10 @@ export default function ChatPage({
             {isChatClosed ? (
               <div className="border-t p-4 bg-muted/50 text-center text-sm text-muted-foreground">
                 {exchange.status === "cancelled"
-                  ? "การแลกเปลี่ยนนี้ถูกยกเลิกแล้ว ไม่สามารถส่งข้อความได้"
+                  ? tt("การแลกเปลี่ยนนี้ถูกยกเลิกแล้ว ไม่สามารถส่งข้อความได้", "This exchange was cancelled. Messaging is disabled.")
                   : exchange.status === "rejected"
-                    ? "การแลกเปลี่ยนนี้ถูกปฏิเสธแล้ว ไม่สามารถส่งข้อความได้"
-                    : "การแลกเปลี่ยนเสร็จสมบูรณ์แล้ว ปิดห้องแชท"}
+                    ? tt("การแลกเปลี่ยนนี้ถูกปฏิเสธแล้ว ไม่สามารถส่งข้อความได้", "This exchange was rejected. Messaging is disabled.")
+                    : tt("การแลกเปลี่ยนเสร็จสมบูรณ์แล้ว ปิดห้องแชท", "This exchange is complete. Chat is now closed.")}
               </div>
             ) : (
               <form onSubmit={handleSendMessage} className="border-t p-3 sm:p-4 bg-background">
@@ -841,7 +878,7 @@ export default function ChatPage({
                   <Input
                     value={newMessage}
                     onChange={handleInputChange}
-                    placeholder="พิมพ์ข้อความ..."
+                    placeholder={tt("พิมพ์ข้อความ...", "Type a message...")}
                     disabled={sending}
                     className="min-h-[40px] max-h-[120px] py-2 flex-1"
                   />
@@ -855,7 +892,7 @@ export default function ChatPage({
                     ) : (
                       <Send className="h-5 w-5" />
                     )}
-                    <span className="sr-only">ส่ง</span>
+                    <span className="sr-only">{tt("ส่ง", "Send")}</span>
                   </Button>
                 </div>
               </form>

@@ -7,12 +7,26 @@
 import { NextRequest } from 'next/server'
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin'
 import { FieldValue } from "firebase-admin/firestore"
+import { z } from 'zod'
+import { sanitizeText } from '@/lib/security'
 import {
   verifyAdminAccess,
   successResponse,
   errorResponse,
   AdminErrorCode,
 } from '@/lib/admin-api'
+
+const adminUserPatchSchema = z
+  .object({
+    displayName: z.string().min(2).max(50).transform(sanitizeText).optional(),
+    bio: z.string().max(300).transform(sanitizeText).optional(),
+    photoURL: z.string().max(2000).optional(),
+    status: z.enum(['ACTIVE', 'WARNING', 'SUSPENDED', 'BANNED']).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one updatable field is required',
+  })
 
 export async function GET(
   request: NextRequest,
@@ -79,52 +93,94 @@ export async function PATCH(
   // Verify admin access
   const { authorized, user, error } = await verifyAdminAccess(request)
   if (!authorized) return error!
+  if (!user?.uid || !user?.email) {
+    return errorResponse(
+      AdminErrorCode.FORBIDDEN,
+      'Admin identity missing',
+      403
+    )
+  }
 
   try {
     const { id } = await params
-    const body = await request.json()
+    if (!id) {
+      return errorResponse(
+        AdminErrorCode.VALIDATION_ERROR,
+        'Missing user id',
+        400
+      )
+    }
+
+    const rawBody = await request.json().catch(() => null)
+    const parsed = adminUserPatchSchema.safeParse(rawBody)
+    if (!parsed.success) {
+      return errorResponse(
+        AdminErrorCode.VALIDATION_ERROR,
+        'Invalid request body',
+        400,
+        parsed.error.errors.map((issue) => ({
+          field: issue.path.join('.') || 'root',
+          message: issue.message,
+        }))
+      )
+    }
+
+    const updates = {
+      ...parsed.data,
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+
     const db = getAdminDb()
     const auth = getAdminAuth()
-    
-    // 1. Update Firestore
-    await db.collection('users').doc(id).update(body)
+    const userRef = db.collection('users').doc(id)
+    const userSnap = await userRef.get()
+    if (!userSnap.exists) {
+      return errorResponse(
+        AdminErrorCode.NOT_FOUND,
+        'User not found',
+        404
+      )
+    }
+
+    // 1. Update Firestore (allow-list only)
+    await userRef.update(updates)
 
     // 2. Handle Status Changes (Security Enforcement)
-    if (body.status) {
-        if (['SUSPENDED', 'BANNED'].includes(body.status)) {
-            // Block Auth
-            await auth.updateUser(id, { disabled: true })
-            await auth.revokeRefreshTokens(id) // Force logout
-            console.log(`[Admin] User ${id} blocked (disabled + tokens revoked)`)
-        } else if (['ACTIVE', 'WARNING'].includes(body.status)) {
-            // Unblock Auth
-            await auth.updateUser(id, { disabled: false })
-            console.log(`[Admin] User ${id} unblocked`)
-        }
-        
-        // 3. Log Action
-        await db.collection("adminLogs").add({
-            actionType: 'user_status_change',
-            adminId: user.uid,
-            adminEmail: user.email,
-            targetType: 'user',
-            targetId: id,
-            description: `Changed status to ${body.status}`,
-            metadata: { newStatus: body.status },
-            createdAt: FieldValue.serverTimestamp()
-        })
+    if (parsed.data.status) {
+      if (['SUSPENDED', 'BANNED'].includes(parsed.data.status)) {
+        // Block Auth
+        await auth.updateUser(id, { disabled: true })
+        await auth.revokeRefreshTokens(id) // Force logout
+        console.log(`[Admin] User ${id} blocked (disabled + tokens revoked)`)
+      } else if (['ACTIVE', 'WARNING'].includes(parsed.data.status)) {
+        // Unblock Auth
+        await auth.updateUser(id, { disabled: false })
+        console.log(`[Admin] User ${id} unblocked`)
+      }
+
+      // 3. Log Action
+      await db.collection("adminLogs").add({
+        actionType: 'user_status_change',
+        adminId: user.uid,
+        adminEmail: user.email,
+        targetType: 'user',
+        targetId: id,
+        description: `Changed status to ${parsed.data.status}`,
+        metadata: { newStatus: parsed.data.status },
+        createdAt: FieldValue.serverTimestamp()
+      })
     } else {
-        // Generic update log
-         await db.collection("adminLogs").add({
-            actionType: 'user_update',
-            adminId: user.uid,
-            adminEmail: user.email,
-            targetType: 'user',
-            targetId: id,
-            description: `Updated user profile`,
-            metadata: { fields: Object.keys(body) },
-            createdAt: FieldValue.serverTimestamp()
-        })
+      // Generic update log
+      await db.collection("adminLogs").add({
+        actionType: 'user_update',
+        adminId: user.uid,
+        adminEmail: user.email,
+        targetType: 'user',
+        targetId: id,
+        description: 'Updated user profile',
+        metadata: { fields: Object.keys(parsed.data) },
+        createdAt: FieldValue.serverTimestamp()
+      })
     }
 
     return successResponse({ success: true })

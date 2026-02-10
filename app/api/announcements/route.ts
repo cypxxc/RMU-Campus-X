@@ -51,6 +51,7 @@ export async function GET() {
         endAt: data.endAt ?? null,
         linkUrl: data.linkUrl ?? null,
         linkLabel: data.linkLabel ?? null,
+        imagePublicId: data.imagePublicId ?? null,
         createdBy: data.createdBy ?? "",
         createdByEmail: data.createdByEmail ?? undefined,
         createdAt: data.createdAt,

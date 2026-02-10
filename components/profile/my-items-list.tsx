@@ -9,6 +9,7 @@ import { Loader2, Package, Edit, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { formatPostedAt, safeToDate } from "@/lib/utils"
 import { getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
+import { useI18n } from "@/components/language-provider"
 
 interface MyItemsListProps {
   items: Item[]
@@ -20,11 +21,12 @@ interface MyItemsListProps {
 export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  const { locale, tt } = useI18n()
 
   const statusLabels: Record<string, string> = {
-    available: "พร้อมให้",
-    pending: "รอดำเนินการ",
-    completed: "เสร็จสิ้น",
+    available: tt("พร้อมให้", "Available"),
+    pending: tt("รอดำเนินการ", "Pending"),
+    completed: tt("เสร็จสิ้น", "Completed"),
   }
 
   const statusColors: Record<string, string> = {
@@ -37,7 +39,7 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
     return (
       <div className="py-20 text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-        <p className="text-sm text-muted-foreground mt-4">กำลังโหลดรายการ...</p>
+        <p className="text-sm text-muted-foreground mt-4">{tt("กำลังโหลดรายการ...", "Loading items...")}</p>
       </div>
     )
   }
@@ -50,9 +52,9 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
             <Package className="h-10 w-10 text-muted-foreground/30" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-bold italic">คุณยังไม่ได้ลงประกาศสิ่งของ</h3>
+            <h3 className="text-lg font-bold italic">{tt("คุณยังไม่ได้ลงประกาศสิ่งของ", "You have not posted any items yet")}</h3>
             <p className="text-muted-foreground text-sm max-w-xs">
-              เริ่มแบ่งปันสิ่งของที่คุณไม่ได้ใช้กับเพื่อนนักศึกษาได้เลยวันนี้
+              {tt("เริ่มแบ่งปันสิ่งของที่คุณไม่ได้ใช้กับเพื่อนนักศึกษาได้เลยวันนี้", "Start sharing unused items with other students today.")}
             </p>
           </div>
         </div>
@@ -105,11 +107,23 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-1 mb-4">
-                    {item.description || "ไม่มีคำอธิบาย"}
+                    {item.description || tt("ไม่มีคำอธิบาย", "No description")}
                   </p>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      ประกาศเมื่อ {formatPostedAt(postedDate)}
+                      {tt("ประกาศเมื่อ", "Posted")}{" "}
+                      {locale === "th"
+                        ? formatPostedAt(postedDate)
+                        : postedDate.getTime() > 0
+                          ? postedDate.toLocaleString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            })
+                          : "—"}
                     </span>
                     <div className="flex gap-2">
                       <Button 
@@ -119,7 +133,7 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
                         onClick={(e) => { e.stopPropagation(); onEdit(item); }}
                       >
                         <Edit className="h-3.5 w-3.5 mr-1" />
-                        แก้ไข
+                        {tt("แก้ไข", "Edit")}
                       </Button>
                       <Button 
                         variant="ghost" 
@@ -147,7 +161,7 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
           >
-            ก่อนหน้า
+            {tt("ก่อนหน้า", "Previous")}
           </Button>
           <div className="flex items-center gap-1">
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
@@ -168,7 +182,7 @@ export function MyItemsList({ items, loading, onEdit, onDelete }: MyItemsListPro
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
           >
-            ถัดไป
+            {tt("ถัดไป", "Next")}
           </Button>
         </div>
       )}

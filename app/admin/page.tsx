@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useState, useMemo, lazy, Suspense } from "react"
+import { useEffect, useMemo, useState, lazy, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
+import { useI18n } from "@/components/language-provider"
 import { Loader2, LayoutDashboard } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAdminDashboardData } from "@/hooks/use-admin-dashboard"
@@ -15,18 +16,30 @@ function toDate(v: unknown): Date {
   if (v && typeof v === "object" && "toDate" in v && typeof (v as { toDate: () => Date }).toDate === "function") {
     return (v as { toDate: () => Date }).toDate()
   }
-  return v instanceof Date ? v : new Date()
+  if (v instanceof Date) return v
+  if (typeof v === "string" || typeof v === "number") {
+    const parsed = new Date(v)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  if (v && typeof v === "object") {
+    const seconds = (v as { seconds?: number; _seconds?: number }).seconds
+      ?? (v as { seconds?: number; _seconds?: number })._seconds
+    if (typeof seconds === "number") return new Date(seconds * 1000)
+  }
+  return new Date()
 }
 
 export default function AdminDashboardPage() {
   const { user, loading: authLoading, isAdmin } = useAuth()
+  const { tt } = useI18n()
   const router = useRouter()
   const { toast } = useToast()
   const { items, tickets, totalUsersCount, isLoading } = useAdminDashboardData()
-  const [now, setNow] = useState<number | null>(null)
+  const [nowMs, setNowMs] = useState(0)
 
   useEffect(() => {
-    setNow(Date.now())
+    const rafId = window.requestAnimationFrame(() => setNowMs(Date.now()))
+    return () => window.cancelAnimationFrame(rafId)
   }, [items.length, tickets.length])
 
   useEffect(() => {
@@ -37,27 +50,30 @@ export default function AdminDashboardPage() {
     }
     if (!isAdmin) {
       toast({
-        title: "ไม่มีสิทธิ์เข้าถึง",
-        description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+        title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
+        description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
         variant: "destructive",
       })
       router.push("/dashboard")
     }
-  }, [authLoading, user, isAdmin, router, toast])
+  }, [authLoading, user, isAdmin, router, toast, tt])
 
-  const nowMs = now ?? 0
-  const newItemsCount = useMemo(() => items.filter(item => {
-    const postedAt = toDate(item.postedAt)
-    const hoursAgo = (nowMs - postedAt.getTime()) / (1000 * 60 * 60)
-    return hoursAgo <= 24 || item.status === "pending"
-  }).length, [items, nowMs])
+  const newItemsCount = useMemo(() => {
+    return items.filter((item) => {
+      const postedAt = toDate(item.postedAt)
+      const hoursAgo = (nowMs - postedAt.getTime()) / (1000 * 60 * 60)
+      return hoursAgo <= 24 || item.status === "pending"
+    }).length
+  }, [items, nowMs])
 
-  const newTicketsCount = useMemo(() => tickets.filter(t => {
-    if (t.status === "new") return true
-    const createdAt = toDate(t.createdAt)
-    const hoursAgo = (nowMs - createdAt.getTime()) / (1000 * 60 * 60)
-    return hoursAgo <= 24
-  }).length, [tickets, nowMs])
+  const newTicketsCount = useMemo(() => {
+    return tickets.filter((t) => {
+      if (t.status === "new") return true
+      const createdAt = toDate(t.createdAt)
+      const hoursAgo = (nowMs - createdAt.getTime()) / (1000 * 60 * 60)
+      return hoursAgo <= 24
+    }).length
+  }, [tickets, nowMs])
 
   if (authLoading || (isAdmin && isLoading)) {
     return (
@@ -102,9 +118,9 @@ export default function AdminDashboardPage() {
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <LayoutDashboard className="h-8 w-8 text-primary" />
-                ภาพรวม
+                {tt("ภาพรวม", "Overview")}
               </h1>
-              <p className="text-muted-foreground">ภาพรวมระบบและสถิติ</p>
+              <p className="text-muted-foreground">{tt("ภาพรวมระบบและสถิติ", "System summary and statistics")}</p>
             </div>
           </div>
         </div>

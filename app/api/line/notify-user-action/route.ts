@@ -19,6 +19,7 @@ interface NotifyUserActionBody {
   // For reported
   reportType?: string
   targetTitle?: string
+  reportReason?: string
   // For warning
   reason?: string
   warningCount?: number
@@ -79,7 +80,12 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case "reported":
         if (body.reportType && body.targetTitle) {
-          await notifyUserReported(lineUserId, body.reportType, body.targetTitle)
+          await notifyUserReported(
+            lineUserId,
+            body.reportType,
+            body.targetTitle,
+            body.reportReason
+          )
         }
         break
 

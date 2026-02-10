@@ -13,6 +13,8 @@ import { ConsentGuard } from "@/components/consent-guard"
 import { TopLoadingBar } from "@/components/top-loading-bar"
 import { SmoothScrollProvider } from "@/components/smooth-scroll-provider"
 import { CookieConsentBanner } from "@/components/cookie-consent-banner"
+import { LanguageProvider } from "@/components/language-provider"
+import { getServerLocale } from "@/lib/i18n/server"
 import "./globals.css"
 
 const geistMono = Geist_Mono({ 
@@ -21,50 +23,71 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
 })
 
-export const metadata: Metadata = {
-  metadataBase: new URL(
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getServerLocale()
+  const metadataBase = new URL(
     process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : "http://localhost:3000"
-  ),
-  title: {
-    default: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ",
-    template: "%s | RMU-Campus X",
-  },
-  description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม",
-  keywords: ["RMU", "Campus X", "แลกเปลี่ยน", "สิ่งของ", "นักศึกษา", "มหาวิทยาลัยราชภัฏมหาสารคาม"],
-  authors: [{ name: "RMU-Campus X Team" }],
-  icons: {
-    icon: "/images/exchange.svg",
-    shortcut: "/images/exchange.svg",
-    apple: "/images/exchange.svg",
-  },
-  openGraph: {
-    type: "website",
-    locale: "th_TH",
-    url: "/",
-    title: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ",
-    description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม — ฟรี ไม่มีค่าใช้จ่าย",
-    siteName: "RMU-Campus X",
-    images: [
-      {
-        url: "/opengraph-image",
-        width: 1200,
-        height: 630,
-        alt: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา RMU",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ",
-    description: "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร ม.ราชภัฏมหาสารคาม — ฟรี ไม่มีค่าใช้จ่าย",
-    images: ["/opengraph-image"],
-  },
-  robots: {
-    follow: true,
-  },
-  manifest: "/manifest.json",
+  )
+
+  const isThai = locale === "th"
+  const titleDefault = isThai
+    ? "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ"
+    : "RMU-Campus X - Campus Item Exchange Platform"
+  const description = isThai
+    ? "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม"
+    : "A campus item exchange platform for students and staff at Rajabhat Maha Sarakham University."
+  const ogDescription = isThai
+    ? "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม — ฟรี ไม่มีค่าใช้จ่าย"
+    : "Exchange and request items across campus community — free for RMU students and staff."
+  const imageAlt = isThai
+    ? "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา RMU"
+    : "RMU-Campus X - Campus item exchange for RMU students"
+
+  return {
+    metadataBase,
+    title: {
+      default: titleDefault,
+      template: "%s | RMU-Campus X",
+    },
+    description,
+    keywords: isThai
+      ? ["RMU", "Campus X", "แลกเปลี่ยน", "สิ่งของ", "นักศึกษา", "มหาวิทยาลัยราชภัฏมหาสารคาม"]
+      : ["RMU", "Campus X", "item exchange", "campus", "students", "Rajabhat Maha Sarakham University"],
+    authors: [{ name: "RMU-Campus X Team" }],
+    icons: {
+      icon: "/images/exchange.svg",
+      shortcut: "/images/exchange.svg",
+      apple: "/images/exchange.svg",
+    },
+    openGraph: {
+      type: "website",
+      locale: isThai ? "th_TH" : "en_US",
+      url: "/",
+      title: titleDefault,
+      description: ogDescription,
+      siteName: "RMU-Campus X",
+      images: [
+        {
+          url: "/opengraph-image",
+          width: 1200,
+          height: 630,
+          alt: imageAlt,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: titleDefault,
+      description: ogDescription,
+      images: ["/opengraph-image"],
+    },
+    robots: {
+      follow: true,
+    },
+    manifest: "/manifest.json",
+  }
 }
 
 export const viewport: Viewport = {
@@ -79,39 +102,43 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const locale = await getServerLocale()
+
   return (
-    <html lang="th" suppressHydrationWarning className={geistMono.variable} data-scroll-behavior="smooth">
+    <html lang={locale} suppressHydrationWarning className={geistMono.variable} data-scroll-behavior="smooth">
       <body className="font-sans antialiased bg-background text-foreground">
-        <QueryProvider>
-          <AuthProvider>
-            <ConsentGuard>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="light"
-              enableSystem={false}
-              disableTransitionOnChange
-            >
-              <AnnouncementProvider>
-              <NavigationHistoryProvider>
-                <SmoothScrollProvider>
-                  <TopLoadingBar />
-                  {children}
-                  <ConditionalFooter />
-                  <CookieConsentBanner />
-                </SmoothScrollProvider>
-              </NavigationHistoryProvider>
-            </AnnouncementProvider>
-              <Toaster />
-              <Analytics />
-            </ThemeProvider>
-            </ConsentGuard>
-          </AuthProvider>
-        </QueryProvider>
+        <LanguageProvider initialLocale={locale}>
+          <QueryProvider>
+            <AuthProvider>
+              <ConsentGuard>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="light"
+                enableSystem={false}
+                disableTransitionOnChange
+              >
+                <AnnouncementProvider>
+                <NavigationHistoryProvider>
+                  <SmoothScrollProvider>
+                    <TopLoadingBar />
+                    {children}
+                    <ConditionalFooter />
+                    <CookieConsentBanner />
+                  </SmoothScrollProvider>
+                </NavigationHistoryProvider>
+              </AnnouncementProvider>
+                <Toaster />
+                <Analytics />
+              </ThemeProvider>
+              </ConsentGuard>
+            </AuthProvider>
+          </QueryProvider>
+        </LanguageProvider>
       </body>
     </html>
   )

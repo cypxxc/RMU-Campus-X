@@ -4,13 +4,15 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
-import { itemsCollection } from "@/lib/db/collections"
+import { itemsCollection, usersCollection } from "@/lib/db/collections"
 import { deleteItemAsOwner } from "@/lib/services/items/item-deletion"
 import { createFirebaseAdminItemDeps, createItemUpdateAdminDeps } from "@/lib/services/items/firebase-admin-deps"
 import { isItemDeletionError } from "@/lib/services/items/errors"
 import { updateItemWithValidation, ItemUpdateError } from "@/lib/services/items/item-update"
 import { itemUpdateSchema } from "@/lib/schemas"
 import { parseItemFromFirestore } from "@/lib/schemas-firestore"
+import { normalizeRatingSummary } from "@/lib/rating"
+import type { Item } from "@/types"
 
 export const runtime = "nodejs"
 
@@ -24,6 +26,10 @@ async function requireAuth(req: NextRequest) {
   const decoded = await verifyIdToken(token, true)
   if (!decoded) return { error: NextResponse.json({ error: "Invalid token" }, { status: 401 }) }
   return { userId: decoded.uid }
+}
+
+function fallbackPostedByName(item: Item): string {
+  return item.postedByName ?? item.postedByEmail?.split("@")[0] ?? item.postedBy
 }
 
 /** GET /api/items/[id] – ดึงรายการเดียว */
@@ -44,9 +50,33 @@ export async function GET(
     }
 
     const item = parseItemFromFirestore(snap.id, snap.data())
+    if (!item) {
+      return NextResponse.json({ success: true, item: null })
+    }
+
+    let postedByName = fallbackPostedByName(item)
+    let postedByRating = item.postedByRating
+    try {
+      const posterSnap = await usersCollection().doc(item.postedBy).get()
+      if (posterSnap.exists) {
+        const posterData = posterSnap.data()
+        postedByName =
+          (posterData?.displayName as string | undefined) ||
+          (posterData?.email as string | undefined)?.split("@")[0] ||
+          postedByName
+        postedByRating = normalizeRatingSummary(posterData?.rating)
+      }
+    } catch {
+      // Keep fallback owner fields if profile lookup fails.
+    }
+
     return NextResponse.json({
       success: true,
-      item: item ?? null,
+      item: {
+        ...item,
+        postedByName,
+        postedByRating,
+      },
     })
   } catch (e) {
     console.error("[Items API] GET Error:", e)

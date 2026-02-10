@@ -10,6 +10,44 @@ import { FieldValue } from "firebase-admin/firestore"
 import { ApiErrors, getAuthToken, successResponse } from "@/lib/api-response"
 import { userProfileSchema } from "@/lib/schemas"
 
+async function getLatestWarningReason(
+  db: FirebaseFirestore.Firestore,
+  userId: string
+): Promise<string> {
+  try {
+    const latestWarningSnap = await db
+      .collection("userWarnings")
+      .where("userId", "==", userId)
+      .orderBy("issuedAt", "desc")
+      .limit(1)
+      .get()
+
+    if (!latestWarningSnap.empty) {
+      const reason = latestWarningSnap.docs[0]?.data()?.reason
+      if (typeof reason === "string") return reason.trim()
+    }
+  } catch (error) {
+    console.warn("[Users Me API] Could not read latest warning with ordered query:", error)
+  }
+
+  try {
+    const fallbackWarningSnap = await db
+      .collection("userWarnings")
+      .where("userId", "==", userId)
+      .limit(1)
+      .get()
+
+    if (!fallbackWarningSnap.empty) {
+      const reason = fallbackWarningSnap.docs[0]?.data()?.reason
+      if (typeof reason === "string") return reason.trim()
+    }
+  } catch (error) {
+    console.warn("[Users Me API] Could not read warning reason with fallback query:", error)
+  }
+
+  return ""
+}
+
 /** GET /api/users/me – ดึงโปรไฟล์ผู้ใช้ */
 export async function GET(request: NextRequest) {
   try {
@@ -35,6 +73,7 @@ export async function GET(request: NextRequest) {
         photoURL: (decoded.picture as string) || "",
         status: "ACTIVE",
         warningCount: 0,
+        suspensionCount: 0,
         restrictions: { canPost: true, canExchange: true, canChat: true },
         termsAccepted: false,
         createdAt: now,
@@ -60,8 +99,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const warningCount = Number(data.warningCount) || 0
+    const latestWarningReason =
+      warningCount > 0 ? await getLatestWarningReason(db, decoded.uid) : ""
+
     const isAdmin = adminSnap.exists
-    return successResponse({ user: { id: userSnap.id || decoded.uid, ...data, isAdmin } })
+    return successResponse({
+      user: {
+        id: userSnap.id || decoded.uid,
+        ...data,
+        latestWarningReason,
+        isAdmin,
+      },
+    })
   } catch (e) {
     console.error("[Users Me API] GET Error:", e)
     return ApiErrors.internalError("Internal server error")

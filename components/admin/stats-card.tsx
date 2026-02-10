@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { LucideIcon, TrendingUp, TrendingDown } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 import { cn } from "@/lib/utils"
 
 interface StatsCardProps {
@@ -55,6 +56,7 @@ export function StatsCard({
   urgent = false,
   className,
 }: StatsCardProps) {
+  const { tt } = useI18n()
   const colors = colorClasses[color]
 
   return (
@@ -103,7 +105,7 @@ export function StatsCard({
           <div className="mt-4 pt-4 border-t border-amber-500/20">
             <p className="text-xs text-amber-600 font-medium flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-              ต้องดำเนินการ
+              {tt("ต้องดำเนินการ", "Needs action")}
             </p>
           </div>
         )}

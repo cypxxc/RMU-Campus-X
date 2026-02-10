@@ -2,10 +2,28 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Package, Users, MessageSquare } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 import { StatsCard } from "@/components/admin/stats-card"
 import { ItemsActivityChart } from "@/components/admin/items-activity-chart"
 import { CategoryDistributionChart } from "@/components/admin/category-distribution-chart"
 import type { Item, SupportTicket } from "@/types"
+
+function toSafeDate(value: unknown): Date {
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate()
+  }
+  if (value instanceof Date) return value
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  if (value && typeof value === "object") {
+    const seconds = (value as { seconds?: number; _seconds?: number }).seconds
+      ?? (value as { seconds?: number; _seconds?: number })._seconds
+    if (typeof seconds === "number") return new Date(seconds * 1000)
+  }
+  return new Date()
+}
 
 interface DashboardOverviewProps {
   items: Item[]
@@ -23,6 +41,7 @@ export function DashboardOverview({
   newItemsCount,
   newTicketsCount,
 }: DashboardOverviewProps) {
+  const { locale, tt } = useI18n()
   const totalItems = items.length
 
   // Calculate dynamic change percentages based on 7-day comparison
@@ -32,12 +51,12 @@ export function DashboardOverview({
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
     const thisWeek = data.filter(item => {
-      const date = (item[dateField] as any)?.toDate?.() || new Date()
+      const date = toSafeDate(item[dateField])
       return date >= sevenDaysAgo && date <= now
     }).length
 
     const lastWeek = data.filter(item => {
-      const date = (item[dateField] as any)?.toDate?.() || new Date()
+      const date = toSafeDate(item[dateField])
       return date >= fourteenDaysAgo && date < sevenDaysAgo
     }).length
 
@@ -60,33 +79,41 @@ export function DashboardOverview({
       {/* Stats Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatsCard
-          title="โพสทั้งหมด"
+          title={tt("โพสทั้งหมด", "Total items")}
           value={totalItems}
           change={itemsChange.text}
           trend={itemsChange.trend}
           icon={Package}
           color="blue"
-          description={newItemsCount > 0 ? `มี ${newItemsCount} รายการใน 24 ชม. ที่ผ่านมา` : 'จำนวนโพสในระบบ'}
+          description={
+            newItemsCount > 0
+              ? tt(`มี ${newItemsCount} รายการใน 24 ชม. ที่ผ่านมา`, `${newItemsCount} in last 24 hours`)
+              : tt("จำนวนโพสในระบบ", "Total posted items")
+          }
         />
         
         <StatsCard
-          title="ผู้ใช้งานทั้งหมด"
+          title={tt("ผู้ใช้งานทั้งหมด", "Total users")}
           value={totalUsersCount}
           change="—"
           trend="up"
           icon={Users}
           color="green"
-          description="จำนวนบัญชีที่สมัครแล้ว"
+          description={tt("จำนวนบัญชีที่สมัครแล้ว", "Registered user accounts")}
         />
         
         <StatsCard
-          title="คำร้องขอความช่วยเหลือ"
+          title={tt("คำร้องขอความช่วยเหลือ", "Support tickets")}
           value={tickets.length}
           change={ticketsChange.text}
           trend={ticketsChange.trend}
           icon={MessageSquare}
           color="red"
-          description={newTicketsCount > 0 ? `มี ${newTicketsCount} รายการใน 24 ชม. ที่ผ่านมา` : 'คำร้องและคำถามจากผู้ใช้'}
+          description={
+            newTicketsCount > 0
+              ? tt(`มี ${newTicketsCount} รายการใน 24 ชม. ที่ผ่านมา`, `${newTicketsCount} in last 24 hours`)
+              : tt("คำร้องและคำถามจากผู้ใช้", "User support requests and questions")
+          }
         />
       </div>
 
@@ -96,10 +123,10 @@ export function DashboardOverview({
         <CategoryDistributionChart items={items} />
       </div>
 
-      {/* รายการโพส */}
+      {/* Recent items */}
       <Card>
         <CardHeader>
-          <CardTitle>รายการโพส</CardTitle>
+          <CardTitle>{tt("รายการโพส", "Recent items")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -113,12 +140,12 @@ export function DashboardOverview({
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground shrink-0">
-                  {new Date((item.postedAt as any)?.toDate?.() || new Date()).toLocaleDateString('th-TH')}
+                  {toSafeDate(item.postedAt).toLocaleDateString(locale === "th" ? "th-TH" : "en-US")}
                 </span>
               </div>
             ))}
             {items.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">ยังไม่มีโพสในระบบ</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{tt("ยังไม่มีโพสในระบบ", "No items yet")}</p>
             )}
           </div>
         </CardContent>

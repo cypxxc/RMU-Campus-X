@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useRef, useCallback } from "react"
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from "@/lib/firestore"
+import { isTransientNetworkError } from "@/lib/api-client"
 import { useAuth } from "@/components/auth-provider"
 import type { AppNotification } from "@/types"
-import { Bell, Check, MessageCircle, AlertTriangle, Package, Info, X, Sparkles, Inbox, ChevronRight } from "lucide-react"
+import { Bell, Check, MessageCircle, AlertTriangle, Package, Info, X, Inbox, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -16,19 +17,23 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { useI18n } from "@/components/language-provider"
 
 function toCreatedAtMs(n: AppNotification): number {
-  const c = (n as any).createdAt
+  const c: unknown = n.createdAt
   if (!c) return Date.now()
-  if (typeof c.toDate === "function") return c.toDate().getTime()
-  if (typeof c.toMillis === "function") return c.toMillis()
-  if (typeof c._seconds === "number") return c._seconds * 1000
+  if (typeof c === "object" && c !== null) {
+    const tsLike = c as { toDate?: () => Date; toMillis?: () => number; _seconds?: number }
+    if (typeof tsLike.toDate === "function") return tsLike.toDate().getTime()
+    if (typeof tsLike.toMillis === "function") return tsLike.toMillis()
+    if (typeof tsLike._seconds === "number") return tsLike._seconds * 1000
+  }
   if (typeof c === "string") return new Date(c).getTime()
   return Date.now()
 }
 
-function formatNotificationTime(n: AppNotification): string {
-  return new Date(toCreatedAtMs(n)).toLocaleString("th-TH", {
+function formatNotificationTime(n: AppNotification, locale: "th" | "en"): string {
+  return new Date(toCreatedAtMs(n)).toLocaleString(locale === "th" ? "th-TH" : "en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -46,6 +51,7 @@ export function NotificationBell() {
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+  const { locale, tt } = useI18n()
 
   useEffect(() => {
     // Clean up old shown toasts (older than 5 minutes) periodically
@@ -75,8 +81,9 @@ export function NotificationBell() {
   // โหลดการแจ้งเตือนผ่าน API (GET /api/notifications) + โพลทุก 15 วินาที + refetch เมื่อเปิด dropdown หรือเมื่อ tab กลับมาที่หน้าจอ
   const fetchNotifications = useCallback(async (showNewToasts = false) => {
     if (!user) return
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return
     try {
-      const { notifications: list } = await getNotifications(user.uid, { pageSize: 20 })
+      const { notifications: list } = await getNotifications(user.uid, { pageSize: 20, includeTotalCount: false })
       const all = (list || []).slice(0, 10)
 
       if (showNewToasts) {
@@ -108,6 +115,7 @@ export function NotificationBell() {
       prevNotificationIds.current = new Set(all.map((n) => n.id))
       lastProcessedTime.current = Date.now()
     } catch (err) {
+      if (isTransientNetworkError(err)) return
       console.error("[NotificationBell] Fetch error:", err)
     }
   }, [user, toast, handleMarkAsRead])
@@ -115,9 +123,12 @@ export function NotificationBell() {
   useEffect(() => {
     if (!user) return
 
-    const POLL_MS = 15_000
+    const POLL_MS = 45_000
     const t = setTimeout(() => fetchNotifications(false), 0)
-    const interval = setInterval(() => fetchNotifications(true), POLL_MS)
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      fetchNotifications(true)
+    }, POLL_MS)
 
     const onVisibilityChange = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
@@ -139,9 +150,9 @@ export function NotificationBell() {
       await markAllNotificationsAsRead(user.uid)
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
       setUnreadCount(0)
-      toast({ title: "อ่านการแจ้งเตือนทั้งหมดแล้ว" })
+      toast({ title: tt("อ่านการแจ้งเตือนทั้งหมดแล้ว", "All notifications marked as read") })
     } catch {
-      toast({ title: "เกิดข้อผิดพลาด", variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), variant: "destructive" })
     }
   }
 
@@ -169,7 +180,11 @@ export function NotificationBell() {
         return next.slice(0, 10)
       })
       if (!removed.isRead) setUnreadCount((prev) => prev + 1)
-      toast({ title: "ลบไม่สำเร็จ", description: "กรุณาลองใหม่อีกครั้ง", variant: "destructive" })
+      toast({
+        title: tt("ลบไม่สำเร็จ", "Delete failed"),
+        description: tt("กรุณาลองใหม่อีกครั้ง", "Please try again."),
+        variant: "destructive",
+      })
     })
   }
 
@@ -182,10 +197,12 @@ export function NotificationBell() {
         return <Package className={`${iconClass} text-emerald-500`} />
       case "report":
         return <AlertTriangle className={`${iconClass} text-amber-500`} />
+      case "support":
+        return <MessageCircle className={`${iconClass} text-indigo-500`} />
+      case "system":
+        return <Info className={`${iconClass} text-cyan-500`} />
       case "warning":
         return <AlertTriangle className={`${iconClass} text-red-500`} />
-      case "success":
-        return <Sparkles className={`${iconClass} text-emerald-500`} />
       default:
         return <Info className={`${iconClass} text-muted-foreground`} />
     }
@@ -200,10 +217,12 @@ export function NotificationBell() {
         return "bg-emerald-500/10 ring-1 ring-emerald-500/20"
       case "report":
         return "bg-amber-500/10 ring-1 ring-amber-500/20"
+      case "support":
+        return "bg-indigo-500/10 ring-1 ring-indigo-500/20"
+      case "system":
+        return "bg-cyan-500/10 ring-1 ring-cyan-500/20"
       case "warning":
         return "bg-red-500/10 ring-1 ring-red-500/20"
-      case "success":
-        return "bg-emerald-500/10 ring-1 ring-emerald-500/20"
       default:
         return "bg-muted/80"
     }
@@ -214,7 +233,7 @@ export function NotificationBell() {
   return (
     <DropdownMenu onOpenChange={(open) => open && fetchNotifications(false)}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9 group" aria-label="การแจ้งเตือน">
+        <Button variant="ghost" size="icon" className="relative h-9 w-9 group" aria-label={tt("การแจ้งเตือน", "Notifications")}>
           <Bell className={`h-5 w-5 transition-transform group-hover:scale-110 ${unreadCount > 0 ? "text-primary" : ""}`} />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-5 w-5">
@@ -236,10 +255,10 @@ export function NotificationBell() {
               <Bell className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h3 className="text-sm font-bold">การแจ้งเตือน</h3>
+              <h3 className="text-sm font-bold">{tt("การแจ้งเตือน", "Notifications")}</h3>
               {unreadCount > 0 && (
                 <p className="text-[11px] text-muted-foreground">
-                  {unreadCount} รายการที่ยังไม่ได้อ่าน
+                  {tt(`${unreadCount} รายการที่ยังไม่ได้อ่าน`, `${unreadCount} unread`)}
                 </p>
               )}
             </div>
@@ -252,7 +271,7 @@ export function NotificationBell() {
               onClick={handleMarkAllRead}
             >
               <Check className="h-3.5 w-3.5 mr-1.5" />
-              อ่านทั้งหมด
+              {tt("อ่านทั้งหมด", "Mark all read")}
             </Button>
           )}
         </div>
@@ -296,7 +315,7 @@ export function NotificationBell() {
                       </p>
                       {hasLink && (
                         <span className="shrink-0 text-primary flex items-center gap-0.5 text-[11px] font-medium">
-                          ไปที่
+                          {tt("ไปที่", "Open")}
                           <ChevronRight className="h-3.5 w-3.5" />
                         </span>
                       )}
@@ -306,17 +325,17 @@ export function NotificationBell() {
                     </p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[11px] text-muted-foreground/70">
-                        {formatNotificationTime(n)}
+                        {formatNotificationTime(n, locale)}
                       </span>
                       {!hasLink && (
                         <span className="text-[10px] text-muted-foreground/80 bg-muted/50 px-1.5 py-0.5 rounded">
-                          ข้อความแจ้งเตือน
+                          {tt("ข้อความแจ้งเตือน", "Notification")}
                         </span>
                       )}
                       {!n.isRead && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                           <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                          ใหม่
+                          {tt("ใหม่", "New")}
                         </span>
                       )}
                     </div>
@@ -339,8 +358,8 @@ export function NotificationBell() {
               <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
                 <Inbox className="h-8 w-8 text-muted-foreground/30" />
               </div>
-              <p className="text-sm font-medium text-foreground/70">ไม่มีการแจ้งเตือน</p>
-              <p className="text-xs text-muted-foreground mt-1">คุณจะได้รับการแจ้งเตือนที่นี่</p>
+              <p className="text-sm font-medium text-foreground/70">{tt("ไม่มีการแจ้งเตือน", "No notifications")}</p>
+              <p className="text-xs text-muted-foreground mt-1">{tt("คุณจะได้รับการแจ้งเตือนที่นี่", "Notifications will appear here.")}</p>
             </div>
           )}
         </div>
@@ -350,7 +369,7 @@ export function NotificationBell() {
           href="/notifications" 
           className="block py-3 text-center text-xs font-bold text-primary hover:bg-primary/5 transition-colors border-t"
         >
-          ดูการแจ้งเตือนทั้งหมด →
+          {tt("ดูการแจ้งเตือนทั้งหมด", "View all notifications")} →
         </Link>
       </DropdownMenuContent>
     </DropdownMenu>

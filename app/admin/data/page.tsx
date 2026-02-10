@@ -5,19 +5,11 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { useAuth } from "@/components/auth-provider"
+import { useI18n } from "@/components/language-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Package, Users, RefreshCw, MessageSquare, AlertTriangle, History, Database, Trash2, UserX } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-
-const MANAGEMENT_LINKS = [
-  { href: "/admin/items", label: "จัดการโพส", icon: Package, desc: "ดู แก้ไข ลบโพส" },
-  { href: "/admin/users", label: "จัดการผู้ใช้", icon: Users, desc: "ดู ผู้ใช้ ออกคำเตือน ระงับ แบน ลบ" },
-  { href: "/admin/exchanges", label: "จัดการการแลกเปลี่ยน", icon: RefreshCw, desc: "ดู ลบรายการการแลกเปลี่ยน" },
-  { href: "/admin/reports", label: "รายงานความไม่เหมาะสม", icon: AlertTriangle, desc: "ตรวจสอบและดำเนินการรายงาน" },
-  { href: "/admin/support", label: "จัดการคำร้อง", icon: MessageSquare, desc: "ตอบกลับและเปลี่ยนสถานะคำร้อง" },
-  { href: "/admin/logs", label: "ประวัติกิจกรรม", icon: History, desc: "ดูบันทึกการดำเนินการของแอดมิน" },
-]
 
 export default function AdminDataPage() {
   const [isAdmin, setIsAdmin] = useState(false)
@@ -26,15 +18,54 @@ export default function AdminDataPage() {
   const [cleanupOrphansLoading, setCleanupOrphansLoading] = useState(false)
 
   const { user, loading: authLoading } = useAuth()
+  const { tt } = useI18n()
   const router = useRouter()
   const { toast } = useToast()
+  const managementLinks = [
+    {
+      href: "/admin/items",
+      label: tt("จัดการโพส", "Manage items"),
+      icon: Package,
+      desc: tt("ดู แก้ไข ลบโพส", "View, edit, and delete items"),
+    },
+    {
+      href: "/admin/users",
+      label: tt("จัดการผู้ใช้", "Manage users"),
+      icon: Users,
+      desc: tt("ดู ผู้ใช้ ออกคำเตือน ระงับ แบน ลบ", "Review users and apply admin actions"),
+    },
+    {
+      href: "/admin/exchanges",
+      label: tt("จัดการการแลกเปลี่ยน", "Manage exchanges"),
+      icon: RefreshCw,
+      desc: tt("ดู ลบรายการการแลกเปลี่ยน", "View and remove exchanges"),
+    },
+    {
+      href: "/admin/reports",
+      label: tt("รายงานความไม่เหมาะสม", "Reports"),
+      icon: AlertTriangle,
+      desc: tt("ตรวจสอบและดำเนินการรายงาน", "Review and process reports"),
+    },
+    {
+      href: "/admin/support",
+      label: tt("จัดการคำร้อง", "Manage support"),
+      icon: MessageSquare,
+      desc: tt("ตอบกลับและเปลี่ยนสถานะคำร้อง", "Reply and update support status"),
+    },
+    {
+      href: "/admin/logs",
+      label: tt("ประวัติกิจกรรม", "Activity logs"),
+      icon: History,
+      desc: tt("ดูบันทึกการดำเนินการของแอดมิน", "Review admin activity history"),
+    },
+  ]
 
   const checkAdmin = useCallback(async () => {
     if (!user) return
     try {
       const isAdmin = await checkIsAdmin(user.email ?? undefined)
       if (!isAdmin) {
-        toast({ title: "ไม่มีสิทธิ์เข้าถึง", variant: "destructive" })
+        toast({ title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"), variant: "destructive" })
         router.push("/dashboard")
         return
       }
@@ -44,7 +75,7 @@ export default function AdminDataPage() {
     } finally {
       setChecking(false)
     }
-  }, [router, toast, user])
+  }, [router, toast, tt, user])
 
   useEffect(() => {
     if (authLoading) return
@@ -65,16 +96,16 @@ export default function AdminDataPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error?.message || "ลบไม่สำเร็จ")
+      if (!res.ok) throw new Error(json?.error?.message || tt("ลบไม่สำเร็จ", "Deletion failed"))
       const deleted = json?.data?.deleted ?? 0
       toast({
-        title: deleted > 0 ? "ลบข้อมูลเก่าแล้ว" : "ไม่มีรายการที่ต้องลบ",
-        description: deleted > 0 ? `ลบการแลกเปลี่ยนที่สำเร็จแล้ว ${deleted} รายการ` : undefined,
+        title: deleted > 0 ? tt("ลบข้อมูลเก่าแล้ว", "Cleanup completed") : tt("ไม่มีรายการที่ต้องลบ", "No records to clean"),
+        description: deleted > 0 ? tt(`ลบการแลกเปลี่ยนที่สำเร็จแล้ว ${deleted} รายการ`, `Deleted ${deleted} completed exchange records`) : undefined,
       })
     } catch (e) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: e instanceof Error ? e.message : "ลบไม่สำเร็จ",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: e instanceof Error ? e.message : tt("ลบไม่สำเร็จ", "Deletion failed"),
         variant: "destructive",
       })
     } finally {
@@ -93,20 +124,20 @@ export default function AdminDataPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error?.message || "ลบไม่สำเร็จ")
+      if (!res.ok) throw new Error(json?.error?.message || tt("ลบไม่สำเร็จ", "Cleanup failed"))
       const deleted = json?.data?.deleted ?? 0
       if (deleted > 0) {
         toast({
-          title: "อัปเดตรายชื่อผู้ใช้แล้ว",
-          description: `ลบข้อมูลบัญชีที่ไม่มีในระบบแล้ว ${deleted} รายการ`,
+          title: tt("อัปเดตรายชื่อผู้ใช้แล้ว", "User list updated"),
+          description: tt(`ลบข้อมูลบัญชีที่ไม่มีในระบบแล้ว ${deleted} รายการ`, `Removed ${deleted} orphan user records`),
         })
       } else {
-        toast({ title: "ไม่มีข้อมูลผีที่ต้องลบ" })
+        toast({ title: tt("ไม่มีข้อมูลผีที่ต้องลบ", "No orphan users found") })
       }
     } catch (e) {
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: e instanceof Error ? e.message : "ลบไม่สำเร็จ",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: e instanceof Error ? e.message : tt("ลบไม่สำเร็จ", "Cleanup failed"),
         variant: "destructive",
       })
     } finally {
@@ -129,22 +160,22 @@ export default function AdminDataPage() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Database className="h-8 w-8 text-primary" />
-              จัดการข้อมูล
+              {tt("จัดการข้อมูล", "Data management")}
             </h1>
             <p className="text-muted-foreground">
-              จัดการข้อมูลทั้งหมดบนเว็บ ไม่ต้องเข้า Firestore โดยตรง
+              {tt("จัดการข้อมูลทั้งหมดบนเว็บ ไม่ต้องเข้า Firestore โดยตรง", "Manage system data from web admin tools without opening Firestore directly.")}
             </p>
           </div>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">หน้าจัดการหลัก</CardTitle>
-            <p className="text-sm text-muted-foreground">ไปยังหน้าจัดการแต่ละประเภท</p>
+            <CardTitle className="text-base">{tt("หน้าจัดการหลัก", "Main admin sections")}</CardTitle>
+            <p className="text-sm text-muted-foreground">{tt("ไปยังหน้าจัดการแต่ละประเภท", "Go to each management area")}</p>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {MANAGEMENT_LINKS.map(({ href, label, icon: Icon, desc }) => (
+              {managementLinks.map(({ href, label, icon: Icon, desc }) => (
                 <Link key={href} href={href}>
                   <Card className="border hover:bg-muted/50 transition-colors cursor-pointer h-full">
                     <CardContent className="p-4 flex items-start gap-3">
@@ -165,8 +196,8 @@ export default function AdminDataPage() {
 
         <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
           <CardHeader>
-            <CardTitle className="text-base">บำรุงรักษา</CardTitle>
-            <p className="text-sm text-muted-foreground">ลบข้อมูลเก่าหรือข้อมูลผีที่ค้างในระบบ</p>
+            <CardTitle className="text-base">{tt("บำรุงรักษา", "Maintenance")}</CardTitle>
+            <p className="text-sm text-muted-foreground">{tt("ลบข้อมูลเก่าหรือข้อมูลผีที่ค้างในระบบ", "Clean old records and orphan data")}</p>
           </CardHeader>
           <CardContent className="flex flex-col sm:flex-row gap-3">
             <Button
@@ -176,7 +207,7 @@ export default function AdminDataPage() {
               disabled={cleanupExchangesLoading}
             >
               {cleanupExchangesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              ลบการแลกเปลี่ยนที่สำเร็จแล้ว (ข้อมูลเก่า)
+              {tt("ลบการแลกเปลี่ยนที่สำเร็จแล้ว (ข้อมูลเก่า)", "Delete completed exchanges (old records)")}
             </Button>
             <Button
               variant="outline"
@@ -185,7 +216,7 @@ export default function AdminDataPage() {
               disabled={cleanupOrphansLoading}
             >
               {cleanupOrphansLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
-              ลบผู้ใช้ผี (ข้อมูล Firestore ที่ไม่มีใน Auth)
+              {tt("ลบผู้ใช้ผี (ข้อมูล Firestore ที่ไม่มีใน Auth)", "Delete orphan users (Firestore records missing in Auth)")}
             </Button>
           </CardContent>
         </Card>

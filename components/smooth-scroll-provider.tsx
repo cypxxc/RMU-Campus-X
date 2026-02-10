@@ -15,6 +15,20 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     if (prefersReducedMotion) return
 
+    const shouldUseNativeScrollInModal = (node: unknown): boolean => {
+      if (!(node instanceof HTMLElement)) return false
+      return Boolean(
+        node.closest(
+          [
+            "[data-lenis-prevent]",
+            "[role='dialog']",
+            "[data-slot='dialog-content']",
+            "[data-slot='alert-dialog-content']",
+          ].join(",")
+        )
+      )
+    }
+
     const init = async () => {
       const Lenis = (await import("lenis")).default
       lenisRef.current = new Lenis({
@@ -22,6 +36,8 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
         easing: (t) => Math.min(1, 1.001 - 2 ** (-10 * t)),
         touchMultiplier: 1.5,
         smoothWheel: true,
+        // Let modal/dialog containers handle their own native scroll via wheel.
+        prevent: (node) => shouldUseNativeScrollInModal(node),
         autoRaf: true,
       })
     }

@@ -17,6 +17,8 @@ import { X, Loader2, ImagePlus, Package, MapPin } from "lucide-react"
 import Image from "next/image"
 import { isOnCooldown, getRemainingCooldown, recordAction, loadCooldownFromStorage, formatCooldownTime } from "@/lib/rate-limit"
 import { CATEGORY_OPTIONS, LOCATION_OPTIONS } from "@/lib/constants"
+import { resolveImageUrl } from "@/lib/cloudinary-url"
+import { useI18n } from "@/components/language-provider"
 
 interface PostItemModalProps {
   open: boolean
@@ -34,7 +36,16 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
   const [userDisplayName, setUserDisplayName] = useState<string>("")
   const { user } = useAuth()
   const { toast } = useToast()
+  const { tt } = useI18n()
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
+  const categoryLabelByValue: Record<ItemCategory, string> = {
+    electronics: tt("อิเล็กทรอนิกส์", "Electronics"),
+    books: tt("หนังสือ", "Books"),
+    furniture: tt("เฟอร์นิเจอร์", "Furniture"),
+    clothing: tt("เสื้อผ้า", "Clothing"),
+    sports: tt("อุปกรณ์กีฬา", "Sports"),
+    other: tt("อื่นๆ", "Other"),
+  }
   
   // Refs for form fields - used for auto-focus on validation errors
   const titleRef = useRef<HTMLInputElement>(null)
@@ -144,8 +155,11 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
     if (isOnCooldown('createItem', user.uid)) {
       const remaining = getRemainingCooldown('createItem', user.uid)
       toast({
-        title: "รอสักครู่",
-        description: `กรุณารอ ${formatCooldownTime(remaining)} ก่อนโพสต์สิ่งของถัดไป`,
+        title: tt("รอสักครู่", "Please wait"),
+        description: tt(
+          `กรุณารอ ${formatCooldownTime(remaining)} ก่อนโพสต์สิ่งของถัดไป`,
+          `Please wait ${formatCooldownTime(remaining)} before posting another item.`
+        ),
         variant: "destructive",
       })
       return
@@ -169,12 +183,12 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
 
       // Check if the API call was successful
       if (!result.success) {
-        throw new Error(result.error || "ไม่สามารถโพสต์สิ่งของได้")
+        throw new Error(result.error || tt("ไม่สามารถโพสต์สิ่งของได้", "Unable to post item"))
       }
 
       toast({
-        title: "โพสต์สำเร็จ 🎉",
-        description: "สิ่งของของคุณถูกเผยแพร่แล้ว",
+        title: tt("โพสต์สำเร็จ 🎉", "Posted successfully 🎉"),
+        description: tt("สิ่งของของคุณถูกเผยแพร่แล้ว", "Your item is now published."),
       })
 
       // Record action for rate limiting
@@ -210,10 +224,10 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
         onSuccess()
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "ไม่สามารถโพสต์สิ่งของได้"
+      const errorMessage = error instanceof Error ? error.message : tt("ไม่สามารถโพสต์สิ่งของได้", "Unable to post item")
       console.error("[PostItemModal] Error posting item:", error)
       toast({
-        title: "เกิดข้อผิดพลาด",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
         description: errorMessage,
         variant: "destructive",
       })
@@ -232,12 +246,14 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
       open={open}
       onOpenChange={handleClose}
       size="lg"
-      title="โพสต์สิ่งของ"
+      fixedHeight
+      maxHeight="90dvh"
+      title={tt("โพสต์สิ่งของ", "Post item")}
       icon={<Package className="h-5 w-5" />}
       footer={
         <UnifiedModalActions
           onCancel={handleClose}
-          submitText="โพสต์สิ่งของ"
+          submitText={tt("โพสต์สิ่งของ", "Post item")}
           submitDisabled={loading || !title.trim() || !description.trim() || !location.trim()}
           loading={loading}
           submitButton={
@@ -250,10 +266,10 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  กำลังโพสต์...
+                  {tt("กำลังโพสต์...", "Posting...")}
                 </>
               ) : (
-                "โพสต์สิ่งของ"
+                tt("โพสต์สิ่งของ", "Post item")
               )}
             </Button>
           }
@@ -264,12 +280,12 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
           {/* Title */}
           <div className="space-y-2">
             <Label htmlFor="modal-title" className="text-sm font-medium">
-              ชื่อสิ่งของ <span className="text-destructive">*</span>
+              {tt("ชื่อสิ่งของ", "Item name")} <span className="text-destructive">*</span>
             </Label>
             <Input
               ref={titleRef}
               id="modal-title"
-              placeholder="เช่น เสื้อโปโล RMU ไซส์ M"
+              placeholder={tt("เช่น เสื้อโปโล RMU ไซส์ M", "e.g. RMU polo shirt size M")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
@@ -283,12 +299,15 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
           {/* Description */}
           <div className="space-y-2">
             <Label htmlFor="modal-description" className="text-sm font-medium">
-              รายละเอียด <span className="text-destructive">*</span>
+              {tt("รายละเอียด", "Description")} <span className="text-destructive">*</span>
             </Label>
             <Textarea
               ref={descriptionRef}
               id="modal-description"
-              placeholder="อธิบายสภาพ ประโยชน์ หรือเหตุผลที่ต้องการแบ่งปัน"
+              placeholder={tt(
+                "อธิบายสภาพ ประโยชน์ หรือเหตุผลที่ต้องการแบ่งปัน",
+                "Describe condition, usefulness, or why you want to share this item"
+              )}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
@@ -297,14 +316,16 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               aria-describedby={errors.description ? "description-error" : undefined}
               className={`resize-none ${errors.description ? "border-destructive focus-visible:ring-destructive" : ""}`}
             />
-            <p className="text-xs text-muted-foreground">รายละเอียดที่ดีจะช่วยเพิ่มโอกาสในการแลกเปลี่ยน</p>
+            <p className="text-xs text-muted-foreground">
+              {tt("รายละเอียดที่ดีจะช่วยเพิ่มโอกาสในการแลกเปลี่ยน", "A clear description improves exchange success.")}
+            </p>
             {errors.description && <p id="description-error" role="alert" className="text-xs text-destructive">{errors.description}</p>}
           </div>
 
           {/* หมวดหมู่ */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              หมวดหมู่ <span className="text-destructive">*</span>
+              {tt("หมวดหมู่", "Category")} <span className="text-destructive">*</span>
             </Label>
             <Select value={category} onValueChange={(value) => setCategory(value as ItemCategory)} disabled={loading}>
               <SelectTrigger className="w-full">
@@ -317,7 +338,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                     <SelectItem key={option.value} value={option.value}>
                       <span className="flex items-center gap-2">
                         <IconComponent className={`h-4 w-4 ${option.color}`} />
-                        {option.label}
+                        {categoryLabelByValue[option.value]}
                       </span>
                     </SelectItem>
                   )
@@ -330,11 +351,11 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
           <div className="space-y-2">
             <Label className="text-sm font-semibold flex items-center gap-2">
               <MapPin className="h-4 w-4 text-primary" />
-              สถานที่นัดรับ <span className="text-destructive">*</span>
+              {tt("สถานที่นัดรับ", "Pickup location")} <span className="text-destructive">*</span>
             </Label>
             <Select value={location} onValueChange={setLocation} disabled={loading} required>
               <SelectTrigger className={`w-full ${errors.location ? "border-destructive ring-destructive" : ""}`}>
-                <SelectValue placeholder="เลือกสถานที่" />
+                <SelectValue placeholder={tt("เลือกสถานที่", "Select location")} />
               </SelectTrigger>
               <SelectContent>
                 {LOCATION_OPTIONS.map((loc) => (
@@ -345,7 +366,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               </SelectContent>
             </Select>
             <Input
-              placeholder="รายละเอียดสถานที่ (ไม่บังคับ)"
+              placeholder={tt("รายละเอียดสถานที่ (ไม่บังคับ)", "Location detail (optional)")}
               value={locationDetail}
               onChange={(e) => setLocationDetail(e.target.value.slice(0, 200))}
               maxLength={200}
@@ -361,8 +382,10 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                 <span className="text-amber-500 text-[10px] font-bold">!</span>
               </div>
               <p className="text-xs text-amber-500 leading-tight">
-                <span className="font-bold block mb-0.5">คำเตือน</span>
-                ต้องนัดรับ <strong>ภายในมหาวิทยาลัยเท่านั้น</strong> เพื่อความปลอดภัย
+                <span className="font-bold block mb-0.5">{tt("คำเตือน", "Warning")}</span>
+                {tt("ต้องนัดรับ ", "Pickup must be ")}
+                <strong>{tt("ภายในมหาวิทยาลัยเท่านั้น", "on campus only")}</strong>
+                {tt(" เพื่อความปลอดภัย", " for safety.")}
               </p>
             </div>
           )}
@@ -370,10 +393,14 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
           {/* Image Upload - Multiple Images */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              รูปภาพ <span className="text-muted-foreground font-normal">({images.length}/5)</span>
+              {tt("รูปภาพ", "Images")} <span className="text-muted-foreground font-normal">({images.length}/5)</span>
             </Label>
             <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">ข้อกำหนดรูปภาพ:</span> สูงสุด 5 รูป • รูปแบบ JPEG, PNG เท่านั้น • ขนาดไม่เกิน <strong>10 MB</strong> ต่อรูป
+              <span className="font-medium text-foreground">{tt("ข้อกำหนดรูปภาพ:", "Image requirements:")}</span>{" "}
+              {tt("สูงสุด 5 รูป", "Up to 5 images")} • {tt("รูปแบบ JPEG, PNG เท่านั้น", "JPEG, PNG only")} •{" "}
+              {tt("ขนาดไม่เกิน ", "Max size ")}
+              <strong>10 MB</strong>
+              {tt(" ต่อรูป", " per image")}
             </div>
 
             {/* Image Grid */}
@@ -381,7 +408,13 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
               <div className="grid grid-cols-3 gap-2">
                 {images.map((img, index) => (
                   <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-muted border border-border group">
-                    <Image src={img} alt={`รูปตัวอย่างที่ ${index + 1}`} fill className="object-cover" unoptimized />
+                    <Image
+                      src={resolveImageUrl(img)}
+                      alt={tt(`รูปตัวอย่างที่ ${index + 1}`, `Preview image ${index + 1}`)}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
                     <Button
                       type="button"
                       variant="destructive"
@@ -389,13 +422,13 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                       className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => removeImage(index)}
                       disabled={loading}
-                      aria-label={`ลบรูปภาพที่ ${index + 1}`}
+                      aria-label={tt(`ลบรูปภาพที่ ${index + 1}`, `Remove image ${index + 1}`)}
                     >
                       <X className="h-3 w-3" />
                     </Button>
                     {index === 0 && (
                       <span className="absolute bottom-1 left-1 text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded font-medium">
-                        หลัก
+                        {tt("หลัก", "Primary")}
                       </span>
                     )}
                   </div>
@@ -408,7 +441,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                     className="aspect-square border-2 border-dashed border-border rounded-lg cursor-pointer bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-1"
                   >
                     <ImagePlus className="h-5 w-5 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground">เพิ่มรูป</span>
+                    <span className="text-[10px] text-muted-foreground">{tt("เพิ่มรูป", "Add image")}</span>
                     <Input 
                       id="modal-image" 
                       type="file" 
@@ -433,9 +466,11 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
                   <ImagePlus className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
                 <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                  คลิกเพื่ออัปโหลดรูปภาพ
+                  {tt("คลิกเพื่ออัปโหลดรูปภาพ", "Click to upload images")}
                 </span>
-                <span className="text-xs text-muted-foreground mt-0.5">สูงสุด 5 รูป, ไม่เกิน 10 MB ต่อรูป (JPEG, PNG เท่านั้น)</span>
+                <span className="text-xs text-muted-foreground mt-0.5">
+                  {tt("สูงสุด 5 รูป, ไม่เกิน 10 MB ต่อรูป (JPEG, PNG เท่านั้น)", "Up to 5 images, max 10 MB each (JPEG, PNG only)")}
+                </span>
                 <Input 
                   id="modal-image-empty" 
                   type="file" 

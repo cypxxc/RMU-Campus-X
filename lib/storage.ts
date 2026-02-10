@@ -14,12 +14,12 @@ const CLOUDINARY_UPLOAD_URL = 'https://api.cloudinary.com/v1_1'
  * 1. Call /api/upload/sign to get credentials
  * 2. POST file + signature directly to Cloudinary
  * @param file - Image file to upload
- * @param preset - Upload preset ('item' | 'avatar')
+ * @param preset - Upload preset ('item' | 'avatar' | 'announcement')
  * @returns Cloudinary public_id (store this in Firestore for transform flexibility)
  */
 export const uploadToCloudinary = async (
   file: File,
-  preset: 'item' | 'avatar' = 'item',
+  preset: 'item' | 'avatar' | 'announcement' = 'item',
   token?: string
 ): Promise<string> => {
   let fileToUpload: File = file
@@ -29,8 +29,8 @@ export const uploadToCloudinary = async (
     try {
       const originalSize = file.size
       const compressedBlob = await compressImage(file, {
-        maxWidth: preset === 'avatar' ? 400 : 1200,
-        maxHeight: preset === 'avatar' ? 400 : 1200,
+        maxWidth: preset === 'avatar' ? 400 : preset === 'announcement' ? 1600 : 1200,
+        maxHeight: preset === 'avatar' ? 400 : preset === 'announcement' ? 1600 : 1200,
         quality: 0.8,
         format: 'image/webp',
       })
@@ -104,4 +104,3 @@ export const validateImageFile = (file: File): { valid: boolean; error?: string 
   
   return { valid: true }
 }
-

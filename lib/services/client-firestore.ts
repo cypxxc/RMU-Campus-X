@@ -82,6 +82,53 @@ function toExchange(data: Record<string, unknown>, id: string): Exchange {
   return exchange as unknown as Exchange
 }
 
+function isBrowserOnline(): boolean {
+  return typeof navigator === "undefined" || navigator.onLine !== false
+}
+
+function subscribeWithOnlineGuard(
+  createSubscription: () => () => void,
+  onOffline?: () => void
+): () => void {
+  let innerUnsub: (() => void) | null = null
+
+  const start = () => {
+    if (!isBrowserOnline() || innerUnsub) return
+    innerUnsub = createSubscription()
+  }
+
+  const stop = () => {
+    if (!innerUnsub) return
+    innerUnsub()
+    innerUnsub = null
+  }
+
+  if (typeof window !== "undefined") {
+    const handleOnline = () => start()
+    const handleOffline = () => {
+      stop()
+      onOffline?.()
+    }
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    if (!isBrowserOnline()) onOffline?.()
+    start()
+
+    return () => {
+      stop()
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }
+
+  start()
+  return () => {
+    stop()
+  }
+}
+
 /**
  * Subscribe exchange details real-time
  * @returns unsubscribe function
@@ -92,21 +139,22 @@ export function subscribeToExchange(
   onError?: () => void
 ): () => void {
   const db = getFirebaseDb()
-  const unsub = onSnapshot(
-    doc(db, "exchanges", exchangeId),
-    (snap) => {
-      if (!snap.exists()) {
-        onUpdate(null)
-        return
+  return subscribeWithOnlineGuard(() =>
+    onSnapshot(
+      doc(db, "exchanges", exchangeId),
+      (snap) => {
+        if (!snap.exists()) {
+          onUpdate(null)
+          return
+        }
+        const data = snap.data() as Record<string, unknown>
+        onUpdate(toExchange(data, snap.id))
+      },
+      () => {
+        onError?.()
       }
-      const data = snap.data() as Record<string, unknown>
-      onUpdate(toExchange(data, snap.id))
-    },
-    () => {
-      onError?.()
-    }
+    )
   )
-  return () => unsub()
 }
 
 /**
@@ -126,32 +174,33 @@ export function subscribeToChatMessages(
     orderBy("createdAt", "desc"),
     limit(pageSize)
   )
-  const unsub = onSnapshot(
-    q,
-    (snapshot) => {
-      const list: ChatMessage[] = snapshot.docs.map((d) => {
-        const data = d.data()
-        return {
-          id: d.id,
-          exchangeId: data.exchangeId as string,
-          senderId: data.senderId as string,
-          senderEmail: (data.senderEmail ?? "") as string,
-          message: (data.message ?? "") as string,
-          createdAt: (toIso(data.createdAt) ?? new Date().toISOString()) as unknown as ChatMessage["createdAt"],
-          imageUrl: (data.imageUrl ?? null) as ChatMessage["imageUrl"],
-          imageType: (data.imageType ?? null) as ChatMessage["imageType"],
-          readAt: data.readAt != null ? (toIso(data.readAt) as unknown as ChatMessage["readAt"]) : undefined,
-          updatedAt: data.updatedAt != null ? (toIso(data.updatedAt) as unknown as ChatMessage["updatedAt"]) : undefined,
-        }
-      })
-      const ordered = [...list].reverse()
-      onUpdate(ordered)
-    },
-    () => {
-      onError?.()
-    }
+  return subscribeWithOnlineGuard(() =>
+    onSnapshot(
+      q,
+      (snapshot) => {
+        const list: ChatMessage[] = snapshot.docs.map((d) => {
+          const data = d.data()
+          return {
+            id: d.id,
+            exchangeId: data.exchangeId as string,
+            senderId: data.senderId as string,
+            senderEmail: (data.senderEmail ?? "") as string,
+            message: (data.message ?? "") as string,
+            createdAt: (toIso(data.createdAt) ?? new Date().toISOString()) as unknown as ChatMessage["createdAt"],
+            imageUrl: (data.imageUrl ?? null) as ChatMessage["imageUrl"],
+            imageType: (data.imageType ?? null) as ChatMessage["imageType"],
+            readAt: data.readAt != null ? (toIso(data.readAt) as unknown as ChatMessage["readAt"]) : undefined,
+            updatedAt: data.updatedAt != null ? (toIso(data.updatedAt) as unknown as ChatMessage["updatedAt"]) : undefined,
+          }
+        })
+        const ordered = [...list].reverse()
+        onUpdate(ordered)
+      },
+      () => {
+        onError?.()
+      }
+    )
   )
-  return () => unsub()
 }
 
 /**
@@ -182,24 +231,29 @@ export function subscribeToChatTyping(
   onError?: () => void
 ): () => void {
   const db = getFirebaseDb()
-  const unsub = onSnapshot(
-    doc(db, "chatTyping", exchangeId),
-    (snap) => {
-      if (!snap.exists()) {
-        onTypingChange(false)
-        return
-      }
-      const data = snap.data()
-      const t = data?.[otherKey]
-      const millis =
-        t && typeof (t as { toMillis?: () => number }).toMillis === "function"
-          ? (t as { toMillis: () => number }).toMillis()
-          : 0
-      onTypingChange(millis > 0 && Date.now() - millis < 5000)
-    },
+  return subscribeWithOnlineGuard(
+    () =>
+      onSnapshot(
+        doc(db, "chatTyping", exchangeId),
+        (snap) => {
+          if (!snap.exists()) {
+            onTypingChange(false)
+            return
+          }
+          const data = snap.data()
+          const t = data?.[otherKey]
+          const millis =
+            t && typeof (t as { toMillis?: () => number }).toMillis === "function"
+              ? (t as { toMillis: () => number }).toMillis()
+              : 0
+          onTypingChange(millis > 0 && Date.now() - millis < 5000)
+        },
+        () => {
+          onError?.()
+        }
+      ),
     () => {
-      onError?.()
+      onTypingChange(false)
     }
   )
-  return () => unsub()
 }

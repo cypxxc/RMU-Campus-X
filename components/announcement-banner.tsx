@@ -1,11 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import type { Announcement, AnnouncementType } from "@/types"
 import { useAnnouncement } from "@/components/announcement-context"
+import { isTransientNetworkError } from "@/lib/api-client"
+import { resolveImageUrl } from "@/lib/cloudinary-url"
 import { X, ChevronRight, Info, AlertTriangle, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useI18n } from "@/components/language-provider"
 
 const STORAGE_KEY = "announcements_dismissed"
 
@@ -51,10 +55,11 @@ function getAnnouncementStyles(type: AnnouncementType) {
   }
 }
 
-const FALLBACK_POLL_MS = 30_000 // fallback ทุก 30 วินาที ถ้า API ไม่ส่ง nextCheckInMs
+const FALLBACK_POLL_MS = 120_000 // fallback ทุก 2 นาที ถ้า API ไม่ส่ง nextCheckInMs
 
 export function AnnouncementBanner() {
   const { setHasAnnouncementVisible } = useAnnouncement()
+  const { tt } = useI18n()
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [dismissed, setDismissed] = useState<Set<string>>(new Set(getDismissedIds()))
   const [loading, setLoading] = useState(true)
@@ -65,33 +70,45 @@ export function AnnouncementBanner() {
     let scheduledRefetch: ReturnType<typeof setTimeout> | null = null
     let intervalRef: ReturnType<typeof setInterval> | null = null
 
-    const fetchAnnouncements = () => {
-      fetch("/api/announcements")
-        .then((res) => res.json())
-        .then((data) => {
-          if (!mounted) return
-          const list = Array.isArray(data.announcements) ? data.announcements : []
-          setAnnouncements(list)
-          const nextMs = typeof data.nextCheckInMs === "number" && data.nextCheckInMs > 0 ? data.nextCheckInMs : null
-          if (scheduledRefetch) clearTimeout(scheduledRefetch)
-          if (nextMs) {
-            scheduledRefetch = setTimeout(fetchAnnouncements, nextMs)
-          }
-        })
-        .catch(() => { if (mounted) setAnnouncements([]) })
-        .finally(() => { if (mounted) setLoading(false) })
+    const fetchAnnouncements = async () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return
+      try {
+        const res = await fetch("/api/announcements")
+        if (!res.ok) throw new Error(`Announcements request failed (${res.status})`)
+        const data = await res.json()
+        if (!mounted) return
+        const list = Array.isArray(data.announcements) ? data.announcements : []
+        setAnnouncements(list)
+        const nextMs = typeof data.nextCheckInMs === "number" && data.nextCheckInMs > 0 ? data.nextCheckInMs : null
+        if (scheduledRefetch) clearTimeout(scheduledRefetch)
+        if (nextMs) {
+          scheduledRefetch = setTimeout(fetchAnnouncements, nextMs)
+        }
+      } catch (error) {
+        if (!mounted) return
+        if (!isTransientNetworkError(error)) {
+          setAnnouncements([])
+        }
+      } finally {
+        if (mounted) setLoading(false)
+      }
     }
 
     fetchAnnouncements()
-    intervalRef = setInterval(fetchAnnouncements, FALLBACK_POLL_MS)
-    const onFocus = () => fetchAnnouncements()
-    document.addEventListener("visibilitychange", onFocus)
+    intervalRef = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      fetchAnnouncements()
+    }, FALLBACK_POLL_MS)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") fetchAnnouncements()
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
       mounted = false
       if (scheduledRefetch) clearTimeout(scheduledRefetch)
       if (intervalRef) clearInterval(intervalRef)
-      document.removeEventListener("visibilitychange", onFocus)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [])
 
@@ -106,9 +123,9 @@ export function AnnouncementBanner() {
 
   return (
     <div
-      className="sticky top-16 z-40 min-h-12 flex items-center justify-center border-b border-border/40 bg-background/95 py-2"
+      className="sticky top-24 sm:top-[6.5rem] z-20 min-h-12 flex items-center justify-center border-b border-border/40 bg-background/95 py-2"
       role="region"
-      aria-label="ประกาศ"
+      aria-label={tt("ประกาศ", "Announcements")}
     >
       <div className="flex w-full max-w-4xl flex-col gap-2 px-4 sm:px-6">
         {visible.map((a) => {
@@ -123,12 +140,24 @@ export function AnnouncementBanner() {
               <div className="flex-1 min-w-0 max-w-2xl text-center">
                 <p className="font-semibold text-sm">{a.title}</p>
                 <p className="text-sm opacity-95 line-clamp-2">{a.message}</p>
+                {a.imagePublicId && (
+                  <div className="mt-2 overflow-hidden rounded-md border border-white/25 bg-black/10">
+                    <Image
+                      src={resolveImageUrl(a.imagePublicId, { width: 1200 })}
+                      alt={a.title}
+                      width={1200}
+                      height={675}
+                      className="h-auto w-full max-h-40 object-cover"
+                      sizes="(max-width: 1024px) 100vw, 768px"
+                    />
+                  </div>
+                )}
                 {a.linkUrl && (
                   <Link
                     href={a.linkUrl}
                     className="inline-flex items-center gap-1 mt-1 text-sm font-medium underline underline-offset-2 hover:no-underline"
                   >
-                    {a.linkLabel || "ดูรายละเอียด"}
+                    {a.linkLabel || tt("ดูรายละเอียด", "Read details")}
                     <ChevronRight className="h-4 w-4" />
                   </Link>
                 )}
@@ -137,7 +166,7 @@ export function AnnouncementBanner() {
                 variant="ghost"
                 size="icon"
                 className="shrink-0 h-8 w-8 rounded-full hover:bg-white/20 text-current -mr-3"
-                aria-label="ปิดประกาศ"
+                aria-label={tt("ปิดประกาศ", "Dismiss announcement")}
                 onClick={() => {
                   dismissId(a.id)
                   setDismissed((prev) => new Set(prev).add(a.id))

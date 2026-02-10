@@ -5,12 +5,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { pathToHistoryEntries, getLabelForPath } from "@/lib/breadcrumb-labels"
+import { useI18n } from "@/components/language-provider"
+import { getLabelForPath, pathToHistoryEntries } from "@/lib/breadcrumb-labels"
 
 export type HistoryEntry = { path: string; label: string }
 
@@ -22,29 +24,36 @@ type ContextValue = {
 export const NavigationHistoryContext = createContext<ContextValue | null>(null)
 
 export function useNavigationHistory(): ContextValue {
-  const ctx = useContext(NavigationHistoryContext)
-  if (!ctx) throw new Error("useNavigationHistory must be used within NavigationHistoryProvider")
-  return ctx
+  const context = useContext(NavigationHistoryContext)
+  if (!context) {
+    throw new Error("useNavigationHistory must be used within NavigationHistoryProvider")
+  }
+  return context
 }
 
 export function NavigationHistoryProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { locale } = useI18n()
+
   const [history, setHistory] = useState<HistoryEntry[]>(() =>
-    pathname ? pathToHistoryEntries(pathname) : [{ path: "/", label: "หน้าแรก" }]
+    pathname
+      ? pathToHistoryEntries(pathname, locale)
+      : [{ path: "/", label: getLabelForPath("/", locale) }]
   )
+
   const fromBreadcrumbClick = useRef(false)
 
   const navigateToBreadcrumb = useCallback(
     (index: number) => {
-      setHistory((prev) => {
-        const path = prev[index]?.path
+      setHistory((previousHistory) => {
+        const path = previousHistory[index]?.path
         if (path != null) {
           fromBreadcrumbClick.current = true
           queueMicrotask(() => router.push(path))
-          return prev.slice(0, index + 1)
+          return previousHistory.slice(0, index + 1)
         }
-        return prev
+        return previousHistory
       })
     },
     [router]
@@ -59,23 +68,22 @@ export function NavigationHistoryProvider({ children }: { children: ReactNode })
     }
 
     queueMicrotask(() => {
-      setHistory((prev) => {
-        const last = prev[prev.length - 1]
-        if (last?.path === pathname) return prev
+      setHistory((previousHistory) => {
+        const last = previousHistory[previousHistory.length - 1]
+        if (last?.path === pathname) return previousHistory
 
-        const found = prev.findIndex((e) => e.path === pathname)
-        if (found >= 0) return prev.slice(0, found + 1)
+        const foundIndex = previousHistory.findIndex((entry) => entry.path === pathname)
+        if (foundIndex >= 0) return previousHistory.slice(0, foundIndex + 1)
 
-        return [...prev, { path: pathname, label: getLabelForPath(pathname) }]
+        return [...previousHistory, { path: pathname, label: getLabelForPath(pathname, locale) }]
       })
     })
-  }, [pathname])
+  }, [locale, pathname])
 
-  const value: ContextValue = { history, navigateToBreadcrumb }
-
-  return (
-    <NavigationHistoryContext.Provider value={value}>
-      {children}
-    </NavigationHistoryContext.Provider>
+  const value = useMemo<ContextValue>(
+    () => ({ history, navigateToBreadcrumb }),
+    [history, navigateToBreadcrumb]
   )
+
+  return <NavigationHistoryContext.Provider value={value}>{children}</NavigationHistoryContext.Provider>
 }

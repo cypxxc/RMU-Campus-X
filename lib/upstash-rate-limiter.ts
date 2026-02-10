@@ -84,6 +84,7 @@ export async function checkRateLimitScalable(
  */
 export const rateLimitPresets = {
   api: (key: string) => checkRateLimitScalable(key, RATE_LIMITS.API.limit, RATE_LIMITS.API.windowMs),
+  read: (key: string) => checkRateLimitScalable(key, RATE_LIMITS.READ.limit, RATE_LIMITS.READ.windowMs),
   upload: (key: string) => checkRateLimitScalable(key, RATE_LIMITS.UPLOAD.limit, RATE_LIMITS.UPLOAD.windowMs),
   auth: (key: string) => checkRateLimitScalable(key, RATE_LIMITS.AUTH.limit, RATE_LIMITS.AUTH.windowMs),
   search: (key: string) => checkRateLimitScalable(key, RATE_LIMITS.SEARCH.limit, RATE_LIMITS.SEARCH.windowMs),

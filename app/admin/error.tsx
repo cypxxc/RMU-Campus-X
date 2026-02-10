@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ShieldAlert, RefreshCw, Home , AlertTriangle} from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useI18n } from "@/components/language-provider"
 
 export default function AdminError({
   error,
@@ -14,6 +15,7 @@ export default function AdminError({
   reset: () => void
 }) {
   const router = useRouter()
+  const { tt } = useI18n()
   const isDev = process.env.NODE_ENV === 'development'
 
   useEffect(() => {
@@ -38,10 +40,10 @@ export default function AdminError({
         <div className="space-y-3">
           <h2 className="text-2xl font-bold text-foreground flex items-center justify-center gap-2">
             <AlertTriangle className="h-6 w-6 text-amber-500" />
-            เกิดข้อผิดพลาดในหน้าจัดการ
+            {tt("เกิดข้อผิดพลาดในหน้าจัดการ", "An admin page error occurred")}
           </h2>
           <p className="text-muted-foreground">
-            ไม่สามารถโหลดหน้าจัดการนี้ได้ กรุณาลองใหม่อีกครั้ง
+            {tt("ไม่สามารถโหลดหน้าจัดการนี้ได้ กรุณาลองใหม่อีกครั้ง", "Unable to load this admin page. Please try again.")}
           </p>
         </div>
 
@@ -52,7 +54,7 @@ export default function AdminError({
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-amber-700 dark:text-amber-500 mb-2">
-                  รายละเอียดข้อผิดพลาด (โหมดพัฒนา):
+                  {tt("รายละเอียดข้อผิดพลาด (โหมดพัฒนา):", "Error details (development mode):")}
                 </p>
                 <pre className="text-xs font-mono text-foreground/80 overflow-x-auto break-all whitespace-pre-wrap">
                   {error.message}
@@ -60,7 +62,7 @@ export default function AdminError({
                 {error.stack && (
                   <details className="mt-3">
                     <summary className="text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground">
-                      รายละเอียดเทคนิค
+                      {tt("รายละเอียดเทคนิค", "Technical details")}
                     </summary>
                     <pre className="text-[10px] font-mono text-muted-foreground mt-2 p-2 bg-muted/50 rounded overflow-x-auto">
                       {error.stack}
@@ -75,7 +77,7 @@ export default function AdminError({
         {!isDev && error.digest && (
           <Card className="p-3 bg-muted/30 border-muted">
             <p className="text-xs text-muted-foreground">
-              รหัสอ้างอิง: <span className="font-mono font-semibold">{error.digest.slice(0, 16)}</span>
+              {tt("รหัสอ้างอิง:", "Reference ID:")} <span className="font-mono font-semibold">{error.digest.slice(0, 16)}</span>
             </p>
           </Card>
         )}
@@ -89,7 +91,7 @@ export default function AdminError({
             className="gap-2 bg-amber-600 hover:bg-amber-700"
           >
             <RefreshCw className="h-4 w-4" />
-            รีเฟรชหน้านี้
+            {tt("รีเฟรชหน้านี้", "Refresh this page")}
           </Button>
           <Button 
             variant="outline" 
@@ -98,19 +100,19 @@ export default function AdminError({
             className="gap-2"
           >
             <Home className="h-4 w-4" />
-            กลับหน้าภาพรวม
+            {tt("กลับหน้าภาพรวม", "Back to overview")}
           </Button>
         </div>
 
         {/* Admin Tip */}
         <div className="bg-muted/30 border border-muted rounded-lg p-4 text-left">
           <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">💡 เคล็ดลับ:</span> หากปัญหายังคงอยู่ ลองตรวจสอบ:
+            <span className="font-semibold text-foreground">{tt("💡 เคล็ดลับ:", "💡 Tip:")}</span> {tt("หากปัญหายังคงอยู่ ลองตรวจสอบ:", "If the issue persists, check:")}
           </p>
           <ul className="text-xs text-muted-foreground mt-2 ml-6 space-y-1 list-disc">
-            <li>สิทธิ์การเข้าถึงข้อมูลในฐานข้อมูล</li>
-            <li>การเชื่อมต่อระบบ</li>
-            <li>เครื่องมือ Developer (Console) สำหรับข้อความแจ้งเตือนเพิ่มเติม</li>
+            <li>{tt("สิทธิ์การเข้าถึงข้อมูลในฐานข้อมูล", "Database access permissions")}</li>
+            <li>{tt("การเชื่อมต่อระบบ", "System connectivity")}</li>
+            <li>{tt("เครื่องมือ Developer (Console) สำหรับข้อความแจ้งเตือนเพิ่มเติม", "Developer tools (Console) for additional logs")}</li>
           </ul>
         </div>
       </div>

@@ -13,7 +13,6 @@ import { FieldValue, type DocumentSnapshot } from "firebase-admin/firestore"
 import { ApiErrors, getAuthToken, successResponse } from "@/lib/api-response"
 
 const PAGE_SIZE = 50
-const LOAD_MORE_SIZE = 20
 
 function isParticipant(ownerId: string, requesterId: string, userId: string): boolean {
   return ownerId === userId || requesterId === userId
@@ -76,11 +75,15 @@ export async function GET(
       const beforeRef = db.collection("chatMessages").doc(beforeId)
       const beforeSnap = await beforeRef.get()
       if (!beforeSnap.exists) return ApiErrors.badRequest("Invalid beforeId")
+      const beforeData = beforeSnap.data() as { exchangeId?: string } | undefined
+      if (beforeData?.exchangeId !== exchangeId) {
+        return ApiErrors.badRequest("beforeId does not belong to this exchange")
+      }
       const q = col
         .where("exchangeId", "==", exchangeId)
         .orderBy("createdAt", "asc")
         .endBefore(beforeSnap)
-        .limit(LOAD_MORE_SIZE)
+        .limit(limitParam)
       const snapshot = await q.get()
       const messages = snapshot.docs.map(serializeMessage)
       return successResponse({ messages })

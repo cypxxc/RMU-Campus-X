@@ -162,26 +162,34 @@ export function withAuth(
   ) => Promise<Response>,
 ) {
   return async (request: NextRequest): Promise<Response> => {
-    const token = extractBearerToken(request.headers.get("Authorization"));
-    if (!token) {
+    try {
+      const token = extractBearerToken(request.headers.get("Authorization"));
+      if (!token) {
+        return NextResponse.json(
+          { error: "Authentication required", code: "AUTH_REQUIRED" },
+          { status: 401 },
+        );
+      }
+
+      const decoded = await verifyIdToken(token, true);
+      if (!decoded) {
+        return NextResponse.json(
+          { error: "Invalid or expired token", code: "INVALID_TOKEN" },
+          { status: 401 },
+        );
+      }
+
+      return await handler(request, {
+        userId: decoded.uid,
+        email: decoded.email,
+      });
+    } catch (error) {
+      console.error("[API Auth] Unexpected error:", error);
       return NextResponse.json(
-        { error: "Authentication required", code: "AUTH_REQUIRED" },
-        { status: 401 },
+        { error: "Internal server error", code: "INTERNAL_ERROR" },
+        { status: 500 },
       );
     }
-
-    const decoded = await verifyIdToken(token, true);
-    if (!decoded) {
-      return NextResponse.json(
-        { error: "Invalid or expired token", code: "INVALID_TOKEN" },
-        { status: 401 },
-      );
-    }
-
-    return handler(request, {
-      userId: decoded.uid,
-      email: decoded.email,
-    });
   };
 }
 
@@ -195,35 +203,43 @@ export function withAdminAuth(
   ) => Promise<Response>,
 ) {
   return async (request: NextRequest): Promise<Response> => {
-    const token = extractBearerToken(request.headers.get("Authorization"));
-    if (!token) {
+    try {
+      const token = extractBearerToken(request.headers.get("Authorization"));
+      if (!token) {
+        return NextResponse.json(
+          { error: "Authentication required", code: "AUTH_REQUIRED" },
+          { status: 401 },
+        );
+      }
+
+      const decoded = await verifyIdToken(token, true);
+      if (!decoded) {
+        return NextResponse.json(
+          { error: "Invalid or expired token", code: "INVALID_TOKEN" },
+          { status: 401 },
+        );
+      }
+
+      // Check admin status
+      const adminCheck = decoded.email ? await isAdmin(decoded.email) : false;
+      if (!adminCheck) {
+        return NextResponse.json(
+          { error: "Admin access required", code: "ADMIN_REQUIRED" },
+          { status: 403 },
+        );
+      }
+
+      return await handler(request, {
+        userId: decoded.uid,
+        email: decoded.email,
+        isAdmin: true,
+      });
+    } catch (error) {
+      console.error("[API AdminAuth] Unexpected error:", error);
       return NextResponse.json(
-        { error: "Authentication required", code: "AUTH_REQUIRED" },
-        { status: 401 },
+        { error: "Internal server error", code: "INTERNAL_ERROR" },
+        { status: 500 },
       );
     }
-
-    const decoded = await verifyIdToken(token, true);
-    if (!decoded) {
-      return NextResponse.json(
-        { error: "Invalid or expired token", code: "INVALID_TOKEN" },
-        { status: 401 },
-      );
-    }
-
-    // Check admin status
-    const adminCheck = decoded.email ? await isAdmin(decoded.email) : false;
-    if (!adminCheck) {
-      return NextResponse.json(
-        { error: "Admin access required", code: "ADMIN_REQUIRED" },
-        { status: 403 },
-      );
-    }
-
-    return handler(request, {
-      userId: decoded.uid,
-      email: decoded.email,
-      isAdmin: true,
-    });
   };
 }

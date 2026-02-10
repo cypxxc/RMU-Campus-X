@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { authFetchJson } from "@/lib/api-client"
-import { getReports, updateUserStatus, issueWarning, getUserWarnings, deleteUserAndData } from "@/lib/firestore"
+import { getReports, updateUserStatus, issueWarning, getUserWarnings, deleteUserAndData, deleteUserNotificationsByAdmin } from "@/lib/firestore"
 import type { Report, User, UserStatus, UserWarning } from "@/types"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
@@ -29,9 +29,11 @@ import {
   User as UserIcon, 
   Search
 } from "lucide-react"
-import { UserDetailModal } from "@/components/admin/admin-modals"
+import { UserDetailModal, type AdminUserNotificationItem } from "@/components/admin/admin-modals"
 import { ActionDialog, type SuspendDuration } from "@/components/admin/action-dialog"
 import { Input } from "@/components/ui/input"
+import { useI18n } from "@/components/language-provider"
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
 interface UserWithReportsRow extends User {
   reportsReceived: number
@@ -46,6 +48,8 @@ export default function AdminReportedUsersPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserWithReportsRow | null>(null)
   const [userWarnings, setUserWarnings] = useState<UserWarning[]>([])
+  const [userNotifications, setUserNotifications] = useState<AdminUserNotificationItem[]>([])
+  const [deletingNotifications, setDeletingNotifications] = useState(false)
   const [userDetail, setUserDetail] = useState<{
     displayName?: string
     createdAt?: string
@@ -66,6 +70,7 @@ export default function AdminReportedUsersPage() {
   // State for actions moved to ActionDialog component to prevent re-renders
 
   const { user, loading: authLoading, isAdmin: isAdminFromAuth } = useAuth()
+  const { locale, tt } = useI18n()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -77,15 +82,15 @@ export default function AdminReportedUsersPage() {
     }
     if (!isAdminFromAuth) {
       toast({
-        title: "ไม่มีสิทธิ์เข้าถึง",
-        description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+        title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
+        description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
         variant: "destructive",
       })
       router.push("/dashboard")
     } else {
       setIsAdmin(true)
     }
-  }, [authLoading, user, isAdminFromAuth, router, toast])
+  }, [authLoading, user, isAdminFromAuth, router, toast, tt])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -164,14 +169,14 @@ export default function AdminReportedUsersPage() {
     } catch (error) {
       console.error("[AdminReportedUsers] Error loading data:", error)
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถโหลดข้อมูลได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: tt("ไม่สามารถโหลดข้อมูลได้", "Unable to load data"),
         variant: "destructive",
       })
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, tt])
 
   const runCleanupOrphans = useCallback(
     async (_options?: { silent?: boolean }) => {
@@ -185,14 +190,14 @@ export default function AdminReportedUsersPage() {
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
-          throw new Error(err?.error?.message || "ลบข้อมูลไม่สำเร็จ")
+          throw new Error(err?.error?.message || tt("ลบข้อมูลไม่สำเร็จ", "Delete failed"))
         }
         const data = await res.json()
         const deleted = data?.data?.deleted ?? 0
         if (deleted > 0) {
           toast({
-            title: "อัปเดตรายชื่อผู้ใช้แล้ว",
-            description: `ลบข้อมูลบัญชีที่ไม่มีในระบบแล้ว ${deleted} รายการ`,
+            title: tt("อัปเดตรายชื่อผู้ใช้แล้ว", "User list updated"),
+            description: tt(`ลบข้อมูลบัญชีที่ไม่มีในระบบแล้ว ${deleted} รายการ`, `Removed ${deleted} orphan account records`),
           })
         }
         return deleted
@@ -200,7 +205,7 @@ export default function AdminReportedUsersPage() {
         return 0
       }
     },
-    [user, toast]
+    [user, toast, tt]
   )
 
   useEffect(() => {
@@ -210,22 +215,15 @@ export default function AdminReportedUsersPage() {
     })
   }, [isAdmin, runCleanupOrphans, loadData])
 
-  // อัปเดตอัตโนมัติทุก 30 วินาที เฉพาะเมื่อแท็บเปิดอยู่
-  useEffect(() => {
-    if (!isAdmin) return
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
-      loadData()
-    }, 30_000)
-    return () => clearInterval(interval)
-  }, [isAdmin, loadData])
+  useRefreshOnFocus(loadData, { enabled: isAdmin, minIntervalMs: 10_000 })
 
   const handleViewUser = async (userRow: UserWithReportsRow) => {
     setSelectedUser(userRow)
     setUserDetail(null)
     setUserWarnings([])
+    setUserNotifications([])
     try {
-      const [warningsRes, detailRes] = await Promise.all([
+      const [warningsRes, detailRes, notificationsRes] = await Promise.all([
         getUserWarnings(userRow.uid),
         (async () => {
           try {
@@ -241,8 +239,45 @@ export default function AdminReportedUsersPage() {
             return null
           }
         })(),
+        (async () => {
+          try {
+            const res = await authFetchJson<{
+              notifications?: Array<{
+                id?: string
+                title?: string
+                message?: string
+                type?: string
+                isRead?: boolean
+                createdAt?: string | null
+              }>
+            }>(`/api/admin/users/${userRow.uid}/notifications?limit=100`, { method: "GET" })
+            return res?.data?.notifications ?? []
+          } catch {
+            return []
+          }
+        })(),
       ])
       setUserWarnings(warningsRes)
+      setUserNotifications(
+        notificationsRes
+          .filter((n) => typeof n?.id === "string" && (n.id as string).trim().length > 0)
+          .map((n) => {
+            const createdAt =
+              typeof n.createdAt === "string" && n.createdAt
+                ? new Date(n.createdAt)
+                : null
+
+            return {
+              id: String(n.id),
+              title: typeof n.title === "string" ? n.title : "",
+              message: typeof n.message === "string" ? n.message : "",
+              type: typeof n.type === "string" ? n.type : "system",
+              isRead: Boolean(n.isRead),
+              createdAt:
+                createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null,
+            }
+          })
+      )
       if (detailRes?.user || detailRes?.stats) {
         const u = detailRes.user ?? {}
         const toDateStr = (v: unknown): string | undefined => {
@@ -267,6 +302,38 @@ export default function AdminReportedUsersPage() {
     }
   }
 
+  const handleDeleteSelectedNotifications = async (notificationIds: string[]) => {
+    if (!selectedUser || notificationIds.length === 0) return
+
+    const uniqueIds = Array.from(new Set(notificationIds.map((id) => id.trim()).filter(Boolean)))
+    if (uniqueIds.length === 0) return
+
+    try {
+      setDeletingNotifications(true)
+      const result = await deleteUserNotificationsByAdmin(selectedUser.uid, {
+        reason: tt("ลบการแจ้งเตือนที่เลือกโดยผู้ดูแลระบบ", "Delete selected notifications by administrator"),
+        notificationIds: uniqueIds,
+      })
+
+      setUserNotifications((prev) => prev.filter((n) => !uniqueIds.includes(n.id)))
+      toast({
+        title: tt("ลบการแจ้งเตือนสำเร็จ", "Notifications deleted"),
+        description:
+          result.deletedCount > 0
+            ? tt(`ลบแล้ว ${result.deletedCount} รายการ`, `Deleted ${result.deletedCount} records`)
+            : tt("ไม่พบการแจ้งเตือนที่ต้องลบ", "No notifications matched"),
+      })
+    } catch (error: any) {
+      toast({
+        title: tt("ลบการแจ้งเตือนไม่สำเร็จ", "Failed to delete notifications"),
+        description: error?.message || tt("เกิดข้อผิดพลาดในการลบการแจ้งเตือน", "Unexpected error while deleting notifications"),
+        variant: "destructive",
+      })
+    } finally {
+      setDeletingNotifications(false)
+    }
+  }
+
   const handleAction = async (reason: string, suspendDuration?: SuspendDuration) => {
     if (!selectedUser || !user || !actionDialog.type) return
 
@@ -277,13 +344,13 @@ export default function AdminReportedUsersPage() {
         await issueWarning(
           selectedUser.uid,
           selectedUser.email,
-          reason || "พฤติกรรมไม่เหมาะสมในการใช้งานระบบ",
+          reason || tt("พฤติกรรมไม่เหมาะสมในการใช้งานระบบ", "Inappropriate platform behavior"),
           user.uid,
           user.email || "",
           undefined,
           undefined
         )
-        toast({ title: "ออกคำเตือนสำเร็จ" })
+        toast({ title: tt("ออกคำเตือนสำเร็จ", "Warning issued") })
       } else if (type === 'suspend') {
         const d = suspendDuration ?? { value: 7, unit: "day" as const }
         const suspendDays = d.unit === "day" ? d.value : undefined
@@ -294,38 +361,38 @@ export default function AdminReportedUsersPage() {
           'SUSPENDED',
           user.uid,
           user.email || "",
-          reason || "ระงับการใช้งานชั่วคราว",
+          reason || tt("ระงับการใช้งานชั่วคราว", "Temporary suspension"),
           suspendDays,
           suspendMinutes
         )
         const desc =
           d.unit === "day"
-            ? `ระงับ ${d.value} วัน`
+            ? tt(`ระงับ ${d.value} วัน`, `Suspended for ${d.value} day(s)`)
             : d.unit === "hour"
-              ? `ระงับ ${d.value} ชั่วโมง`
-              : `ระงับ ${d.value} นาที`
-        toast({ title: "ระงับผู้ใช้สำเร็จ", description: desc })
+              ? tt(`ระงับ ${d.value} ชั่วโมง`, `Suspended for ${d.value} hour(s)`)
+              : tt(`ระงับ ${d.value} นาที`, `Suspended for ${d.value} minute(s)`)
+        toast({ title: tt("ระงับผู้ใช้สำเร็จ", "User suspended"), description: desc })
       } else if (type === 'ban') {
         await updateUserStatus(
           selectedUser.uid,
           'BANNED',
           user.uid,
           user.email || "",
-          reason || "แบนถาวรเนื่องจากการละเมิดกฎอย่างร้ายแรง"
+          reason || tt("แบนถาวรเนื่องจากการละเมิดกฎอย่างร้ายแรง", "Permanently banned for severe policy violation")
         )
-        toast({ title: "แบนผู้ใช้สำเร็จ" })
+        toast({ title: tt("แบนผู้ใช้สำเร็จ", "User banned") })
       } else if (type === 'activate') {
         await updateUserStatus(
           selectedUser.uid,
           'ACTIVE',
           user.uid,
           user.email || "",
-          reason || "ปลดล็อคบัญชี"
+          reason || tt("ปลดล็อคบัญชี", "Reactivate account")
         )
-        toast({ title: "ปลดล็อคผู้ใช้สำเร็จ" })
+        toast({ title: tt("ปลดล็อคผู้ใช้สำเร็จ", "User reactivated") })
       } else if (type === 'delete') {
         await deleteUserAndData(selectedUser.uid)
-        toast({ title: "ลบผู้ใช้และข้อมูลสำเร็จ" })
+        toast({ title: tt("ลบผู้ใช้และข้อมูลสำเร็จ", "User and data deleted") })
       }
 
       setActionDialog({ open: false, type: null })
@@ -334,7 +401,7 @@ export default function AdminReportedUsersPage() {
     } catch (error: any) {
       console.error("[AdminReportedUsers] Error performing action:", error)
       toast({
-        title: "เกิดข้อผิดพลาด",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
         description: error.message,
         variant: "destructive",
       })
@@ -344,10 +411,10 @@ export default function AdminReportedUsersPage() {
   const getStatusBadge = (userItem: UserWithReportsRow) => {
     const status = userItem.status || 'ACTIVE'
     const configs = {
-      ACTIVE: { label: "ใช้งานปกติ", className: "bg-green-100 text-green-800 border-green-200", icon: CheckCircle2 },
-      WARNING: { label: "คำเตือน", className: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: AlertTriangle },
-      SUSPENDED: { label: "ระงับ", className: "bg-orange-100 text-orange-800 border-orange-200", icon: ShieldAlert },
-      BANNED: { label: "แบน", className: "bg-red-100 text-red-800 border-red-200", icon: Ban },
+      ACTIVE: { label: tt("ใช้งานปกติ", "Active"), className: "bg-green-100 text-green-800 border-green-200", icon: CheckCircle2 },
+      WARNING: { label: tt("คำเตือน", "Warning"), className: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: AlertTriangle },
+      SUSPENDED: { label: tt("ระงับ", "Suspended"), className: "bg-orange-100 text-orange-800 border-orange-200", icon: ShieldAlert },
+      BANNED: { label: tt("แบน", "Banned"), className: "bg-red-100 text-red-800 border-red-200", icon: Ban },
     }
     
     // Check specific conditions
@@ -359,7 +426,7 @@ export default function AdminReportedUsersPage() {
           return (
              <Badge className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1 hover:bg-yellow-100">
                 <CheckCircle2 className="h-3 w-3" />
-                ระงับ (รอปลด)
+                {tt("ระงับ (รอปลด)", "Suspended (pending release)")}
              </Badge>
           )
        }
@@ -368,7 +435,7 @@ export default function AdminReportedUsersPage() {
        return (
           <Badge className={`${configs.SUSPENDED.className} gap-1`}>
              <ShieldAlert className="h-3 w-3" />
-             ถึง {until.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+             {tt("ถึง", "Until")} {until.toLocaleDateString(locale === "th" ? "th-TH" : "en-US", { day: 'numeric', month: 'short' })}
           </Badge>
        )
     }
@@ -407,9 +474,9 @@ export default function AdminReportedUsersPage() {
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <UserIcon className="h-8 w-8 text-primary" />
-                จัดการผู้ใช้
+                {tt("จัดการผู้ใช้", "Manage users")}
               </h1>
-              <p className="text-muted-foreground">รายชื่อผู้ใช้ทั้งหมดในระบบและสถานะการถูกรายงาน</p>
+              <p className="text-muted-foreground">{tt("รายชื่อผู้ใช้ทั้งหมดในระบบและสถานะการถูกรายงาน", "All users and their report status")}</p>
             </div>
           </div>
         </div>
@@ -420,15 +487,15 @@ export default function AdminReportedUsersPage() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <CardTitle className="flex items-center gap-2">
                 <UserIcon className="h-5 w-5 text-primary" />
-                รายชื่อผู้ใช้
+                {tt("รายชื่อผู้ใช้", "Users")}
                 <Badge variant="secondary" className="ml-2 px-3 py-1">
-                  {filteredUsers.length} คน
+                  {tt(`${filteredUsers.length} คน`, `${filteredUsers.length} users`)}
                 </Badge>
               </CardTitle>
               <div className="relative w-full md:w-auto">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="ค้นหาผู้ใช้ด้วยอีเมล, ID, หรือสถานะ..."
+                  placeholder={tt("ค้นหาผู้ใช้ด้วยอีเมล, ID, หรือสถานะ...", "Search by email, ID, or status...")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 bg-background w-full md:w-[300px]"
@@ -440,13 +507,13 @@ export default function AdminReportedUsersPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/40">
-                  <TableHead className="font-semibold">อีเมล</TableHead>
-                  <TableHead className="font-semibold">สถานะ</TableHead>
-                  <TableHead className="text-center font-semibold">ถูกรายงาน (ครั้ง)</TableHead>
-                  <TableHead className="text-center font-semibold">แจ้งรายงาน (ครั้ง)</TableHead>
-                  <TableHead className="text-center font-semibold">คำเตือนสะสม</TableHead>
-                  <TableHead className="font-semibold">รายงานล่าสุดเมื่อ</TableHead>
-                  <TableHead className="text-right font-semibold">จัดการ</TableHead>
+                  <TableHead className="font-semibold">{tt("อีเมล", "Email")}</TableHead>
+                  <TableHead className="font-semibold">{tt("สถานะ", "Status")}</TableHead>
+                  <TableHead className="text-center font-semibold">{tt("ถูกรายงาน (ครั้ง)", "Reported (times)")}</TableHead>
+                  <TableHead className="text-center font-semibold">{tt("แจ้งรายงาน (ครั้ง)", "Reports filed (times)")}</TableHead>
+                  <TableHead className="text-center font-semibold">{tt("คำเตือนสะสม", "Warnings")}</TableHead>
+                  <TableHead className="font-semibold">{tt("รายงานล่าสุดเมื่อ", "Last report")}</TableHead>
+                  <TableHead className="text-right font-semibold">{tt("จัดการ", "Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -458,7 +525,7 @@ export default function AdminReportedUsersPage() {
                           <UserIcon className="h-12 w-12 text-muted-foreground/50" />
                         </div>
                         <h3 className="text-lg font-semibold text-foreground mb-1">
-                          {searchQuery ? "ไม่พบผู้ใช้ที่ค้นหา" : "ไม่พบข้อมูลผู้ใช้"}
+                          {searchQuery ? tt("ไม่พบผู้ใช้ที่ค้นหา", "No matching users") : tt("ไม่พบข้อมูลผู้ใช้", "No users found")}
                         </h3>
                       </div>
                     </TableCell>
@@ -481,7 +548,7 @@ export default function AdminReportedUsersPage() {
                           </div>
                           <div>
                              <div className="text-sm font-medium">{u.email}</div>
-                             {!u.createdAt && <Badge variant="secondary" className="text-[9px] h-4 px-1">ไม่มีในระบบ</Badge>}
+                             {!u.createdAt && <Badge variant="secondary" className="text-[9px] h-4 px-1">{tt("ไม่มีในระบบ", "Not in system")}</Badge>}
                           </div>
                         </div>
                       </TableCell>
@@ -507,7 +574,7 @@ export default function AdminReportedUsersPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {u.lastReportDate 
-                          ? u.lastReportDate.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                          ? u.lastReportDate.toLocaleString(locale === "th" ? "th-TH" : "en-US", { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                           : "-"}
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -516,7 +583,7 @@ export default function AdminReportedUsersPage() {
                           size="sm"
                           className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                           onClick={() => handleViewUser(u)}
-                          title="ดูข้อมูล"
+                          title={tt("ดูข้อมูล", "View details")}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -536,7 +603,7 @@ export default function AdminReportedUsersPage() {
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                 >
-                  ก่อนหน้า
+                  {tt("ก่อนหน้า", "Previous")}
                 </Button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.ceil(filteredUsers.length / itemsPerPage) }, (_, i) => i + 1).slice(
@@ -560,7 +627,7 @@ export default function AdminReportedUsersPage() {
                   onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredUsers.length / itemsPerPage), p + 1))}
                   disabled={currentPage === Math.ceil(filteredUsers.length / itemsPerPage)}
                 >
-                  ถัดไป
+                  {tt("ถัดไป", "Next")}
                 </Button>
               </div>
             )}
@@ -576,6 +643,7 @@ export default function AdminReportedUsersPage() {
             if (!open) {
               setSelectedUser(null)
               setUserDetail(null)
+              setUserNotifications([])
             }
           }}
           email={selectedUser.email}
@@ -594,6 +662,9 @@ export default function AdminReportedUsersPage() {
             issuedByEmail: w.issuedByEmail,
             issuedAt: (w.issuedAt as any)?.toDate?.() || new Date()
           }))}
+          notifications={userNotifications}
+          deletingNotifications={deletingNotifications}
+          onDeleteSelectedNotifications={handleDeleteSelectedNotifications}
           onAction={(type) => {
             const validTypes = ["suspend", "ban", "warn", "activate", "delete"]
             if (validTypes.includes(type)) {
@@ -601,7 +672,7 @@ export default function AdminReportedUsersPage() {
             }
           }}
           getStatusBadge={getStatusBadge}
-          formatDate={(date) => date.toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+          formatDate={(date) => date.toLocaleString(locale === "th" ? "th-TH" : "en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
         />
       )}
 

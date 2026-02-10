@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { deleteItem, updateItem, createAdminLog } from "@/lib/firestore"
@@ -32,23 +32,27 @@ import { ItemCard } from "@/components/item-card"
 import { ItemCardSkeletonGrid } from "@/components/item-card-skeleton"
 import { ItemDetailView } from "@/components/item-detail-view"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { memo } from "react"
+import { useI18n } from "@/components/language-provider"
 import debounce from "lodash/debounce"
+import { cn } from "@/lib/utils"
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
 const MemoizedItemCard = memo(ItemCard)
 
-const statusLabels: Record<string, string> = {
-  available: "พร้อมให้",
-  pending: "รอดำเนินการ",
-  completed: "เสร็จสิ้น",
+const statusLabels: Record<ItemStatus, { th: string; en: string }> = {
+  available: { th: "พร้อมให้", en: "Available" },
+  pending: { th: "รอดำเนินการ", en: "Pending" },
+  completed: { th: "เสร็จสิ้น", en: "Completed" },
 }
 
 const PAGE_SIZE = 20
+type StatusFilter = ItemStatus | "all"
 
 export default function AdminItemsPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
   const [processing, setProcessing] = useState(false)
@@ -56,13 +60,14 @@ export default function AdminItemsPage() {
   // สถิติโพสแบบ real-time จาก API (โพสทั้งหมด, ใหม่ 24 ชม., พร้อมให้รับ, แลกเปลี่ยนแล้ว)
   const [itemStats, setItemStats] = useState<{
     total: number
-    newLast24h: number
+    pending: number
     active: number
     completed: number
   } | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
 
   const { user, loading: authLoading } = useAuth()
+  const { tt } = useI18n()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -73,8 +78,8 @@ export default function AdminItemsPage() {
       const isAdmin = await checkIsAdmin(user.email ?? undefined)
       if (!isAdmin) {
         toast({
-          title: "ไม่มีสิทธิ์เข้าถึง",
-          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+          title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
+          description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
           variant: "destructive",
         })
         router.push("/dashboard")
@@ -85,7 +90,7 @@ export default function AdminItemsPage() {
       console.error("[AdminItems] Error checking admin:", error)
       router.push("/dashboard")
     }
-  }, [router, toast, user])
+  }, [router, toast, user, tt])
 
   const fetchItemStats = useCallback(async () => {
     if (!user) return
@@ -100,7 +105,7 @@ export default function AdminItemsPage() {
         const items = json.data.items
         setItemStats({
           total: items.total ?? 0,
-          newLast24h: items.newLast24h ?? 0,
+          pending: items.pending ?? 0,
           active: items.active ?? 0,
           completed: items.completed ?? 0,
         })
@@ -137,9 +142,66 @@ export default function AdminItemsPage() {
     goToPage,
   } = useItems({
     searchQuery: debouncedSearchQuery,
+    status: statusFilter,
     pageSize: PAGE_SIZE,
+    includeFavoriteStatus: false,
     enabled: isAdmin,
   })
+
+  const filterLabels: Record<StatusFilter, string> = {
+    all: tt("ทุกสถานะ", "All statuses"),
+    available: tt("พร้อมให้", "Available"),
+    pending: tt("รอดำเนินการ", "Pending"),
+    completed: tt("แลกเปลี่ยนแล้ว", "Completed"),
+  }
+  const activeFilterLabel = filterLabels[statusFilter]
+  const getStatusLabel = (status: ItemStatus) => tt(statusLabels[status].th, statusLabels[status].en)
+  const statusCards = [
+    {
+      key: "all" as const,
+      title: tt("โพสทั้งหมด", "Total posts"),
+      value: itemStats ? itemStats.total : (statsLoading ? "..." : "-"),
+      description: tt("คลิกเพื่อดูทุกสถานะ", "Click to view all statuses"),
+      icon: Package,
+      iconBg: "bg-primary/10 dark:bg-primary/20",
+      iconColor: "text-primary",
+    },
+    {
+      key: "available" as const,
+      title: tt("พร้อมให้รับ", "Ready for pickup"),
+      value: itemStats ? itemStats.active : (statsLoading ? "..." : "-"),
+      description: tt("คลิกเพื่อดูเฉพาะโพสพร้อมให้รับ", "Click to view ready posts only"),
+      icon: CheckCircle2,
+      iconBg: "bg-green-100 dark:bg-green-950/50",
+      iconColor: "text-green-600 dark:text-green-400",
+    },
+    {
+      key: "pending" as const,
+      title: tt("รอดำเนินการ", "Pending"),
+      value: itemStats ? itemStats.pending : (statsLoading ? "..." : "-"),
+      description: tt("คลิกเพื่อดูเฉพาะโพสรอดำเนินการ", "Click to view pending posts only"),
+      icon: Clock,
+      iconBg: "bg-amber-100 dark:bg-amber-950/50",
+      iconColor: "text-amber-600 dark:text-amber-400",
+    },
+    {
+      key: "completed" as const,
+      title: tt("แลกเปลี่ยนแล้ว", "Completed"),
+      value: itemStats ? itemStats.completed : (statsLoading ? "..." : "-"),
+      description: tt("คลิกเพื่อดูเฉพาะโพสที่เสร็จสิ้น", "Click to view completed posts only"),
+      icon: CheckCircle2,
+      iconBg: "bg-muted",
+      iconColor: "text-muted-foreground",
+    },
+  ] satisfies Array<{
+    key: StatusFilter
+    title: string
+    value: number | string
+    description: string
+    icon: typeof Package
+    iconBg: string
+    iconColor: string
+  }>
 
   // โหลดสถิติโพสแบบ real-time เมื่อเป็น admin
   useEffect(() => {
@@ -147,16 +209,14 @@ export default function AdminItemsPage() {
     fetchItemStats()
   }, [isAdmin, user, fetchItemStats])
 
-  // อัปเดตอัตโนมัติทุก 30 วินาที (สถิติ) เฉพาะเมื่อแท็บเปิดอยู่ - รายการโพสใช้ refetchInterval จาก useItems
-  useEffect(() => {
-    if (!isAdmin) return
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+  useRefreshOnFocus(
+    useCallback(() => {
+      if (!isAdmin) return
       fetchItemStats()
       refetchItems()
-    }, 30_000)
-    return () => clearInterval(interval)
-  }, [isAdmin, fetchItemStats, refetchItems])
+    }, [isAdmin, fetchItemStats, refetchItems]),
+    { enabled: isAdmin, minIntervalMs: 10_000 }
+  )
 
   const handleDeleteItem = async () => {
     if (!deleteDialog.itemId || !user) return
@@ -175,18 +235,18 @@ export default function AdminItemsPage() {
         targetType: 'item',
         targetId: deleteDialog.itemId,
         targetInfo: itemToDelete?.title || "Unknown Item",
-        description: `ลบโพส: ${itemToDelete?.title || deleteDialog.itemId}`,
+        description: `${tt("ลบโพส", "Delete item")}: ${itemToDelete?.title || deleteDialog.itemId}`,
         status: 'success',
         metadata: { category: itemToDelete?.category }
       } as any)
 
-      toast({ title: "ลบโพสสำเร็จ" })
+      toast({ title: tt("ลบโพสสำเร็จ", "Item deleted") })
       refetchItems()
       fetchItemStats() // อัปเดตสถิติ real-time
       
       setDeleteDialog({ open: false, itemId: null })
     } catch (error: any) {
-      toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
     } finally {
       setProcessing(false)
     }
@@ -208,7 +268,7 @@ export default function AdminItemsPage() {
         targetType: 'item',
         targetId: itemId,
         targetInfo: itemToUpdate?.title || "Unknown Item",
-        description: `เปลี่ยนสถานะเป็น: ${statusLabels[newStatus]}`,
+        description: `${tt("เปลี่ยนสถานะเป็น", "Set status to")}: ${getStatusLabel(newStatus)}`,
         status: 'success',
         metadata: { 
           from: itemToUpdate?.status,
@@ -216,7 +276,7 @@ export default function AdminItemsPage() {
         }
       } as any)
 
-      toast({ title: `เปลี่ยนสถานะเป็น ${statusLabels[newStatus]}` })
+      toast({ title: `${tt("เปลี่ยนสถานะเป็น", "Status updated to")} ${getStatusLabel(newStatus)}` })
       refetchItems()
       if (selectedItem?.id === itemId) {
         setSelectedItem(prev => prev ? { ...prev, status: newStatus } : null)
@@ -224,7 +284,7 @@ export default function AdminItemsPage() {
       fetchItemStats() // อัปเดตสถิติ real-time
       
     } catch (error: any) {
-      toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
     } finally {
       setProcessing(false)
     }
@@ -247,82 +307,72 @@ export default function AdminItemsPage() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Package className="h-8 w-8 text-primary" />
-              จัดการโพส
+              {tt("จัดการโพส", "Manage posts")}
             </h1>
-            <p className="text-muted-foreground">ดูแลและจัดการโพสในระบบ</p>
+            <p className="text-muted-foreground">{tt("ดูแลและจัดการโพสในระบบ", "Review and manage posts in the system")}</p>
           </div>
         </div>
       </div>
 
       {/* สถิติโพสแบบ real-time จากระบบ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card className="border shadow-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-2 bg-primary/10 rounded-lg dark:bg-primary/20">
-              <Package className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold">
-                {itemStats ? itemStats.total : (statsLoading ? "…" : "—")}
-              </div>
-              <p className="text-xs text-muted-foreground">โพสทั้งหมดในระบบ</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-2 bg-blue-100 dark:bg-blue-950/50 rounded-lg">
-              <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-foreground">
-                {itemStats ? itemStats.newLast24h : (statsLoading ? "…" : "—")}
-              </div>
-              <p className="text-xs text-muted-foreground">โพสใหม่ (24 ชม.ล่าสุด)</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-2 bg-green-100 dark:bg-green-950/50 rounded-lg">
-              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-foreground">
-                {itemStats ? itemStats.active : (statsLoading ? "…" : "—")}
-              </div>
-              <p className="text-xs text-muted-foreground">พร้อมให้รับ</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-2 bg-muted rounded-lg">
-              <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-foreground">
-                {itemStats ? itemStats.completed : (statsLoading ? "…" : "—")}
-              </div>
-              <p className="text-xs text-muted-foreground">แลกเปลี่ยนแล้ว</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        {statusCards.map((card) => {
+          const Icon = card.icon
+          const active = statusFilter === card.key
+          return (
+            <Card
+              key={card.key}
+              role="button"
+              tabIndex={0}
+              aria-pressed={active}
+              onClick={() => setStatusFilter(card.key)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  setStatusFilter(card.key)
+                }
+              }}
+              className={cn(
+                "group border shadow-sm cursor-pointer select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/40",
+                active && "border-primary ring-2 ring-primary/20 bg-primary/5"
+              )}
+            >
+              <CardContent className="p-4 flex items-start gap-4">
+                <div className={cn("p-2 rounded-lg shrink-0", card.iconBg)}>
+                  <Icon className={cn("h-5 w-5", card.iconColor)} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-2xl font-bold text-foreground">{card.value}</div>
+                    <ChevronRight className={cn("h-4 w-4 text-primary/80 mt-1 transition-transform", active ? "translate-x-0.5" : "group-hover:translate-x-0.5")} />
+                  </div>
+                  <p className="text-xs font-medium text-foreground/90">{card.title}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {active ? tt("กำลังแสดงโพสสถานะนี้", "Showing this status") : card.description}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       {/* Items Section Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <Package className="h-5 w-5 text-primary" />
-          รายการโพส
+          {tt("รายการโพส", "Posts")}
           <Badge variant="secondary" className="ml-2 px-3 py-1">
-            {totalCount} รายการ
+            {tt(`${totalCount} รายการ`, `${totalCount} records`)}
+          </Badge>
+          <Badge variant={statusFilter === "all" ? "outline" : "default"} className="px-3 py-1">
+            {activeFilterLabel}
           </Badge>
         </h2>
         <div className="relative w-full md:w-auto">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="ค้นหาโพส..."
+            placeholder={tt("ค้นหาโพส...", "Search posts...")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 bg-background w-full md:w-[300px]"
@@ -340,18 +390,33 @@ export default function AdminItemsPage() {
               <Package className="h-7 w-7 text-muted-foreground" />
             </EmptyMedia>
             <EmptyTitle>
-              {searchQuery ? "ไม่พบโพสที่ค้นหา" : "ยังไม่มีโพสในระบบ"}
+              {searchQuery
+                ? tt("ไม่พบโพสที่ค้นหา", "No posts found")
+                : statusFilter === "all"
+                  ? tt("ยังไม่มีโพสในระบบ", "No posts yet")
+                  : `${tt("ไม่พบโพสสถานะ", "No posts with status")} ${activeFilterLabel}`}
             </EmptyTitle>
             <EmptyDescription>
-              {searchQuery ? "ลองเปลี่ยนคำค้นหาใหม่" : "โพสจากผู้ใช้จะแสดงในหน้านี้"}
+              {searchQuery
+                ? tt("ลองเปลี่ยนคำค้นหาใหม่", "Try a different keyword")
+                : statusFilter === "all"
+                  ? tt("โพสจากผู้ใช้จะแสดงในหน้านี้", "User posts will appear here")
+                  : tt("ลองเปลี่ยนไปดูสถานะอื่น หรือกลับไปดูทุกสถานะ", "Try another status or switch back to all")}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            {searchQuery && (
-              <Button variant="outline" onClick={() => setSearchQuery("")}>
-                ล้างคำค้นหา
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {searchQuery && (
+                <Button variant="outline" onClick={() => setSearchQuery("")}>
+                  {tt("ล้างคำค้นหา", "Clear search")}
+                </Button>
+              )}
+              {statusFilter !== "all" && (
+                <Button variant="outline" onClick={() => setStatusFilter("all")}>
+                  {tt("ดูทุกสถานะ", "View all statuses")}
+                </Button>
+              )}
+            </div>
           </EmptyContent>
         </Empty>
       ) : (
@@ -373,7 +438,7 @@ export default function AdminItemsPage() {
       {totalPages > 1 && (
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-4">
           <p className="text-sm text-muted-foreground order-2 sm:order-1">
-            หน้า {currentPage} จาก {totalPages}
+            {tt(`หน้า ${currentPage} จาก ${totalPages}`, `Page ${currentPage} of ${totalPages}`)}
           </p>
           <div className="flex items-center gap-2 order-1 sm:order-2">
             <Button
@@ -387,7 +452,7 @@ export default function AdminItemsPage() {
               className="gap-1 min-w-[100px]"
             >
               <ChevronLeft className="h-4 w-4" />
-              ก่อนหน้า
+              {tt("ก่อนหน้า", "Previous")}
             </Button>
             <span className="text-sm font-medium px-2 sm:hidden">
               {currentPage} / {totalPages}
@@ -402,7 +467,7 @@ export default function AdminItemsPage() {
               disabled={currentPage === totalPages || loading}
               className="gap-1 min-w-[100px]"
             >
-              ถัดไป
+              {tt("ถัดไป", "Next")}
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -412,7 +477,7 @@ export default function AdminItemsPage() {
       {/* Item Detail Dialog — ใช้ layout เดียวกับ dashboard + แถบจัดการ admin */}
       <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
         <DialogContent className="max-w-4xl overflow-hidden border-none shadow-2xl p-0 max-h-[90vh] flex flex-col">
-          <DialogTitle className="sr-only">รายละเอียดโพส</DialogTitle>
+          <DialogTitle className="sr-only">{tt("รายละเอียดโพส", "Post details")}</DialogTitle>
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
             {selectedItem && (
               <ItemDetailView
@@ -445,9 +510,9 @@ export default function AdminItemsPage() {
                 <Trash2 className="h-6 w-6 text-destructive" />
               </div>
               <div className="space-y-1.5 pt-0.5">
-                <AlertDialogTitle className="text-xl">ยืนยันการลบ</AlertDialogTitle>
+                <AlertDialogTitle className="text-xl">{tt("ยืนยันการลบ", "Confirm deletion")}</AlertDialogTitle>
                 <AlertDialogDescription className="text-base text-muted-foreground">
-                  คุณต้องการลบโพสนี้หรือไม่?
+                  {tt("คุณต้องการลบโพสนี้หรือไม่?", "Do you want to delete this post?")}
                 </AlertDialogDescription>
               </div>
             </div>
@@ -455,18 +520,18 @@ export default function AdminItemsPage() {
           <div className="flex gap-3 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/20 px-4 py-3.5">
             <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
-              การกระทำนี้ไม่สามารถยกเลิกได้ โพสจะถูกลบออกจากระบบอย่างถาวร
+              {tt("การกระทำนี้ไม่สามารถยกเลิกได้ โพสจะถูกลบออกจากระบบอย่างถาวร", "This action cannot be undone. The post will be permanently deleted.")}
             </p>
           </div>
           <AlertDialogFooter className="mt-6 gap-3 sm:gap-3">
-            <AlertDialogCancel className="order-2 sm:order-1">ยกเลิก</AlertDialogCancel>
+            <AlertDialogCancel className="order-2 sm:order-1">{tt("ยกเลิก", "Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteItem}
               disabled={processing}
               className="order-1 sm:order-2 bg-destructive text-destructive-foreground hover:bg-destructive/90 focus:ring-destructive"
             >
               {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              ลบโพส
+              {tt("ลบโพส", "Delete post")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

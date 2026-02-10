@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { useAuth } from "@/components/auth-provider"
+import { useI18n } from "@/components/language-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -49,8 +50,18 @@ import {
   Clock,
   Mail,
 } from "lucide-react"
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
 import { STATUS_LABELS } from "@/lib/exchange-state-machine"
+
+const STATUS_LABELS_EN: Record<string, string> = {
+  pending: "Pending owner response",
+  accepted: "In progress",
+  in_progress: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  rejected: "Rejected",
+}
 
 interface ExchangeRow {
   id: string
@@ -108,6 +119,7 @@ export default function AdminExchangesPage() {
   const [lastId, setLastId] = useState<string | null>(null)
 
   const { user, loading: authLoading } = useAuth()
+  const { locale, tt } = useI18n()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -116,7 +128,7 @@ export default function AdminExchangesPage() {
     try {
       const isAdmin = await checkIsAdmin(user.email ?? undefined)
       if (!isAdmin) {
-        toast({ title: "ไม่มีสิทธิ์เข้าถึง", variant: "destructive" })
+        toast({ title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"), variant: "destructive" })
         router.push("/dashboard")
         return
       }
@@ -124,7 +136,7 @@ export default function AdminExchangesPage() {
     } catch {
       router.push("/dashboard")
     }
-  }, [router, toast, user])
+  }, [router, toast, user, tt])
 
   useEffect(() => {
     if (authLoading) return
@@ -150,12 +162,12 @@ export default function AdminExchangesPage() {
           headers: { Authorization: `Bearer ${token}` },
         })
         const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(json?.error?.message || "โหลดไม่สำเร็จ")
+        if (!res.ok) throw new Error(json?.error?.message || tt("โหลดไม่สำเร็จ", "Load failed"))
         const data = json?.data
         const list = (data?.exchanges ?? []).map((e: ExchangeRow) => ({
           ...e,
-          createdAt: e.createdAt ? new Date(e.createdAt).toLocaleString("th-TH") : "—",
-          updatedAt: e.updatedAt ? new Date(e.updatedAt).toLocaleString("th-TH") : "—",
+          createdAt: e.createdAt ? new Date(e.createdAt).toLocaleString(locale === "th" ? "th-TH" : "en-US") : tt("—", "-"),
+          updatedAt: e.updatedAt ? new Date(e.updatedAt).toLocaleString(locale === "th" ? "th-TH" : "en-US") : tt("—", "-"),
         }))
         if (append) {
           setExchanges((prev) => [...prev, ...list])
@@ -166,7 +178,7 @@ export default function AdminExchangesPage() {
         setLastId(data?.lastId ?? null)
       } catch (e) {
         toast({
-          title: "โหลดไม่สำเร็จ",
+          title: tt("โหลดไม่สำเร็จ", "Load failed"),
           description: e instanceof Error ? e.message : undefined,
           variant: "destructive",
         })
@@ -175,7 +187,7 @@ export default function AdminExchangesPage() {
         setLoading(false)
       }
     },
-    [user, statusFilter, lastId, toast]
+    [user, statusFilter, lastId, toast, tt, locale]
   )
 
   useEffect(() => {
@@ -183,15 +195,13 @@ export default function AdminExchangesPage() {
     loadExchanges(false)
   }, [isAdmin, user, statusFilter, loadExchanges])
 
-  useEffect(() => {
-    if (!isAdmin) return
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        loadExchanges(false)
-      }
-    }, 30_000)
-    return () => clearInterval(interval)
-  }, [isAdmin, loadExchanges])
+  useRefreshOnFocus(
+    useCallback(() => {
+      if (!isAdmin) return
+      loadExchanges(false)
+    }, [isAdmin, loadExchanges]),
+    { enabled: isAdmin, minIntervalMs: 10_000 }
+  )
 
   const handleDelete = async () => {
     const id = deleteDialog.id
@@ -204,14 +214,14 @@ export default function AdminExchangesPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error?.message || "ลบไม่สำเร็จ")
+      if (!res.ok) throw new Error(json?.error?.message || tt("ลบไม่สำเร็จ", "Delete failed"))
       setExchanges((prev) => prev.filter((e) => e.id !== id))
       setDeleteDialog({ open: false, id: null })
       if (selectedExchange?.id === id) setSelectedExchange(null)
-      toast({ title: "ลบการแลกเปลี่ยนแล้ว" })
+      toast({ title: tt("ลบการแลกเปลี่ยนแล้ว", "Exchange deleted") })
     } catch (e) {
       toast({
-        title: "ลบไม่สำเร็จ",
+        title: tt("ลบไม่สำเร็จ", "Delete failed"),
         description: e instanceof Error ? e.message : undefined,
         variant: "destructive",
       })
@@ -227,7 +237,13 @@ export default function AdminExchangesPage() {
         : status === "cancelled" || status === "rejected"
           ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
           : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400"
-    return <Badge className={c}>{STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status}</Badge>
+    return (
+      <Badge className={c}>
+        {locale === "th"
+          ? STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status
+          : STATUS_LABELS_EN[status] ?? status}
+      </Badge>
+    )
   }
 
   if (!isAdmin) {
@@ -246,9 +262,9 @@ export default function AdminExchangesPage() {
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <Package className="h-8 w-8 text-primary" />
-                จัดการการแลกเปลี่ยน
+                {tt("จัดการการแลกเปลี่ยน", "Manage exchanges")}
               </h1>
-              <p className="text-muted-foreground">ดูและลบรายการการแลกเปลี่ยนบนเว็บ ไม่ต้องเข้า Firestore</p>
+              <p className="text-muted-foreground">{tt("ดูและลบรายการการแลกเปลี่ยนบนเว็บ ไม่ต้องเข้า Firestore", "View and delete exchange records directly from the web admin.")}</p>
             </div>
           </div>
         </div>
@@ -258,20 +274,20 @@ export default function AdminExchangesPage() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5 text-primary" />
-                รายการการแลกเปลี่ยน
+                {tt("รายการการแลกเปลี่ยน", "Exchange list")}
                 <Badge variant="secondary" className="ml-2 px-3 py-1">
-                  {exchanges.length} รายการ
+                  {tt(`${exchanges.length} รายการ`, `${exchanges.length} records`)}
                 </Badge>
               </CardTitle>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="สถานะ" />
+                  <SelectValue placeholder={tt("สถานะ", "Status")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">ทั้งหมด</SelectItem>
+                  <SelectItem value="all">{tt("ทั้งหมด", "All")}</SelectItem>
                   {Object.entries(STATUS_LABELS).map(([value, label]) => (
                     <SelectItem key={value} value={value}>
-                      {label}
+                      {locale === "th" ? label : STATUS_LABELS_EN[value] ?? value}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -285,31 +301,31 @@ export default function AdminExchangesPage() {
               </div>
             ) : exchanges.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground">
-                ไม่มีรายการการแลกเปลี่ยน
+                {tt("ไม่มีรายการการแลกเปลี่ยน", "No exchanges found")}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>สิ่งของ</TableHead>
-                    <TableHead>เจ้าของ</TableHead>
-                    <TableHead>ผู้ขอ</TableHead>
-                    <TableHead>สถานะ</TableHead>
-                    <TableHead>สร้างเมื่อ</TableHead>
-                    <TableHead className="w-[80px]">จัดการ</TableHead>
+                    <TableHead>{tt("สิ่งของ", "Item")}</TableHead>
+                    <TableHead>{tt("เจ้าของ", "Owner")}</TableHead>
+                    <TableHead>{tt("ผู้ขอ", "Requester")}</TableHead>
+                    <TableHead>{tt("สถานะ", "Status")}</TableHead>
+                    <TableHead>{tt("สร้างเมื่อ", "Created at")}</TableHead>
+                    <TableHead className="w-[80px]">{tt("จัดการ", "Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {exchanges.map((ex) => (
                     <TableRow key={ex.id}>
                       <TableCell className="font-medium max-w-[180px] truncate">
-                        {ex.itemTitle ?? "—"}
+                        {ex.itemTitle ?? tt("—", "-")}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm max-w-[140px] truncate">
-                        {ex.ownerEmail ?? "—"}
+                        {ex.ownerEmail ?? tt("—", "-")}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm max-w-[140px] truncate">
-                        {ex.requesterEmail ?? "—"}
+                        {ex.requesterEmail ?? tt("—", "-")}
                       </TableCell>
                       <TableCell>{getStatusBadge(ex.status)}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{ex.createdAt}</TableCell>
@@ -319,7 +335,7 @@ export default function AdminExchangesPage() {
                           size="sm"
                           className="h-8 w-8 p-0"
                           onClick={() => setSelectedExchange(ex)}
-                          title="ดู/แก้ไขรายละเอียด"
+                          title={tt("ดู/แก้ไขรายละเอียด", "View details")}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -333,7 +349,7 @@ export default function AdminExchangesPage() {
               <div className="p-4 border-t flex justify-center">
                 <Button variant="outline" onClick={() => loadExchanges(true, lastId)} disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  โหลดเพิ่ม
+                  {tt("โหลดเพิ่ม", "Load more")}
                 </Button>
               </div>
             )}
@@ -348,40 +364,40 @@ export default function AdminExchangesPage() {
               <span className="rounded-lg bg-primary/10 p-2">
                 <Package className="h-5 w-5 text-primary" />
               </span>
-              รายละเอียดการแลกเปลี่ยน
+              {tt("รายละเอียดการแลกเปลี่ยน", "Exchange details")}
             </DialogTitle>
           </DialogHeader>
           {selectedExchange && (
             <div className="rounded-xl border border-border/60 bg-gradient-to-b from-muted/30 to-muted/10 px-6 py-5 max-h-[70vh] overflow-y-auto">
               <DetailRow
-                label="สิ่งของ"
-                value={selectedExchange.itemTitle ?? "—"}
+                label={tt("สิ่งของ", "Item")}
+                value={selectedExchange.itemTitle ?? tt("—", "-")}
                 icon={Package}
                 valueClassName="font-medium text-base"
               />
               <DetailRow
-                label="เจ้าของ"
-                value={selectedExchange.ownerEmail ?? "—"}
+                label={tt("เจ้าของ", "Owner")}
+                value={selectedExchange.ownerEmail ?? tt("—", "-")}
                 icon={User}
               />
               <DetailRow
-                label="ผู้ขอ"
-                value={selectedExchange.requesterEmail ?? "—"}
+                label={tt("ผู้ขอ", "Requester")}
+                value={selectedExchange.requesterEmail ?? tt("—", "-")}
                 icon={Mail}
               />
               <DetailRow
-                label="สถานะ"
+                label={tt("สถานะ", "Status")}
                 value={getStatusBadge(selectedExchange.status)}
               />
               <DetailRow
-                label="สร้างเมื่อ"
-                value={selectedExchange.createdAt ?? "—"}
+                label={tt("สร้างเมื่อ", "Created at")}
+                value={selectedExchange.createdAt ?? tt("—", "-")}
                 icon={Clock}
                 valueClassName="text-muted-foreground"
               />
               <DetailRow
-                label="อัปเดตเมื่อ"
-                value={selectedExchange.updatedAt ?? "—"}
+                label={tt("อัปเดตเมื่อ", "Updated at")}
+                value={selectedExchange.updatedAt ?? tt("—", "-")}
                 icon={Clock}
                 valueClassName="text-muted-foreground"
               />
@@ -389,7 +405,7 @@ export default function AdminExchangesPage() {
           )}
           <DialogFooter className="gap-2 sm:gap-3 pt-6 px-0">
             <Button variant="outline" onClick={() => setSelectedExchange(null)}>
-              ปิด
+              {tt("ปิด", "Close")}
             </Button>
             {selectedExchange && (
               <Button
@@ -401,7 +417,7 @@ export default function AdminExchangesPage() {
                 }}
               >
                 <Trash2 className="h-4 w-4 mr-1.5" />
-                ลบ
+                {tt("ลบ", "Delete")}
               </Button>
             )}
           </DialogFooter>
@@ -411,20 +427,20 @@ export default function AdminExchangesPage() {
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => !open && setDeleteDialog({ open: false, id: null })}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>ยืนยันการลบ</AlertDialogTitle>
+            <AlertDialogTitle>{tt("ยืนยันการลบ", "Confirm deletion")}</AlertDialogTitle>
             <AlertDialogDescription>
-              การลบจะรวมแชทที่เกี่ยวข้องด้วย ไม่สามารถกู้คืนได้
+              {tt("การลบจะรวมแชทที่เกี่ยวข้องด้วย ไม่สามารถกู้คืนได้", "Deletion includes related chat data and cannot be undone.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogCancel>{tt("ยกเลิก", "Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={processing}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {processing && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              ลบ
+              {tt("ลบ", "Delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

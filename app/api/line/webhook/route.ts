@@ -14,6 +14,7 @@ import {
 } from "@/lib/line"
 import { getAdminDb } from "@/lib/firebase-admin"
 import { FieldValue, Timestamp } from "firebase-admin/firestore"
+import type { ExchangeStatus } from "@/types"
 
 interface LineEvent {
   type: string
@@ -163,6 +164,14 @@ const UNLINK_COMMANDS = [
   "disconnect",
 ]
 const EXIT_CHAT_COMMANDS = ["exit", "ออก", "หยุดแชท", "จบแชท", "ออกจากแชท"]
+const CONFIRM_COMMANDS = [
+  "confirm",
+  "confirmexchange",
+  "ยืนยัน",
+  "ยืนยันแลกเปลี่ยน",
+  "ยืนยันการแลกเปลี่ยน",
+]
+const CONFIRM_EXCHANGE_PREFIX = "confirm_exchange:"
 
 function normalizeCommandText(value: string): { lower: string; compact: string } {
   const lower = value.normalize("NFC").trim().toLowerCase()
@@ -176,6 +185,37 @@ function isCommand(compact: string, commands: string[]): boolean {
 
 function hasKeyword(lower: string, keywords: string[]): boolean {
   return keywords.some((keyword) => lower.includes(keyword.toLowerCase()))
+}
+
+function extractConfirmExchangeId(text: string): string | null {
+  const trimmed = text.trim()
+  const lower = trimmed.toLowerCase()
+  if (!lower.startsWith(CONFIRM_EXCHANGE_PREFIX)) return null
+  const exchangeId = trimmed.slice(CONFIRM_EXCHANGE_PREFIX.length).trim()
+  return exchangeId.length > 0 ? exchangeId : null
+}
+
+function buildChatQuickReply(_exchangeId: string) {
+  return {
+    items: [
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "ยืนยันแลกเปลี่ยน",
+          text: "ยืนยันการแลกเปลี่ยน",
+        },
+      },
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "ออกจากแชท",
+          text: "ออก",
+        },
+      },
+    ],
+  }
 }
 
 function buildHelpText(): string {
@@ -291,6 +331,148 @@ async function getExchangeOtherParty(exchangeId: string, currentUserId: string):
   const lineUserId = u.lineUserId as string | undefined
   const displayName = (u.displayName as string) || (u.email as string) || "ผู้ใช้"
   return { lineUserId, displayName: displayName.split("@")[0] ?? "ผู้ใช้", itemTitle }
+}
+
+type ConfirmExchangeFromLineResult = {
+  status: ExchangeStatus
+  role: "owner" | "requester"
+  itemTitle: string
+  ownerId: string
+  requesterId: string
+  otherUserId: string
+  otherLineUserId?: string
+  alreadyConfirmed: boolean
+  shouldNotifyOther: boolean
+}
+
+async function confirmExchangeFromLine(
+  exchangeId: string,
+  userId: string
+): Promise<ConfirmExchangeFromLineResult> {
+  const db = getAdminDb()
+  const exchangeRef = db.collection("exchanges").doc(exchangeId)
+
+  const result = await db.runTransaction(async (transaction) => {
+    const exchangeDoc = await transaction.get(exchangeRef)
+    if (!exchangeDoc.exists) {
+      throw new Error("Exchange not found")
+    }
+
+    const exchange = exchangeDoc.data() as {
+      status: ExchangeStatus
+      ownerId: string
+      requesterId: string
+      ownerConfirmed?: boolean
+      requesterConfirmed?: boolean
+      itemId: string
+      itemTitle: string
+    }
+
+    if (!["accepted", "in_progress"].includes(exchange.status)) {
+      throw new Error(`Cannot confirm exchange in status: ${exchange.status}`)
+    }
+
+    const isOwner = exchange.ownerId === userId
+    const isRequester = exchange.requesterId === userId
+    if (!isOwner && !isRequester) {
+      throw new Error("Only the owner or requester can confirm")
+    }
+
+    const role: "owner" | "requester" = isOwner ? "owner" : "requester"
+    const ownerConfirmedBefore = exchange.ownerConfirmed === true
+    const requesterConfirmedBefore = exchange.requesterConfirmed === true
+    const alreadyConfirmed = role === "owner" ? ownerConfirmedBefore : requesterConfirmedBefore
+
+    let ownerConfirmed = ownerConfirmedBefore
+    let requesterConfirmed = requesterConfirmedBefore
+    if (role === "owner") ownerConfirmed = true
+    else requesterConfirmed = true
+
+    const updates: Record<string, unknown> = {
+      updatedAt: FieldValue.serverTimestamp(),
+      ownerConfirmed,
+      requesterConfirmed,
+    }
+
+    let newStatus: ExchangeStatus = exchange.status
+    if (exchange.status === "accepted") {
+      newStatus = "in_progress"
+      updates.status = "in_progress"
+    }
+
+    if (ownerConfirmed && requesterConfirmed) {
+      newStatus = "completed"
+      updates.status = "completed"
+      const itemRef = db.collection("items").doc(exchange.itemId)
+      transaction.update(itemRef, {
+        status: "completed",
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    }
+
+    transaction.update(exchangeRef, updates)
+
+    return {
+      status: newStatus,
+      role,
+      itemTitle: exchange.itemTitle,
+      ownerId: exchange.ownerId,
+      requesterId: exchange.requesterId,
+      otherUserId: role === "owner" ? exchange.requesterId : exchange.ownerId,
+      alreadyConfirmed,
+      shouldNotifyOther: !alreadyConfirmed && newStatus !== "completed",
+    }
+  })
+
+  if (result.status === "completed") {
+    await db.collection("notifications").add({
+      userId: result.ownerId,
+      title: "การแลกเปลี่ยนเสร็จสิ้น",
+      message: `การแลกเปลี่ยน "${result.itemTitle}" สำเร็จเรียบร้อยแล้ว!`,
+      type: "exchange",
+      relatedId: exchangeId,
+      isRead: false,
+      createdAt: FieldValue.serverTimestamp(),
+    })
+    await db.collection("notifications").add({
+      userId: result.requesterId,
+      title: "การแลกเปลี่ยนเสร็จสิ้น",
+      message: `การแลกเปลี่ยน "${result.itemTitle}" สำเร็จเรียบร้อยแล้ว!`,
+      type: "exchange",
+      relatedId: exchangeId,
+      isRead: false,
+      createdAt: FieldValue.serverTimestamp(),
+    })
+  } else if (result.shouldNotifyOther) {
+    const message =
+      result.role === "owner"
+        ? `เจ้าของสิ่งของ "${result.itemTitle}" ยืนยันแล้ว กรุณายืนยันเพื่อให้การแลกเปลี่ยนเสร็จสมบูรณ์`
+        : `ผู้ขอรับ "${result.itemTitle}" ยืนยันแล้ว กรุณายืนยันเพื่อให้การแลกเปลี่ยนเสร็จสมบูรณ์`
+
+    await db.collection("notifications").add({
+      userId: result.otherUserId,
+      title: "อีกฝ่ายยืนยันแล้ว",
+      message,
+      type: "exchange",
+      relatedId: exchangeId,
+      isRead: false,
+      createdAt: FieldValue.serverTimestamp(),
+    })
+  }
+
+  const otherUserDoc = await db.collection("users").doc(result.otherUserId).get()
+  if (!otherUserDoc.exists) return result
+  const otherUserData = otherUserDoc.data() as {
+    lineUserId?: string
+    lineNotifications?: { enabled?: boolean }
+  }
+  const lineEnabled = otherUserData?.lineNotifications?.enabled !== false
+  if (!lineEnabled) return result
+
+  return {
+    ...result,
+    otherLineUserId: otherUserData?.lineUserId,
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -670,6 +852,100 @@ async function handleTextMessage(event: LineEvent) {
     }
 
     const session = await getChatSession(lineUserId)
+    const confirmExchangeId = extractConfirmExchangeId(text)
+    const wantConfirmExchange = confirmExchangeId !== null || isCommand(compact, CONFIRM_COMMANDS)
+    if (wantConfirmExchange) {
+      const userId = await getUserIdByLineUserId(lineUserId)
+      if (!userId) {
+        await sendReplyMessage(event.replyToken, [
+          { type: "text", text: "❌ ไม่พบบัญชีผู้ใช้ที่เชื่อมกับ LINE นี้" },
+        ])
+        return
+      }
+
+      const targetExchangeId = confirmExchangeId || session?.exchangeId
+      if (!targetExchangeId) {
+        await sendReplyMessage(event.replyToken, [
+          {
+            type: "text",
+            text: "⚠️ กรุณาเลือกห้องแชทก่อนยืนยัน\n\nพิมพ์ \"แชท\" แล้วเลือกเลขรายการที่ต้องการ",
+          },
+        ])
+        return
+      }
+
+      try {
+        const confirmResult = await confirmExchangeFromLine(targetExchangeId, userId)
+
+        if (confirmResult.status === "completed") {
+          await clearChatSession(lineUserId)
+          await sendReplyMessage(event.replyToken, [
+            {
+              type: "text",
+              text: `✅ ยืนยันสำเร็จ\n\nการแลกเปลี่ยน "${confirmResult.itemTitle}" เสร็จสมบูรณ์แล้ว`,
+            },
+          ])
+
+          if (confirmResult.otherLineUserId) {
+            await clearChatSession(confirmResult.otherLineUserId)
+            await sendPushMessage(confirmResult.otherLineUserId, [
+              {
+                type: "text",
+                text: `🎉 การแลกเปลี่ยน "${confirmResult.itemTitle}" เสร็จสมบูรณ์แล้ว`,
+              },
+            ])
+          }
+        } else {
+          await setChatSession(lineUserId, { exchangeId: targetExchangeId })
+          await sendReplyMessage(event.replyToken, [
+            {
+              type: "text",
+              text: confirmResult.alreadyConfirmed
+                ? `✅ คุณยืนยันไว้แล้วสำหรับ "${confirmResult.itemTitle}"\n\nระบบกำลังรออีกฝ่ายยืนยัน`
+                : `✅ ยืนยันแล้วสำหรับ "${confirmResult.itemTitle}"\n\nระบบกำลังรออีกฝ่ายยืนยัน`,
+              quickReply: buildChatQuickReply(targetExchangeId),
+            },
+          ])
+
+          if (confirmResult.otherLineUserId && confirmResult.shouldNotifyOther) {
+            await setChatSession(confirmResult.otherLineUserId, { exchangeId: targetExchangeId })
+            await sendPushMessage(confirmResult.otherLineUserId, [
+              {
+                type: "text",
+                text: `🔔 อีกฝ่ายยืนยันแล้วสำหรับ "${confirmResult.itemTitle}"\nกรุณากดยืนยันการแลกเปลี่ยนเพื่อปิดรายการ`,
+                quickReply: buildChatQuickReply(targetExchangeId),
+              },
+            ])
+          }
+        }
+      } catch (confirmError) {
+        const message = confirmError instanceof Error ? confirmError.message : String(confirmError)
+        if (message.includes("Exchange not found")) {
+          await sendReplyMessage(event.replyToken, [
+            { type: "text", text: "❌ ไม่พบรายการแลกเปลี่ยนนี้แล้ว" },
+          ])
+          return
+        }
+        if (message.includes("Only the owner or requester")) {
+          await sendReplyMessage(event.replyToken, [
+            { type: "text", text: "❌ คุณไม่มีสิทธิ์ยืนยันรายการนี้" },
+          ])
+          return
+        }
+        if (message.includes("Cannot confirm exchange in status")) {
+          await sendReplyMessage(event.replyToken, [
+            { type: "text", text: "⚠️ รายการนี้ยังยืนยันไม่ได้ หรือจบรายการแล้ว" },
+          ])
+          return
+        }
+        console.error("[LINE Webhook] Confirm exchange error:", confirmError)
+        await sendReplyMessage(event.replyToken, [
+          { type: "text", text: "❌ ยืนยันการแลกเปลี่ยนไม่สำเร็จ กรุณาลองอีกครั้ง" },
+        ])
+      }
+      return
+    }
+
     // รองรับ "1", "2", "1-1", "10" ฯลฯ — ดึงเลขตัวแรกมาใช้เป็นลำดับ
     const numMatch = text.match(/^(\d+)/)
     if (session?.exchangeIds && session.exchangeIds.length > 0 && numMatch) {
@@ -711,6 +987,7 @@ async function handleTextMessage(event: LineEvent) {
           {
             type: "text",
             text: `💬 กำลังแชทเรื่อง "${other.itemTitle}" กับ ${other.displayName}\n\nพิมพ์ข้อความได้เลย\nพิมพ์ "ออก" เพื่อออกจากแชท${noLineNote}`,
+            quickReply: buildChatQuickReply(exchangeId),
           },
         ])
         return
@@ -762,16 +1039,22 @@ async function handleTextMessage(event: LineEvent) {
 
       // แจ้งอีกฝ่ายผ่าน LINE (ถ้าเชื่อม LINE อยู่เท่านั้น)
       if (other.lineUserId) {
+        await setChatSession(other.lineUserId, { exchangeId: session.exchangeId })
         await sendPushMessage(other.lineUserId, [
           {
             type: "text",
             text: `💬 จาก ${senderNameShort} (รายการ: ${other.itemTitle})\n\n${text}\n\nพิมพ์ข้อความเพื่อตอบกลับได้`,
+            quickReply: buildChatQuickReply(session.exchangeId),
           },
         ])
       }
       await setChatSession(lineUserId, { exchangeId: session.exchangeId })
       const sentNote = other.lineUserId ? "✓ ส่งแล้ว (แสดงในแชทบนเว็บ + แจ้งอีกฝ่ายผ่าน LINE)" : "✓ ส่งแล้ว (แสดงในแชทบนเว็บ — อีกฝ่ายยังไม่เชื่อม LINE จะไม่ได้รับแจ้ง)"
-      await sendReplyMessage(event.replyToken, [{ type: "text", text: sentNote }])
+      await sendReplyMessage(event.replyToken, [{
+        type: "text",
+        text: sentNote,
+        quickReply: buildChatQuickReply(session.exchangeId),
+      }])
       return
     }
 

@@ -1,8 +1,12 @@
 import { Button } from "@/components/ui/button"
 import { Home, Search, Compass } from "lucide-react"
 import Link from "next/link"
+import { getServerLocale } from "@/lib/i18n/server"
 
-export default function NotFound() {
+export default async function NotFound() {
+  const locale = await getServerLocale()
+  const tt = (th: string, en: string) => (locale === "th" ? th : en)
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-16">
       <div className="text-center max-w-lg mx-auto space-y-8">
@@ -16,14 +20,16 @@ export default function NotFound() {
 
         {/* Message - น่าอุ่นใจ เป็นกันเอง */}
         <div className="space-y-3">
-          <p className="text-sm font-medium text-primary">หน้านี้หายไป</p>
+          <p className="text-sm font-medium text-primary">{tt("หน้านี้หายไป", "This page is missing")}</p>
           <h1 className="text-5xl sm:text-6xl font-black text-foreground tracking-tight">404</h1>
           <h2 className="text-xl font-bold text-foreground">
-            ดูเหมือนคุณจะหลงทางเล็กน้อย
+            {tt("ดูเหมือนคุณจะหลงทางเล็กน้อย", "Looks like you took a wrong turn")}
           </h2>
           <p className="text-muted-foreground leading-relaxed max-w-sm mx-auto">
-            ไม่เป็นไรนะ — บางทีลิงก์อาจเก่า หรือหน้านี้อาจย้ายไปแล้ว 
-            ลองเริ่มใหม่จากหน้าหลักหรือค้นหาสิ่งของที่สนใจกันนะ
+            {tt(
+              "ไม่เป็นไรนะ — บางทีลิงก์อาจเก่า หรือหน้านี้อาจย้ายไปแล้ว ลองเริ่มใหม่จากหน้าหลักหรือค้นหาสิ่งของที่สนใจกันนะ",
+              "No worries. The link may be outdated or the page may have moved. Start again from the dashboard and continue browsing."
+            )}
           </p>
         </div>
 
@@ -32,13 +38,13 @@ export default function NotFound() {
           <Button asChild size="lg" className="gap-2">
             <Link href="/dashboard">
               <Home className="h-4 w-4" />
-              กลับไปหน้าหลัก
+              {tt("กลับไปหน้าหลัก", "Back to dashboard")}
             </Link>
           </Button>
           <Button variant="outline" asChild size="lg" className="gap-2">
             <Link href="/dashboard">
               <Search className="h-4 w-4" />
-              ค้นหาสิ่งของที่อยากได้
+              {tt("ค้นหาสิ่งของที่อยากได้", "Find items")}
             </Link>
           </Button>
         </div>

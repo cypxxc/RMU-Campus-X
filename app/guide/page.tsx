@@ -1,112 +1,165 @@
-import { BookOpen, UserPlus, Package, Search, MessageSquare, Handshake, Heart, Flag, FileText } from "lucide-react"
+"use client"
 
-const GUIDE_LAST_UPDATED = "4 กุมภาพันธ์ 2568"
+import {
+  BookOpen,
+  FileText,
+  Flag,
+  Handshake,
+  Heart,
+  MessageSquare,
+  Package,
+  Search,
+  UserPlus,
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 
-const SECTIONS = [
+type LocalizedText = { th: string; en: string }
+
+type GuideSection = {
+  id: string
+  icon: LucideIcon
+  title: LocalizedText
+  steps: LocalizedText[]
+}
+
+const GUIDE_LAST_UPDATED: LocalizedText = {
+  th: "10 กุมภาพันธ์ 2569",
+  en: "February 10, 2026",
+}
+
+const SECTIONS: GuideSection[] = [
   {
     id: "register",
     icon: UserPlus,
-    title: "สมัครสมาชิกและยืนยันอีเมล",
+    title: {
+      th: "สมัครสมาชิกและยืนยันอีเมล",
+      en: "Register and verify email",
+    },
     steps: [
-      "ไปที่หน้าแรก แล้วกดปุ่ม **สมัครสมาชิก**",
-      "กรอกอีเมล @rmu.ac.th (เฉพาะนักศึกษาและบุคลากร RMU เท่านั้น)",
-      "ตั้งรหัสผ่านที่ปลอดภัย และกดสมัคร",
-      "เปิดอีเมลที่ลงทะเบียน แล้วกดลิงก์ยืนยันตัวตนในจดหมายจากระบบ",
-      "หลังยืนยันแล้ว สามารถเข้าสู่ระบบได้ทันที",
+      { th: "กดปุ่มสมัครสมาชิกจากหน้าแรก", en: "Click Register on the landing page." },
+      { th: "ใช้อีเมล @rmu.ac.th และตั้งรหัสผ่าน", en: "Use your @rmu.ac.th email and set a password." },
+      { th: "เปิดอีเมลและกดลิงก์ยืนยันตัวตน", en: "Open your inbox and confirm your email link." },
+      { th: "หลังยืนยันแล้วเข้าสู่ระบบได้ทันที", en: "After verification, you can sign in immediately." },
     ],
   },
   {
     id: "post",
     icon: Package,
-    title: "โพสต์สิ่งของ",
+    title: {
+      th: "โพสต์สิ่งของ",
+      en: "Post an item",
+    },
     steps: [
-      "เข้าสู่ระบบ แล้วกดปุ่ม **โพสต์สิ่งของ** (เครื่องหมาย +) ที่แถบด้านบนหรือในหน้าหลัก",
-      "กรอก **ชื่อสิ่งของ** และ **รายละเอียด** ให้ครบ",
-      "เลือก **หมวดหมู่** (หนังสือ อุปกรณ์อิเล็กทรอนิกส์ เครื่องใช้ ฯลฯ) และ **สถานที่รับของ**",
-      "อัปโหลดรูปภาพ (ได้สูงสุด 5 รูป) เพื่อให้ผู้สนใจเห็นสภาพของจริง",
-      "กด **โพสต์สิ่งของ** ประกาศจะแสดงในหน้าหลักและค้นหาจากหมวดหมู่ได้ทันที",
+      { th: "กดปุ่มโพสต์สิ่งของ (+)", en: "Click Post item (+)." },
+      { th: "กรอกชื่อ รายละเอียด หมวดหมู่ และจุดนัดรับ", en: "Fill in title, description, category, and pickup location." },
+      { th: "อัปโหลดรูปได้สูงสุด 5 รูป", en: "Upload up to 5 images." },
+      { th: "กดโพสต์เพื่อเผยแพร่รายการ", en: "Submit to publish your listing." },
     ],
   },
   {
     id: "search-request",
     icon: Search,
-    title: "ค้นหาและขอรับสิ่งของ",
+    title: {
+      th: "ค้นหาและขอรับสิ่งของ",
+      en: "Browse and request items",
+    },
     steps: [
-      "ที่ **หน้าหลัก** ใช้ช่องค้นหาด้านบน หรือเลือก **ตัวกรอง** (หมวดหมู่ / สถานะ) ทางซ้าย",
-      "คลิกที่การ์ดสิ่งของที่สนใจ เพื่อดูรายละเอียดเต็ม",
-      "กดปุ่ม **ขอรับสิ่งของนี้**",
-      "เจ้าของจะได้รับแจ้งเตือนและสามารถ **ตอบรับ** หรือ **ปฏิเสธ** คำขอได้",
+      { th: "ใช้ช่องค้นหาและตัวกรองในหน้าแดชบอร์ด", en: "Use search and filters on the dashboard." },
+      { th: "เปิดรายละเอียดสิ่งของที่สนใจ", en: "Open the item details you are interested in." },
+      { th: "กดขอรับสิ่งของเพื่อเริ่มการติดต่อ", en: "Click Request item to start the process." },
+      { th: "เจ้าของรายการจะตอบรับหรือปฏิเสธคำขอ", en: "The owner can accept or reject your request." },
     ],
   },
   {
     id: "exchange-chat",
     icon: MessageSquare,
-    title: "การแลกเปลี่ยนและแชท",
+    title: {
+      th: "แชทและติดตามการแลกเปลี่ยน",
+      en: "Chat and track exchange",
+    },
     steps: [
-      "กด **ขอรับสิ่งของ** → ระบบจะเปิด **ห้องแชท** ให้ทันที",
-      "หรือดูรายการในเมนู **การแลกเปลี่ยน** แล้วกดเข้าไปที่รายการนั้นเพื่อเปิดห้องแชท",
-      "ใช้แชทในการนัดวันเวลา",
-      "เมื่อทั้งสองฝ่ายรับของครบแล้ว ให้กด **ยืนยันการแลกเปลี่ยน** ตามลำดับ",
-      "หลังยืนยันครบ การแลกเปลี่ยนจะถือว่า **สำเร็จ** และจะแสดงในประวัติ",
+      { th: "เมื่อมีการขอรับ ระบบจะสร้างห้องแชทอัตโนมัติ", en: "A chat room is created automatically after request." },
+      { th: "คุยรายละเอียดเรื่องเวลาและสถานที่นัดรับ", en: "Discuss schedule and pickup location in chat." },
+      { th: "ติดตามสถานะจากเมนูการแลกเปลี่ยนของฉัน", en: "Track status from My exchanges." },
+      { th: "ยืนยันเมื่อส่งมอบและรับของเรียบร้อย", en: "Confirm after handoff is completed." },
     ],
   },
   {
     id: "meet-confirm",
     icon: Handshake,
-    title: "นัดรับของและยืนยันการแลกเปลี่ยน",
+    title: {
+      th: "นัดรับและยืนยันผล",
+      en: "Meetup and confirmation",
+    },
     steps: [
-      "นัดหมายกับอีกฝ่ายผ่านแชท ให้ชัดเจนเรื่อง **วัน เวลา สถานที่** (แนะนำจุดภายใน RMU ที่ปลอดภัย)",
-      "เมื่อมอบของ/รับของแล้ว ให้เข้าไปที่หน้ารายการแลกเปลี่ยนนั้น",
-      "กด **ยืนยันว่าส่งมอบของแล้ว** (ฝ่ายให้ของ) หรือ **ยืนยันว่าได้รับของแล้ว** (ฝ่ายรับของ)",
-      "เมื่อทั้งสองฝ่ายกดยืนยันครบ การแลกเปลี่ยนจะเสร็จสมบูรณ์",
+      { th: "นัดรับในจุดสาธารณะที่ปลอดภัยภายในมหาวิทยาลัย", en: "Meet at a safe public location on campus." },
+      { th: "ตรวจสอบสิ่งของก่อนส่งมอบ/รับ", en: "Inspect the item before handoff." },
+      { th: "ผู้ให้และผู้รับกดยืนยันคนละฝั่ง", en: "Both owner and requester confirm from their side." },
+      { th: "เมื่อยืนยันครบ สถานะจะเป็นเสร็จสิ้น", en: "Once both confirm, status changes to completed." },
     ],
   },
   {
     id: "favorites",
     icon: Heart,
-    title: "รายการโปรด",
+    title: {
+      th: "รายการโปรด",
+      en: "Favorites",
+    },
     steps: [
-      "ที่การ์ดสิ่งของในหน้าหลักหรือหน้ารายละเอียด กดไอคอน **หัวใจ** เพื่อเก็บเข้า **รายการโปรด**",
-      "ดูรายการที่บันทึกไว้ได้จากเมนู **รายการโปรด**",
-      "สามารถยกเลิกการบันทึกได้โดยกดหัวใจอีกครั้ง",
+      { th: "กดไอคอนหัวใจเพื่อบันทึกรายการที่สนใจ", en: "Click the heart icon to save interesting items." },
+      { th: "ดูรายการทั้งหมดได้จากหน้า Favorites", en: "View all saved items on the Favorites page." },
+      { th: "กดหัวใจอีกครั้งเพื่อนำออกจากรายการโปรด", en: "Click the heart again to remove it from favorites." },
     ],
   },
   {
     id: "report",
     icon: Flag,
-    title: "แจ้งปัญหาการใช้งาน",
+    title: {
+      th: "การรายงานและขอความช่วยเหลือ",
+      en: "Report and support",
+    },
     steps: [
-      "พบสิ่งของหรือผู้ใช้ที่ผิดกฎหรือไม่เหมาะสม: กดปุ่ม **รายงาน** ที่หน้ารายการสิ่งของหรือหน้าโปรไฟล์ของผู้ใช้",
-      "มีคำถามหรือปัญหาเฉพาะ: ใช้เมนู **ช่วยเหลือ** แล้วเลือก **ส่งคำร้อง** เพื่อแจ้งทีมงาน (คำร้องของฉันจะแสดงในเมนูเมื่อมีคำร้องอยู่)",
-      "อ่าน **แนวทางชุมชน** และ **ข้อกำหนดการใช้งาน** ได้จากลิงก์ในเอกสารชุดนี้",
+      { th: "ใช้ปุ่มรายงานเมื่อพบเนื้อหาหรือพฤติกรรมไม่เหมาะสม", en: "Use Report when you find inappropriate content or behavior." },
+      { th: "ใช้เมนูช่วยเหลือเพื่อส่งคำร้องถึงทีมงาน", en: "Use Support menu to submit a ticket to the team." },
+      { th: "ติดตามคำตอบได้จากหน้าคำร้องของฉัน", en: "Track replies from your ticket history." },
     ],
   },
 ]
 
+function pickText(value: LocalizedText, locale: "th" | "en") {
+  return locale === "th" ? value.th : value.en
+}
+
 export default function GuidePage() {
+  const { locale, tt } = useI18n()
+
   return (
     <div className="container mx-auto px-4 py-8 sm:py-10 max-w-3xl">
       <div className="text-center mb-10">
         <div className="inline-flex items-center justify-center p-3 rounded-full bg-primary/10 text-primary mb-4">
           <BookOpen className="h-6 w-6" />
         </div>
-        <h1 className="text-3xl font-bold mb-2">คู่มือการใช้งาน</h1>
+        <h1 className="text-3xl font-bold mb-2">{tt("คู่มือการใช้งาน", "User Guide")}</h1>
         <p className="text-muted-foreground mb-2">
-          RMU-Campus X — แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม
+          {tt(
+            "RMU-Campus X — คู่มือใช้งานแพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษาและบุคลากร",
+            "RMU-Campus X — Usage guide for the campus item exchange platform."
+          )}
         </p>
         <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
           <FileText className="h-3.5 w-3.5" />
-          อัปเดตล่าสุด: {GUIDE_LAST_UPDATED}
+          {tt("อัปเดตล่าสุด:", "Last updated:")} {pickText(GUIDE_LAST_UPDATED, locale)}
         </p>
       </div>
 
-      <nav className="mb-10 rounded-lg border bg-muted/30 p-4" aria-label="สารบัญ">
-        <p className="text-sm font-medium text-muted-foreground mb-3">สารบัญ</p>
+      <nav className="mb-10 rounded-lg border bg-muted/30 p-4" aria-label={tt("สารบัญ", "Table of contents")}>
+        <p className="text-sm font-medium text-muted-foreground mb-3">{tt("สารบัญ", "Table of contents")}</p>
         <ul className="space-y-1.5 text-sm">
-          {SECTIONS.map((s) => (
-            <li key={s.id}>
-              <a href={`#${s.id}`} className="text-primary hover:underline">
-                {s.title}
+          {SECTIONS.map((section) => (
+            <li key={section.id}>
+              <a href={`#${section.id}`} className="text-primary hover:underline">
+                {pickText(section.title, locale)}
               </a>
             </li>
           ))}
@@ -117,29 +170,20 @@ export default function GuidePage() {
         {SECTIONS.map((section) => {
           const Icon = section.icon
           return (
-            <section
-              key={section.id}
-              id={section.id}
-              className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm"
-            >
+            <section key={section.id} id={section.id} className="scroll-mt-24 rounded-xl border bg-card p-6 shadow-sm">
               <h2 className="flex items-center gap-2 text-xl font-bold mb-4">
                 <Icon className="h-5 w-5 text-primary shrink-0" />
-                {section.title}
+                {pickText(section.title, locale)}
               </h2>
               <ol className="space-y-3 list-decimal list-inside text-muted-foreground leading-relaxed">
-                {section.steps.map((step, i) => (
-                  <li key={i} className="[&_strong]:text-foreground">
-                    {step.split(/\*\*(.*?)\*\*/g).map((part, j) =>
-                      j % 2 === 1 ? <strong key={j}>{part}</strong> : part
-                    )}
-                  </li>
+                {section.steps.map((step, index) => (
+                  <li key={index}>{pickText(step, locale)}</li>
                 ))}
               </ol>
             </section>
           )
         })}
       </div>
-
     </div>
   )
 }

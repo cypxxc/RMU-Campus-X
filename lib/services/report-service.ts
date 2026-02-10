@@ -1,4 +1,5 @@
 import type { ReportType } from "@/types"
+import { resolveImageUrl } from "@/lib/cloudinary-url"
 
 
 interface SubmitReportParams {
@@ -17,6 +18,18 @@ export const submitReport = async (
   params: SubmitReportParams
 ): Promise<void> => {
   const { reportType, targetId, targetTitle, reasonCode, reasonLabel, description, images } = params
+  const evidenceUrls = images
+    .map((imageRef) => resolveImageUrl(imageRef) || imageRef)
+    .map((url) => url.trim())
+    .filter((url) => {
+      if (!url) return false
+      try {
+        const parsed = new URL(url)
+        return parsed.protocol === "http:" || parsed.protocol === "https:"
+      } catch {
+        return false
+      }
+    })
 
   // Route all report creation through the server API:
   // - prevents spoofing
@@ -40,7 +53,7 @@ export const submitReport = async (
       // Keep these for context in admin UI/LINE message
       targetId,
       targetTitle: targetTitle || "",
-      evidenceUrls: images,
+      evidenceUrls,
     }),
   })
 

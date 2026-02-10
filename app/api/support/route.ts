@@ -36,6 +36,16 @@ export async function GET(request: NextRequest) {
     if (!decoded) return NextResponse.json({ error: "Invalid or expired token", code: "INVALID_TOKEN" }, { status: 401 })
 
     const db = getAdminDb()
+    const summary = request.nextUrl.searchParams.get("summary")
+    if (summary === "hasTickets") {
+      const hasTicketsSnap = await db
+        .collection("support_tickets")
+        .where("userId", "==", decoded.uid)
+        .limit(1)
+        .get()
+      return NextResponse.json({ success: true, data: { hasTickets: !hasTicketsSnap.empty } })
+    }
+
     const snapshot = await db
       .collection("support_tickets")
       .where("userId", "==", decoded.uid)

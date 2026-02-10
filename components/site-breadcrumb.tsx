@@ -13,21 +13,27 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { useI18n } from "@/components/language-provider"
 import { NavigationHistoryContext } from "@/components/navigation-history-provider"
-import { pathToHistoryEntries } from "@/lib/breadcrumb-labels"
+import { getLabelForPath, pathToHistoryEntries } from "@/lib/breadcrumb-labels"
 
 export function SiteBreadcrumb() {
   const pathname = usePathname()
+  const { locale } = useI18n()
   const ctx = useContext(NavigationHistoryContext)
 
   if (pathname === "/") return null
 
-  const rawHistory = ctx?.history ?? (pathname ? pathToHistoryEntries(pathname) : [])
+  const rawHistory = ctx?.history ?? (pathname ? pathToHistoryEntries(pathname, locale) : [])
+  const localizedHistory = rawHistory.map((entry) => ({
+    path: entry.path,
+    label: getLabelForPath(entry.path, locale),
+  }))
   const navigateToBreadcrumb = ctx?.navigateToBreadcrumb
 
   // รวมรายการที่ label ซ้ำติดกัน (เก็บ path และ originalIndex ตัวล่าสุดของแต่ละชุด)
   type EntryWithIndex = { path: string; label: string; originalIndex: number }
-  const history = rawHistory.reduce<EntryWithIndex[]>((acc, entry, i) => {
+  const history = localizedHistory.reduce<EntryWithIndex[]>((acc, entry, i) => {
     const last = acc[acc.length - 1]
     if (last && last.label === entry.label) {
       acc[acc.length - 1] = { path: entry.path, label: entry.label, originalIndex: i }

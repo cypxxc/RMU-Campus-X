@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Star } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 
 interface ReviewModalProps {
   open: boolean
@@ -28,6 +29,7 @@ export function ReviewModal({
 }: ReviewModalProps) {
   const { user } = useAuth()
   const { toast } = useToast()
+  const { tt } = useI18n()
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState("")
   const [loading, setLoading] = useState(false)
@@ -37,8 +39,8 @@ export function ReviewModal({
 
     if (rating === 0) {
       toast({
-        title: "กรุณาให้คะแนน",
-        description: "โปรดเลือกจำนวนดาวที่ต้องการให้",
+        title: tt("กรุณาให้คะแนน", "Please provide a rating"),
+        description: tt("โปรดเลือกจำนวนดาวที่ต้องการให้", "Please select a star rating."),
         variant: "destructive"
       })
       return
@@ -71,16 +73,16 @@ export function ReviewModal({
       }
 
       toast({
-        title: "บันทึกรีวิวสำเร็จ",
-        description: "ขอบคุณสำหรับการประเมิน"
+        title: tt("บันทึกรีวิวสำเร็จ", "Review submitted"),
+        description: tt("ขอบคุณสำหรับการประเมิน", "Thank you for your feedback.")
       })
       onOpenChange(false)
       onSuccess?.()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error submitting review:", error)
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error.message || "ไม่สามารถบันทึกรีวิวได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถบันทึกรีวิวได้", "Unable to submit review"),
         variant: "destructive"
       })
     } finally {
@@ -92,14 +94,14 @@ export function ReviewModal({
     <UnifiedModal
       open={open}
       onOpenChange={onOpenChange}
-      title="ให้คะแนนการแลกเปลี่ยน"
-      description={`คุณมีความคิดเห็นอย่างไรกับการแลกเปลี่ยน "${itemTitle}"?`}
+      title={tt("ให้คะแนนการแลกเปลี่ยน", "Rate this exchange")}
+      description={tt(`คุณมีความคิดเห็นอย่างไรกับการแลกเปลี่ยน "${itemTitle}"?`, `How was your exchange for "${itemTitle}"?`)}
       icon={<Star className="h-5 w-5" />}
       footer={
         <UnifiedModalActions
           onCancel={() => onOpenChange(false)}
           onSubmit={handleSubmit}
-          submitText="ส่งรีวิว"
+          submitText={tt("ส่งรีวิว", "Submit review")}
           loading={loading}
           submitDisabled={loading}
         />
@@ -107,7 +109,7 @@ export function ReviewModal({
     >
       <div className="space-y-6 py-2">
         <div className="flex flex-col items-center justify-center space-y-2">
-          <Label className="text-base text-muted-foreground">คะแนนความพึงพอใจ</Label>
+          <Label className="text-base text-muted-foreground">{tt("คะแนนความพึงพอใจ", "Satisfaction rating")}</Label>
           <StarRating 
             rating={rating} 
             onChange={setRating} 
@@ -117,10 +119,10 @@ export function ReviewModal({
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="comment">ความคิดเห็นเพิ่มเติม (ไม่บังคับ)</Label>
+          <Label htmlFor="comment">{tt("ความคิดเห็นเพิ่มเติม (ไม่บังคับ)", "Additional comments (optional)")}</Label>
           <Textarea
             id="comment"
-            placeholder="เล่าประสบการณ์ของคุณ..."
+            placeholder={tt("เล่าประสบการณ์ของคุณ...", "Share your experience...")}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={3}

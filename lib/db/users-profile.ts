@@ -4,6 +4,7 @@ import type { User } from "@/types"
 import { authFetchJson } from "@/lib/api-client"
 
 const isClient = typeof window !== "undefined"
+const isOffline = () => typeof navigator !== "undefined" && navigator.onLine === false
 
 // ============ User Profile Management ============
 
@@ -50,6 +51,7 @@ export const acceptTerms = async (userId: string) => {
 export const getUserProfile = async (userId: string): Promise<User | null> => {
   if (isClient) {
     try {
+      if (isOffline()) return null
       const { getAuth } = await import("firebase/auth")
       const auth = getAuth()
       const me = auth.currentUser?.uid
@@ -81,6 +83,7 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 export const getUserPublicProfile = async (userId: string) => {
   if (isClient) {
     try {
+      if (isOffline()) return null
       const res = await fetch(`/api/users/${userId}`)
       const j = await res.json().catch(() => ({}))
       const u = j.user

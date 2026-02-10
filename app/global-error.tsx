@@ -1,8 +1,21 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, RefreshCw } from "lucide-react"
+
+type Locale = "th" | "en"
+
+function getClientLocale(): Locale {
+  if (typeof document === "undefined") return "th"
+  const cookieLocale = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("rmu_locale="))
+    ?.split("=")[1]
+    ?.toLowerCase()
+  return cookieLocale === "en" ? "en" : "th"
+}
 
 export default function GlobalError({
   error,
@@ -16,8 +29,14 @@ export default function GlobalError({
     console.error("[GlobalError]", error?.message, error?.digest, error)
   }, [error])
 
+  const locale = useMemo(() => getClientLocale(), [])
+  const tt = useMemo(
+    () => (th: string, en: string) => (locale === "th" ? th : en),
+    [locale]
+  )
+
   return (
-    <html lang="th">
+    <html lang={locale}>
       <body>
         <div className="min-h-screen flex items-center justify-center bg-background px-4">
           <div className="text-center max-w-md mx-auto space-y-6">
@@ -29,10 +48,13 @@ export default function GlobalError({
             {/* Error Message */}
             <div className="space-y-2">
               <h1 className="text-2xl font-bold text-foreground">
-                เกิดข้อผิดพลาด
+                {tt("เกิดข้อผิดพลาด", "Something went wrong")}
               </h1>
               <p className="text-muted-foreground">
-                ขออภัย เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง
+                {tt(
+                  "ขออภัย เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง",
+                  "An unexpected error occurred. Please try again."
+                )}
               </p>
               {/* แสดง error digest สำหรับ support (ไม่แสดง stack) */}
               {error.digest && (
@@ -46,7 +68,7 @@ export default function GlobalError({
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button onClick={reset} className="gap-2">
                 <RefreshCw className="h-4 w-4" />
-                ลองใหม่อีกครั้ง
+                {tt("ลองใหม่อีกครั้ง", "Try again")}
               </Button>
             </div>
           </div>

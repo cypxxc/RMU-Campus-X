@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { getAdminLogs, type AdminLog, type AdminActionType } from "@/lib/firestore"
 import { useAuth } from "@/components/auth-provider"
+import { useI18n } from "@/components/language-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,27 +34,28 @@ import {
 } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
-const ACTION_TYPE_LABELS: Record<AdminActionType, { label: string; color: string; icon: any }> = {
-  user_warning: { label: "ออกคำเตือน", color: "bg-amber-100 text-amber-800", icon: AlertTriangle },
-  user_suspend: { label: "ระงับผู้ใช้", color: "bg-orange-100 text-orange-800", icon: ShieldAlert },
-  user_ban: { label: "แบนผู้ใช้", color: "bg-red-100 text-red-800", icon: Ban },
-  user_activate: { label: "ปลดล็อคผู้ใช้", color: "bg-green-100 text-green-800", icon: CheckCircle2 },
-  report_status_change: { label: "เปลี่ยนสถานะรายงาน", color: "bg-blue-100 text-blue-800", icon: ClipboardList },
-  report_resolve: { label: "แก้ไขรายงาน", color: "bg-green-100 text-green-800", icon: CheckCircle2 },
-  item_delete: { label: "ลบโพส", color: "bg-red-100 text-red-800", icon: Package },
-  item_status_change: { label: "เปลี่ยนสถานะโพส", color: "bg-blue-100 text-blue-800", icon: Package },
-  ticket_reply: { label: "ตอบกลับคำร้อง", color: "bg-purple-100 text-purple-800", icon: MessageSquare },
-  ticket_status_change: { label: "เปลี่ยนสถานะคำร้อง", color: "bg-blue-100 text-blue-800", icon: MessageSquare },
-  other: { label: "อื่นๆ", color: "bg-gray-100 text-gray-800", icon: FileWarning },
+const ACTION_TYPE_LABELS: Record<AdminActionType, { label: { th: string; en: string }; color: string; icon: any }> = {
+  user_warning: { label: { th: "ออกคำเตือน", en: "Issue warning" }, color: "bg-amber-100 text-amber-800", icon: AlertTriangle },
+  user_suspend: { label: { th: "ระงับผู้ใช้", en: "Suspend user" }, color: "bg-orange-100 text-orange-800", icon: ShieldAlert },
+  user_ban: { label: { th: "แบนผู้ใช้", en: "Ban user" }, color: "bg-red-100 text-red-800", icon: Ban },
+  user_activate: { label: { th: "ปลดล็อคผู้ใช้", en: "Reactivate user" }, color: "bg-green-100 text-green-800", icon: CheckCircle2 },
+  report_status_change: { label: { th: "เปลี่ยนสถานะรายงาน", en: "Update report status" }, color: "bg-blue-100 text-blue-800", icon: ClipboardList },
+  report_resolve: { label: { th: "แก้ไขรายงาน", en: "Resolve report" }, color: "bg-green-100 text-green-800", icon: CheckCircle2 },
+  item_delete: { label: { th: "ลบโพส", en: "Delete item" }, color: "bg-red-100 text-red-800", icon: Package },
+  item_status_change: { label: { th: "เปลี่ยนสถานะโพส", en: "Update item status" }, color: "bg-blue-100 text-blue-800", icon: Package },
+  ticket_reply: { label: { th: "ตอบกลับคำร้อง", en: "Reply ticket" }, color: "bg-purple-100 text-purple-800", icon: MessageSquare },
+  ticket_status_change: { label: { th: "เปลี่ยนสถานะคำร้อง", en: "Update ticket status" }, color: "bg-blue-100 text-blue-800", icon: MessageSquare },
+  other: { label: { th: "อื่นๆ", en: "Other" }, color: "bg-gray-100 text-gray-800", icon: FileWarning },
 }
 
-const TARGET_TYPE_LABELS: Record<string, string> = {
-  user: "ผู้ใช้",
-  item: "โพส",
-  report: "รายงาน",
-  ticket: "คำร้อง",
-  exchange: "การแลกเปลี่ยน",
+const TARGET_TYPE_LABELS: Record<string, { th: string; en: string }> = {
+  user: { th: "ผู้ใช้", en: "User" },
+  item: { th: "โพส", en: "Item" },
+  report: { th: "รายงาน", en: "Report" },
+  ticket: { th: "คำร้อง", en: "Ticket" },
+  exchange: { th: "การแลกเปลี่ยน", en: "Exchange" },
 }
 
 export default function AdminLogsPage() {
@@ -67,6 +69,7 @@ export default function AdminLogsPage() {
   const itemsPerPage = 10
 
   const { user, loading: authLoading } = useAuth()
+  const { locale, tt } = useI18n()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -88,14 +91,14 @@ export default function AdminLogsPage() {
     } catch (error) {
       console.error("[AdminLogs] Error loading logs:", error)
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถโหลดข้อมูล logs ได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: tt("ไม่สามารถโหลดข้อมูล logs ได้", "Unable to load admin logs"),
         variant: "destructive",
       })
     } finally {
       setLoading(false)
     }
-  }, [filterAction, filterTarget, toast])
+  }, [filterAction, filterTarget, toast, tt])
 
   const checkAdmin = useCallback(async () => {
     if (!user) return
@@ -104,8 +107,8 @@ export default function AdminLogsPage() {
       const isAdmin = await checkIsAdmin(user.email ?? undefined)
       if (!isAdmin) {
         toast({
-          title: "ไม่มีสิทธิ์เข้าถึง",
-          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+          title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
+          description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
           variant: "destructive",
         })
         router.push("/dashboard")
@@ -118,7 +121,7 @@ export default function AdminLogsPage() {
       console.error("[AdminLogs] Error checking admin:", error)
       router.push("/dashboard")
     }
-  }, [loadLogs, router, toast, user])
+  }, [loadLogs, router, toast, user, tt])
 
   useEffect(() => {
     if (authLoading) return
@@ -136,15 +139,7 @@ export default function AdminLogsPage() {
     }
   }, [isAdmin, loadLogs])
 
-  // อัปเดตอัตโนมัติทุก 30 วินาที เฉพาะเมื่อแท็บเปิดอยู่
-  useEffect(() => {
-    if (!isAdmin) return
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
-      loadLogs()
-    }, 30_000)
-    return () => clearInterval(interval)
-  }, [isAdmin, loadLogs])
+  useRefreshOnFocus(loadLogs, { enabled: isAdmin, minIntervalMs: 10_000 })
 
   if (loading || !isAdmin) {
     return (
@@ -182,9 +177,9 @@ export default function AdminLogsPage() {
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <ClipboardList className="h-8 w-8 text-primary" />
-                บันทึกกิจกรรม Admin
+                {tt("บันทึกกิจกรรม Admin", "Admin activity logs")}
               </h1>
-              <p className="text-muted-foreground">ประวัติการดำเนินการของผู้ดูแลระบบ</p>
+              <p className="text-muted-foreground">{tt("ประวัติการดำเนินการของผู้ดูแลระบบ", "History of administrator actions")}</p>
             </div>
           </div>
         </div>
@@ -195,15 +190,15 @@ export default function AdminLogsPage() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <CardTitle className="flex items-center gap-2 text-base">
                 <ClipboardList className="h-5 w-5 text-primary" />
-                รายการกิจกรรม
+                {tt("รายการกิจกรรม", "Activity list")}
                 <Badge variant="secondary" className="ml-2 px-3 py-1">
-                  {filteredLogs.length} รายการ
+                  {tt(`${filteredLogs.length} รายการ`, `${filteredLogs.length} records`)}
                 </Badge>
               </CardTitle>
               <div className="relative w-full md:w-auto">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="ค้นหาประวัติการทำงาน..."
+                  placeholder={tt("ค้นหาประวัติการทำงาน...", "Search activity logs...")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 bg-background w-full md:w-[300px] h-9"
@@ -218,10 +213,10 @@ export default function AdminLogsPage() {
                   <ClipboardList className="h-12 w-12 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-1">
-                  {searchQuery ? "ไม่พบกิจกรรมที่ค้นหา" : "ยังไม่มีบันทึกกิจกรรม"}
+                  {searchQuery ? tt("ไม่พบกิจกรรมที่ค้นหา", "No matching activity") : tt("ยังไม่มีบันทึกกิจกรรม", "No activity logs yet")}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {searchQuery ? "ลองเปลี่ยนคำค้นหาใหม่" : "เมื่อผู้ดูแลดำเนินการใดๆ จะแสดงที่นี่"}
+                  {searchQuery ? tt("ลองเปลี่ยนคำค้นหาใหม่", "Try a different keyword.") : tt("เมื่อผู้ดูแลดำเนินการใดๆ จะแสดงที่นี่", "Admin actions will appear here.")}
                 </p>
               </div>
             ) : (
@@ -229,11 +224,11 @@ export default function AdminLogsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted hover:bg-muted">
-                      <TableHead className="font-semibold">การกระทำ</TableHead>
-                      <TableHead className="font-semibold">เป้าหมาย</TableHead>
-                      <TableHead className="font-semibold">รายละเอียด</TableHead>
-                      <TableHead className="font-semibold">ผู้ดำเนินการ</TableHead>
-                      <TableHead className="font-semibold">เวลา</TableHead>
+                      <TableHead className="font-semibold">{tt("การกระทำ", "Action")}</TableHead>
+                      <TableHead className="font-semibold">{tt("เป้าหมาย", "Target")}</TableHead>
+                      <TableHead className="font-semibold">{tt("รายละเอียด", "Details")}</TableHead>
+                      <TableHead className="font-semibold">{tt("ผู้ดำเนินการ", "Operator")}</TableHead>
+                      <TableHead className="font-semibold">{tt("เวลา", "Time")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -251,13 +246,15 @@ export default function AdminLogsPage() {
                           <TableCell>
                             <Badge className={`${actionConfig.color} gap-1.5 shadow-sm`}>
                               <ActionIcon className="h-3 w-3" />
-                              {actionConfig.label}
+                              {locale === "th" ? actionConfig.label.th : actionConfig.label.en}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             <div className="space-y-0.5">
                               <Badge variant="outline" className="text-[10px] font-normal">
-                                {TARGET_TYPE_LABELS[log.targetType] || log.targetType}
+                                {(locale === "th"
+                                  ? TARGET_TYPE_LABELS[log.targetType]?.th
+                                  : TARGET_TYPE_LABELS[log.targetType]?.en) || log.targetType}
                               </Badge>
                               <p className="font-medium text-sm truncate max-w-[200px]">
                                 {log.targetInfo || log.targetId}
@@ -280,7 +277,7 @@ export default function AdminLogsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {((log.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { 
+                            {((log.createdAt as any)?.toDate?.() || new Date()).toLocaleString(locale === "th" ? "th-TH" : "en-US", { 
                               year: 'numeric', 
                               month: 'short', 
                               day: 'numeric', 
@@ -305,7 +302,7 @@ export default function AdminLogsPage() {
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                 >
-                  ก่อนหน้า
+                  {tt("ก่อนหน้า", "Previous")}
                 </Button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.ceil(filteredLogs.length / itemsPerPage) }, (_, i) => i + 1).slice(
@@ -329,7 +326,7 @@ export default function AdminLogsPage() {
                   onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredLogs.length / itemsPerPage), p + 1))}
                   disabled={currentPage === Math.ceil(filteredLogs.length / itemsPerPage)}
                 >
-                  ถัดไป
+                  {tt("ถัดไป", "Next")}
                 </Button>
               </div>
             )}

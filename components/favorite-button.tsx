@@ -8,6 +8,7 @@ import { checkIsFavorite, toggleFavorite } from "@/lib/db/favorites"
 import { useToast } from "@/hooks/use-toast"
 import type { Item } from "@/types"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/components/language-provider"
 
 interface FavoriteButtonProps {
   item: Item
@@ -18,26 +19,49 @@ interface FavoriteButtonProps {
 export function FavoriteButton({ item, variant = "icon", className }: FavoriteButtonProps) {
   const { user } = useAuth()
   const { toast } = useToast()
-  const [isFavorite, setIsFavorite] = useState(false)
+  const { tt } = useI18n()
+  const [isFavorite, setIsFavorite] = useState(Boolean(item.isFavorite))
   const [toggling, setToggling] = useState(false)
 
   const isOwnItem = user && item?.postedBy && String(item.postedBy) === user.uid
-  if (isOwnItem) return null
 
   useEffect(() => {
-    if (user && item) {
-      checkIsFavorite(user.uid, item.id).then(setIsFavorite)
+    if (typeof item.isFavorite === "boolean") {
+      setIsFavorite(item.isFavorite)
+      return
     }
-  }, [user, item])
+
+    if (!user?.uid || !item?.id || isOwnItem) {
+      setIsFavorite(false)
+      return
+    }
+
+    let active = true
+    checkIsFavorite(user.uid, item.id).then((fav) => {
+      if (!active) return
+      setIsFavorite(fav)
+    })
+    return () => {
+      active = false
+    }
+  }, [user?.uid, item?.id, item.isFavorite, isOwnItem])
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
+    if (isOwnItem) {
+      toast({
+        title: "Your item",
+        description: "You cannot add your own item to favorites.",
+      })
+      return
+    }
+
     if (!user) {
       toast({
-        title: "กรุณาเข้าสู่ระบบ",
-        description: "คุณต้องเข้าสู่ระบบเพื่อบันทึกรายการโปรด",
+        title: tt("กรุณาเข้าสู่ระบบ", "Please sign in"),
+        description: tt("คุณต้องเข้าสู่ระบบเพื่อบันทึกรายการโปรด", "You need to sign in to save favorites."),
         variant: "destructive"
       })
       return
@@ -45,19 +69,19 @@ export function FavoriteButton({ item, variant = "icon", className }: FavoriteBu
 
     setToggling(true)
     try {
-      const newState = await toggleFavorite(user.uid, item)
+      const newState = await toggleFavorite(user.uid, item, isFavorite)
       setIsFavorite(newState)
       
       if (newState) {
-        toast({ title: "บันทึกรายการแล้ว", description: "รายการนี้ถูกเพิ่มในรายการโปรดของคุณ" })
+        toast({ title: tt("บันทึกรายการแล้ว", "Saved"), description: tt("รายการนี้ถูกเพิ่มในรายการโปรดของคุณ", "Item added to your favorites.") })
       } else {
-        toast({ title: "ลบรายการแล้ว", description: "รายการนี้ถูกลบออกจากรายการโปรดของคุณ" })
+        toast({ title: tt("ลบรายการแล้ว", "Removed"), description: tt("รายการนี้ถูกลบออกจากรายการโปรดของคุณ", "Item removed from your favorites.") })
       }
     } catch (error) {
       console.error("Error toggling favorite:", error)
       toast({ 
-        title: "เกิดข้อผิดพลาด", 
-        description: "ไม่สามารถบันทึกรายการได้", 
+        title: tt("เกิดข้อผิดพลาด", "Error"), 
+        description: tt("ไม่สามารถบันทึกรายการได้", "Unable to update favorite"), 
         variant: "destructive" 
       })
     } finally {
@@ -79,7 +103,7 @@ export function FavoriteButton({ item, variant = "icon", className }: FavoriteBu
         disabled={toggling}
       >
         <Heart className={cn("h-5 w-5", isFavorite ? "fill-current" : "")} aria-hidden="true" />
-        {isFavorite ? "บันทึกแล้ว" : "บันทึกรายการ"}
+        {isFavorite ? tt("บันทึกแล้ว", "Saved") : tt("บันทึกรายการ", "Save")}
       </Button>
     )
   }
@@ -95,7 +119,7 @@ export function FavoriteButton({ item, variant = "icon", className }: FavoriteBu
       )}
       onClick={handleToggle}
       disabled={toggling}
-      aria-label={isFavorite ? "ลบออกจากรายการโปรด" : "เพิ่มในรายการโปรด"}
+      aria-label={isFavorite ? tt("ลบออกจากรายการโปรด", "Remove from favorites") : tt("เพิ่มในรายการโปรด", "Add to favorites")}
     >
       <Heart className={cn("h-4 w-4", isFavorite ? "fill-current" : "")} aria-hidden="true" />
     </Button>

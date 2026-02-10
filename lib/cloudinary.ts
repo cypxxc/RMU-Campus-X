@@ -41,6 +41,12 @@ export const UPLOAD_PRESETS = {
       { width: 800, crop: 'limit', quality: 'auto' } // Chat images shouldn't be too small but optimized
     ],
   },
+  announcement: {
+    folder: 'rmu-exchange/announcements',
+    transformation: [
+      { width: 1600, height: 900, crop: 'limit', quality: 'auto:good' }
+    ],
+  },
 } as const
 
 export type UploadPreset = keyof typeof UPLOAD_PRESETS

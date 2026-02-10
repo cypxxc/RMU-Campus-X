@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Loader2, X, ImagePlus, AlertTriangle } from "lucide-react"
-import { REPORT_REASONS, REPORT_TYPE_LABELS } from "@/lib/constants"
+import { REPORT_REASONS } from "@/lib/constants"
+import { resolveImageUrl } from "@/lib/cloudinary-url"
+import { useI18n } from "@/components/language-provider"
 
 type ReportType = "item_report" | "exchange_report" | "user_report"
 
@@ -33,6 +35,7 @@ interface ReportModalProps {
 export function ReportModal({ open, onOpenChange, reportType, targetId, targetTitle }: ReportModalProps) {
   const { user } = useAuth()
   const { toast } = useToast()
+  const { tt } = useI18n()
   const [reasonCode, setReasonCode] = useState("")
   const [description, setDescription] = useState("")
   const [loading, setLoading] = useState(false)
@@ -50,7 +53,22 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
     folder: "item" 
   })
 
-  const reasons = REPORT_REASONS[reportType] || []
+  const reasonLabelMap: Record<string, string> = {
+    item_fake_info: tt("ข้อมูลสิ่งของไม่ถูกต้องหรือเท็จ", "False or inaccurate item information"),
+    item_inappropriate: tt("เนื้อหาไม่เหมาะสม", "Inappropriate content"),
+    item_spam: tt("สแปมโพส", "Spam post"),
+    item_illegal: tt("สิ่งของผิดกฎหมาย", "Illegal item"),
+    exchange_no_show: tt("ไม่มาตามนัด", "No-show"),
+    exchange_wrong_item: tt("สิ่งของไม่ตรงตามที่ตกลง", "Wrong item compared to agreement"),
+    exchange_unsafe: tt("พฤติกรรมไม่เหมาะสม", "Unsafe or inappropriate behavior"),
+    user_inappropriate: tt("พฤติกรรมไม่เหมาะสม", "Inappropriate behavior"),
+    user_spam: tt("สแปมข้อความ", "Spam messages"),
+    other: tt("อื่นๆ (โปรดระบุ)", "Other (please specify)"),
+  }
+  const reasons = (REPORT_REASONS[reportType] || []).map((r) => ({
+    ...r,
+    label: reasonLabelMap[r.code] || r.label,
+  }))
   const selectedReason = reasons.find((r) => r.code === reasonCode)
   const isOtherReason = reasonCode === "other"
   const isFormValid = reasonCode && (!isOtherReason || description.trim())
@@ -78,19 +96,19 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
       })
 
       toast({
-        title: "ส่งรายงานสำเร็จ",
-        description: "ขอบคุณสำหรับการรายงาน ทีมงานจะตรวจสอบโดยเร็วที่สุด",
+        title: tt("ส่งรายงานสำเร็จ", "Report submitted"),
+        description: tt("ขอบคุณสำหรับการรายงาน ทีมงานจะตรวจสอบโดยเร็วที่สุด", "Thanks for your report. Our team will review it soon."),
       })
 
       setReasonCode("")
       setDescription("")
       clearImages()
       onOpenChange(false)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[Report] Error creating report:", error)
       toast({
-        title: "เกิดข้อผิดพลาด",
-        description: error.message || "ไม่สามารถส่งรายงานได้",
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: error instanceof Error ? error.message : tt("ไม่สามารถส่งรายงานได้", "Unable to submit report"),
         variant: "destructive",
       })
     } finally {
@@ -108,13 +126,19 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
       open={open}
       onOpenChange={onOpenChange}
       size="sm"
-      title={REPORT_TYPE_LABELS[reportType] || "รายงาน"}
-      description="ข้อมูลของคุณจะถูกเก็บเป็นความลับ"
+      title={
+        reportType === "item_report"
+          ? tt("รายงานสิ่งของ", "Item report")
+          : reportType === "exchange_report"
+            ? tt("รายงานการแลกเปลี่ยน", "Exchange report")
+            : tt("รายงานผู้ใช้", "User report")
+      }
+      description={tt("ข้อมูลของคุณจะถูกเก็บเป็นความลับ", "Your report will be handled confidentially.")}
       icon={<AlertTriangle className="h-5 w-5" />}
       footer={
         <UnifiedModalActions
           onCancel={() => onOpenChange(false)}
-          submitText="ส่งรายงาน"
+          submitText={tt("ส่งรายงาน", "Submit report")}
           submitDisabled={!isFormValid || loading}
           loading={loading}
           submitButton={
@@ -127,28 +151,28 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  กำลังส่ง...
+                  {tt("กำลังส่ง...", "Submitting...")}
                 </>
               ) : (
-                "ส่งรายงาน"
+                tt("ส่งรายงาน", "Submit report")
               )}
             </Button>
           }
         />
       }
-    >
-      <div className="space-y-5">
-        {/* เหตุผล - ใช้ Select แทน radio ลดความรก */}
-        <div className="space-y-1.5">
-          <Label className="text-sm font-medium">
-            เหตุผลในการรายงาน <span className="text-destructive">*</span>
-          </Label>
-          <Select value={reasonCode} onValueChange={setReasonCode}>
-            <SelectTrigger className="w-full h-10">
-              <SelectValue placeholder="เลือกเหตุผลที่ตรงกับปัญหาที่พบ" />
-            </SelectTrigger>
-            <SelectContent>
-              {reasons.map((reason) => (
+      >
+        <div className="space-y-5">
+          {/* เหตุผล - ใช้ Select แทน radio ลดความรก */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">
+              {tt("เหตุผลในการรายงาน", "Reason")} <span className="text-destructive">*</span>
+            </Label>
+            <Select value={reasonCode} onValueChange={setReasonCode}>
+              <SelectTrigger className="w-full h-10">
+                <SelectValue placeholder={tt("เลือกเหตุผลที่ตรงกับปัญหาที่พบ", "Select a reason that matches the issue")} />
+              </SelectTrigger>
+              <SelectContent>
+                {reasons.map((reason) => (
                 <SelectItem key={reason.code} value={reason.code}>
                   {reason.label}
                 </SelectItem>
@@ -157,36 +181,47 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
           </Select>
         </div>
 
-        {/* รายละเอียดเพิ่มเติม */}
-        <div className="space-y-1.5">
-          <Label htmlFor="description" className="text-sm font-medium text-muted-foreground">
-            รายละเอียดเพิ่มเติม {isOtherReason && <span className="text-destructive">*</span>}
-          </Label>
-          <Textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value.slice(0, 500))}
-            placeholder={isOtherReason ? "อธิบายปัญหาที่พบ..." : "ไม่บังคับ"}
-            className="min-h-[72px] resize-none text-sm"
-            maxLength={500}
-          />
-          <p className="text-xs text-muted-foreground text-right tabular-nums">{description.length}/500</p>
-        </div>
-
-        {/* รูปหลักฐาน - รูปแบบเดียวกับตอนโพส */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">
-            รูปภาพ <span className="text-muted-foreground font-normal">({images.length}/5)</span>
-          </Label>
-          <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">ข้อกำหนดรูปภาพ:</span> สูงสุด 5 รูป • รูปแบบ JPEG, PNG เท่านั้น • ขนาดไม่เกิน <strong>10 MB</strong> ต่อรูป
+          {/* รายละเอียดเพิ่มเติม */}
+          <div className="space-y-1.5">
+            <Label htmlFor="description" className="text-sm font-medium text-muted-foreground">
+              {tt("รายละเอียดเพิ่มเติม", "Additional details")} {isOtherReason && <span className="text-destructive">*</span>}
+            </Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value.slice(0, 500))}
+              placeholder={isOtherReason ? tt("อธิบายปัญหาที่พบ...", "Describe the issue...") : tt("ไม่บังคับ", "Optional")}
+              className="min-h-[72px] resize-none text-sm"
+              maxLength={500}
+            />
+            <p className="text-xs text-muted-foreground text-right tabular-nums">
+              {tt(`${description.length}/500`, `${description.length}/500`)}
+            </p>
           </div>
+
+          {/* รูปหลักฐาน - รูปแบบเดียวกับตอนโพส */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">
+              {tt("รูปภาพ", "Images")} <span className="text-muted-foreground font-normal">({images.length}/5)</span>
+            </Label>
+            <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">{tt("ข้อกำหนดรูปภาพ:", "Image requirements:")}</span>{" "}
+              {tt("สูงสุด 5 รูป", "Up to 5 images")} • {tt("รูปแบบ JPEG, PNG เท่านั้น", "JPEG, PNG only")} • {tt("ขนาดไม่เกิน ", "Max size ")}
+              <strong>10 MB</strong>
+              {tt(" ต่อรูป", " per image")}
+            </div>
 
           {images.length > 0 && (
             <div className="grid grid-cols-3 gap-2">
               {images.map((img, index) => (
                 <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-muted border border-border group">
-                  <Image src={img} alt={`รูปหลักฐานที่ ${index + 1}`} fill className="object-cover" unoptimized />
+                  <Image
+                    src={resolveImageUrl(img)}
+                    alt={tt(`รูปหลักฐานที่ ${index + 1}`, `Evidence image ${index + 1}`)}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
                   <Button
                     type="button"
                     variant="destructive"
@@ -194,7 +229,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
                     className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => removeImage(index)}
                     disabled={loading}
-                    aria-label={`ลบรูปภาพที่ ${index + 1}`}
+                    aria-label={tt(`ลบรูปภาพที่ ${index + 1}`, `Remove image ${index + 1}`)}
                   >
                     <X className="h-3 w-3" />
                   </Button>
@@ -206,7 +241,7 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
                   className="aspect-square border-2 border-dashed border-border rounded-lg cursor-pointer bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all flex flex-col items-center justify-center gap-1"
                 >
                   <ImagePlus className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-[10px] text-muted-foreground">เพิ่มรูป</span>
+                  <span className="text-[10px] text-muted-foreground">{tt("เพิ่มรูป", "Add image")}</span>
                   <Input
                     id="report-modal-image"
                     type="file"
@@ -230,9 +265,11 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
                 <ImagePlus className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
               <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                คลิกเพื่ออัปโหลดรูปภาพ
+                {tt("คลิกเพื่ออัปโหลดรูปภาพ", "Click to upload images")}
               </span>
-              <span className="text-xs text-muted-foreground mt-0.5">สูงสุด 5 รูป, ไม่เกิน 10 MB ต่อรูป (JPEG, PNG เท่านั้น)</span>
+              <span className="text-xs text-muted-foreground mt-0.5">
+                {tt("สูงสุด 5 รูป, ไม่เกิน 10 MB ต่อรูป (JPEG, PNG เท่านั้น)", "Up to 5 images, max 10 MB each (JPEG, PNG only)")}
+              </span>
               <Input
                 id="report-modal-image-empty"
                 type="file"

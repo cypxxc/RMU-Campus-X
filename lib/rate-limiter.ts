@@ -69,6 +69,9 @@ export function checkRateLimit(
 export const RATE_LIMITS = {
   // General API endpoints: 100 requests per minute
   API: { limit: 100, windowMs: 60 * 1000 },
+
+  // Read-only API endpoints: higher than write but still bounded
+  READ: { limit: 300, windowMs: 60 * 1000 },
   
   // Upload endpoint: 10 requests per minute (to prevent abuse)
   UPLOAD: { limit: 10, windowMs: 60 * 1000 },

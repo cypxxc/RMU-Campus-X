@@ -53,6 +53,7 @@ function AlertDialogContent({
       <AlertDialogOverlay />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
+        data-lenis-prevent
         className={cn(
           'bg-background fixed top-[50%] left-[50%] z-50 flex h-auto max-h-[90vh] w-[95vw] translate-x-[-50%] translate-y-[-50%] flex-col rounded-2xl border shadow-2xl p-6',
           // Tablet: Centered & Large

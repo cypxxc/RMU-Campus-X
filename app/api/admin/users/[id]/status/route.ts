@@ -1,52 +1,56 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/firebase-admin"
 import { updateUserStatus } from "@/lib/services/admin/user-actions"
+import { updateUserStatusSchema } from "@/lib/schemas"
+import { verifyAdminAccess } from "@/lib/admin-api"
 
 // POST /api/admin/users/[id]/status
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { authorized, user, error } = await verifyAdminAccess(req)
+  if (!authorized) return error!
+
   try {
-    const resolvedParams = await params
-    const userId = resolvedParams.id
-    
-    // 1. Verify Admin Token
-    const authHeader = req.headers.get("Authorization")
-    const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null
-    
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const { id: userId } = await params
+    if (!userId) {
+      return NextResponse.json({ error: "Missing user id" }, { status: 400 })
     }
 
-    const decodedToken = await verifyIdToken(token)
-    if (!decodedToken) { // Add isAdmin check if you have custom claims
-        return NextResponse.json({ error: "Invalid Token" }, { status: 403 })
+    if (!user?.uid || !user?.email) {
+      return NextResponse.json({ error: "Admin identity missing" }, { status: 403 })
     }
 
-    // 2. Get Request Body
-    const body = await req.json()
-    const { status, reason, suspendDays, suspendMinutes } = body
-
-    if (!status || !['ACTIVE', 'SUSPENDED', 'BANNED'].includes(status)) {
-        return NextResponse.json({ error: "Invalid status" }, { status: 400 })
+    const body = await req.json().catch(() => null)
+    const parsed = updateUserStatusSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: parsed.error.errors.map((issue) => ({
+            field: issue.path.join(".") || "root",
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      )
     }
 
-    // 3. Call Service
+    const { status, reason, suspendDays, suspendMinutes } = parsed.data
+
     const result = await updateUserStatus({
-        adminId: decodedToken.uid,
-        adminEmail: decodedToken.email || "unknown",
-        userId,
-        status,
-        reason,
-        suspendDays,
-        suspendMinutes
+      adminId: user.uid,
+      adminEmail: user.email,
+      userId,
+      status,
+      reason,
+      suspendDays,
+      suspendMinutes,
     })
 
     return NextResponse.json(result)
-
-  } catch (error: any) {
+  } catch (error) {
     console.error("[API] Update Status Error:", error)
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }

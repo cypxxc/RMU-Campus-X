@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import type { DocumentSnapshot } from "firebase/firestore"
-import { checkIsAdmin, getDocById } from "@/lib/services/client-firestore"
+import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { replyToTicket, updateTicketStatus, getUserProfile, getSupportTickets } from "@/lib/firestore"
 import type { SupportTicket, User, SupportTicketStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
@@ -30,15 +29,34 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2, MessageSquare, Send, Pencil, CheckCircle2, Clock, Inbox, Search, Check, UserCircle } from "lucide-react"
 import Image from "next/image"
 import { resolveImageUrl } from "@/lib/cloudinary-url"
+import { useI18n } from "@/components/language-provider"
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
-const ticketStatusLabels: Record<string, string> = {
-  new: "ใหม่",
-  in_progress: "กำลังดำเนินการ",
-  resolved: "แก้ไขแล้ว",
-  closed: "ปิด",
+const ticketStatusLabels: Record<string, { th: string; en: string }> = {
+  new: { th: "ใหม่", en: "New" },
+  in_progress: { th: "กำลังดำเนินการ", en: "In progress" },
+  resolved: { th: "ดำเนินการแล้ว", en: "Resolved" },
+  closed: { th: "ปิด", en: "Closed" },
 }
 
-const getStatusBadge = (status: string) => {
+function toSafeDate(value: unknown): Date {
+  if (value && typeof (value as { toDate?: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate()
+  }
+  if (value instanceof Date) return value
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  if (value && typeof value === "object") {
+    const obj = value as { seconds?: number; _seconds?: number }
+    const seconds = typeof obj.seconds === "number" ? obj.seconds : obj._seconds
+    if (typeof seconds === "number") return new Date(seconds * 1000)
+  }
+  return new Date()
+}
+
+const getStatusBadge = (status: string, tt: (th: string, en: string) => string) => {
   const configs: Record<string, { className: string; icon: any }> = {
     new: { className: "bg-blue-100 text-blue-800 border-blue-200", icon: Inbox },
     in_progress: { className: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Clock },
@@ -52,7 +70,7 @@ const getStatusBadge = (status: string) => {
   if (!config) {
     return (
       <Badge className="bg-muted text-muted-foreground gap-1">
-        {ticketStatusLabels[status] || status}
+        {ticketStatusLabels[status] ? tt(ticketStatusLabels[status].th, ticketStatusLabels[status].en) : status}
       </Badge>
     )
   }
@@ -60,14 +78,14 @@ const getStatusBadge = (status: string) => {
   return (
     <Badge className={`${config.className} gap-1 shadow-sm`}>
       <Icon className="h-3 w-3" />
-      {ticketStatusLabels[status] || status}
+      {ticketStatusLabels[status] ? tt(ticketStatusLabels[status].th, ticketStatusLabels[status].en) : status}
     </Badge>
   )
 }
 
 interface PaginationState {
   data: SupportTicket[]
-  lastDoc: DocumentSnapshot | null
+  lastDoc: string | null
   hasMore: boolean
   totalCount: number
   loading: boolean
@@ -97,6 +115,7 @@ export default function AdminSupportPage() {
   }, [historyState])
 
   const { user, loading: authLoading } = useAuth()
+  const { locale, tt } = useI18n()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -107,8 +126,8 @@ export default function AdminSupportPage() {
       const isAdmin = await checkIsAdmin(user.email ?? undefined)
       if (!isAdmin) {
         toast({
-          title: "ไม่มีสิทธิ์เข้าถึง",
-          description: "คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ",
+          title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
+          description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
           variant: "destructive",
         })
         router.push("/dashboard")
@@ -120,7 +139,7 @@ export default function AdminSupportPage() {
       console.error("[AdminSupport] Error checking admin:", error)
       router.push("/dashboard")
     }
-  }, [router, toast, user])
+  }, [router, toast, user, tt])
 
   useEffect(() => {
     if (authLoading) return
@@ -161,9 +180,9 @@ export default function AdminSupportPage() {
     } catch (error) {
       console.error(`[AdminSupport] Error loading ${tab} tickets:`, error)
       setState(prev => ({ ...prev, loading: false }))
-      toast({ title: "โหลดข้อมูลล้มเหลว", variant: "destructive" })
+      toast({ title: tt("โหลดข้อมูลล้มเหลว", "Failed to load data"), variant: "destructive" })
     }
-  }, [toast])
+  }, [toast, tt])
 
   useEffect(() => {
     if (!isAdmin || isDataLoaded) return
@@ -179,16 +198,10 @@ export default function AdminSupportPage() {
     try {
       await replyToTicket(selectedTicket.id, ticketReply.trim(), user.uid, user.email || "")
       setTicketReply("")
-
-      const ticketData = await getDocById("support_tickets", selectedTicket.id)
-      if (ticketData) {
-        const newData = { id: selectedTicket.id, ...ticketData } as SupportTicket
-        setSelectedTicket(newData)
-      }
       refreshAll()
-      toast({ title: "ตอบกลับสำเร็จ" })
+      toast({ title: tt("ตอบกลับสำเร็จ", "Reply sent") })
     } catch (error: any) {
-      toast({ title: "เกิดข้อผิดพลาด", description: error.message, variant: "destructive" })
+      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), description: error.message, variant: "destructive" })
     } finally {
       setProcessing(false)
     }
@@ -199,15 +212,7 @@ export default function AdminSupportPage() {
     loadTickets("history", true)
   }, [loadTickets])
 
-  // อัปเดตอัตโนมัติทุก 30 วินาที เฉพาะเมื่อแท็บเปิดอยู่
-  useEffect(() => {
-    if (!isAdmin) return
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
-      refreshAll()
-    }, 30_000)
-    return () => clearInterval(interval)
-  }, [isAdmin, refreshAll])
+  useRefreshOnFocus(refreshAll, { enabled: isAdmin, minIntervalMs: 10_000 })
 
   // Filter logic for search (client-side filtering of loaded data as requested in plan, or server side? Plan said Server pagination.)
   // We can't easily Mix Server Pagination + Client Search without refetching. 
@@ -243,9 +248,9 @@ export default function AdminSupportPage() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <MessageSquare className="h-8 w-8 text-primary" />
-              คำร้องขอความช่วยเหลือ
+              {tt("คำร้องขอความช่วยเหลือ", "Support tickets")}
             </h1>
-            <p className="text-muted-foreground">จัดการคำร้องและตอบกลับผู้ใช้</p>
+            <p className="text-muted-foreground">{tt("จัดการคำร้องและตอบกลับผู้ใช้", "Manage tickets and reply to users")}</p>
           </div>
         </div>
       </div>
@@ -260,7 +265,7 @@ export default function AdminSupportPage() {
              <div>
                {/* Approximate totals based on what we fetched / know */}
                <div className="text-2xl font-bold">{pendingState.totalCount + historyState.totalCount}</div>
-               <p className="text-xs text-muted-foreground">ทั้งหมด</p>
+               <p className="text-xs text-muted-foreground">{tt("ทั้งหมด", "Total")}</p>
              </div>
           </CardContent>
         </Card>
@@ -275,7 +280,7 @@ export default function AdminSupportPage() {
                    {/* Approximate or need specific count queries. For now using what we have loaded or known total from query */}
                    {pendingState.data.filter(t => t.status === 'new').length}
                </div>
-               <p className="text-xs text-muted-foreground">ใหม่ (โหลดแล้ว)</p>
+               <p className="text-xs text-muted-foreground">{tt("ใหม่ (โหลดแล้ว)", "New (loaded)")}</p>
              </div>
           </CardContent>
         </Card>
@@ -288,7 +293,7 @@ export default function AdminSupportPage() {
                <div className="text-2xl font-bold text-foreground">
                    {pendingState.data.filter(t => t.status === 'in_progress').length}
                </div>
-               <p className="text-xs text-muted-foreground">กำลังดำเนินการ</p>
+               <p className="text-xs text-muted-foreground">{tt("กำลังดำเนินการ", "In progress")}</p>
              </div>
           </CardContent>
         </Card>
@@ -301,7 +306,7 @@ export default function AdminSupportPage() {
                <div className="text-2xl font-bold text-foreground">
                    {historyState.totalCount}
                </div>
-               <p className="text-xs text-muted-foreground">เสร็จสิ้น</p>
+               <p className="text-xs text-muted-foreground">{tt("เสร็จสิ้น", "Resolved")}</p>
              </div>
           </CardContent>
         </Card>
@@ -313,12 +318,12 @@ export default function AdminSupportPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
-              รายการคำร้อง
+              {tt("รายการคำร้อง", "Ticket list")}
             </CardTitle>
             <div className="relative w-full md:w-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="ค้นหาคำร้อง..."
+                placeholder={tt("ค้นหาคำร้อง...", "Search tickets...")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 bg-background w-full md:w-[300px]"
@@ -331,11 +336,11 @@ export default function AdminSupportPage() {
             <div className="px-6 py-3 border-b bg-muted/30">
               <TabsList className="bg-muted/50 p-1">
                 <TabsTrigger value="pending" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                   รอดำเนินการ 
+                   {tt("รอดำเนินการ", "Pending")}
                    <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-muted-foreground/10 text-foreground">{pendingState.totalCount}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="history" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                   ประวัติ
+                   {tt("ประวัติ", "History")}
                    <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-muted-foreground/10 text-foreground">{historyState.totalCount}</Badge>
                 </TabsTrigger>
               </TabsList>
@@ -356,7 +361,7 @@ export default function AdminSupportPage() {
                       setTicketUser(null)
                     }
                  }} 
-                 emptyMessage="ไม่มีคำร้องรอดำเนินการ"
+                 emptyMessage={tt("ไม่มีคำร้องรอดำเนินการ", "No pending tickets")}
                />
             </TabsContent>
             
@@ -375,7 +380,7 @@ export default function AdminSupportPage() {
                       setTicketUser(null)
                     }
                  }} 
-                 emptyMessage="ไม่มีประวัติคำร้อง"
+                 emptyMessage={tt("ไม่มีประวัติคำร้อง", "No ticket history")}
                />
             </TabsContent>
           </Tabs>
@@ -391,7 +396,7 @@ export default function AdminSupportPage() {
             </DialogTitle>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {selectedTicket && (
-                <div className="shrink-0">{getStatusBadge(selectedTicket.status)}</div>
+                <div className="shrink-0">{getStatusBadge(selectedTicket.status, tt)}</div>
               )}
               <span className="text-xs text-muted-foreground truncate max-w-[180px] ml-auto sm:ml-0" title={selectedTicket?.userEmail}>
                 {selectedTicket?.userEmail}
@@ -420,7 +425,7 @@ export default function AdminSupportPage() {
             )
             const allMessages = [initialMsg, ...history]
             const formatTime = (d: any) =>
-              (d?.toDate?.() || (d instanceof Date ? d : new Date())).toLocaleString("th-TH", {
+              toSafeDate(d).toLocaleString(locale === "th" ? "th-TH" : "en-US", {
                 year: "numeric",
                 month: "short",
                 day: "numeric",
@@ -445,7 +450,7 @@ export default function AdminSupportPage() {
                               {ticketUser?.photoURL ? (
                                 <Image
                                   src={resolveImageUrl(ticketUser.photoURL)}
-                                  alt={`รูปโปรไฟล์ของ ${ticketUser?.displayName || ticketUser?.email || "ผู้ส่งคำร้อง"}`}
+                                  alt={`${tt("รูปโปรไฟล์ของ", "Profile photo of")} ${ticketUser?.displayName || ticketUser?.email || tt("ผู้ส่งคำร้อง", "ticket sender")}`}
                                   fill
                                   className="object-cover"
                                   sizes="36px"
@@ -466,13 +471,13 @@ export default function AdminSupportPage() {
                               {msg.content}
                               {isMe && msg.senderEmail && (
                                 <div className="mt-2 pt-2 border-t border-primary/20 text-[11px] opacity-90">
-                                  ตอบโดย {msg.senderEmail}
+                                  {tt("ตอบโดย", "Replied by")} {msg.senderEmail}
                                 </div>
                               )}
                             </div>
                             <div className={`flex items-center gap-1.5 mt-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
                               <span className="text-[11px] text-muted-foreground">{timeStr}</span>
-                              {!isMe && <span className="text-[11px] text-muted-foreground">- ผู้ใช้งาน</span>}
+                              {!isMe && <span className="text-[11px] text-muted-foreground">- {tt("ผู้ใช้งาน", "User")}</span>}
                               {isMe && (
                                 <span className="w-3.5 h-3.5 rounded-full bg-primary/30 flex items-center justify-center">
                                   <Check className="h-2.5 w-2.5 text-primary" strokeWidth={3} />
@@ -500,7 +505,7 @@ export default function AdminSupportPage() {
                         <Input
                           value={ticketReply}
                           onChange={(e) => setTicketReply(e.target.value)}
-                          placeholder="ตอบกลับ..."
+                          placeholder={tt("ตอบกลับ...", "Reply...")}
                           disabled={processing}
                           className="flex-1 rounded-full border-2 bg-background focus-visible:ring-2"
                         />
@@ -524,9 +529,9 @@ export default function AdminSupportPage() {
                               await updateTicketStatus(selectedTicket.id, "resolved", user.uid, user.email || "")
                               setSelectedTicket(null)
                               refreshAll()
-                              toast({ title: "ปิดคำร้องแล้ว" })
+                              toast({ title: tt("ปิดคำร้องแล้ว", "Ticket resolved") })
                             } catch {
-                              toast({ title: "เกิดข้อผิดพลาด", variant: "destructive" })
+                              toast({ title: tt("เกิดข้อผิดพลาด", "Error"), variant: "destructive" })
                             } finally {
                               setProcessing(false)
                             }
@@ -535,13 +540,13 @@ export default function AdminSupportPage() {
                           className="shrink-0 border-green-200 hover:bg-green-50 text-green-700 dark:border-green-900 dark:hover:bg-green-950/50 dark:text-green-400"
                         >
                           <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                          แก้ไขแล้ว
+                          {tt("ดำเนินการแล้ว", "Resolve")}
                         </Button>
                       )}
                     </div>
                   ) : (
                     <div className="p-4 text-center">
-                      <p className="text-sm text-muted-foreground">คำร้องนี้ปิดแล้ว ไม่สามารถตอบกลับได้</p>
+                      <p className="text-sm text-muted-foreground">{tt("คำร้องนี้ปิดแล้ว ไม่สามารถตอบกลับได้", "This ticket is closed and cannot be replied to")}</p>
                     </div>
                   )}
                 </div>
@@ -570,6 +575,7 @@ function TicketsList({
   onView: (ticket: SupportTicket) => void, 
   emptyMessage: string,
 }) {
+  const { locale, tt } = useI18n()
 
   return (
      <div>
@@ -577,10 +583,10 @@ function TicketsList({
           <Table>
             <TableHeader>
               <TableRow className="bg-muted hover:bg-muted">
-                <TableHead className="font-semibold">หัวข้อ</TableHead>
-                <TableHead className="font-semibold">สถานะ</TableHead>
-                <TableHead className="font-semibold">วันที่</TableHead>
-                <TableHead className="text-right font-semibold">จัดการ</TableHead>
+                <TableHead className="font-semibold">{tt("หัวข้อ", "Subject")}</TableHead>
+                <TableHead className="font-semibold">{tt("สถานะ", "Status")}</TableHead>
+                <TableHead className="font-semibold">{tt("วันที่", "Date")}</TableHead>
+                <TableHead className="text-right font-semibold">{tt("จัดการ", "Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -607,9 +613,9 @@ function TicketsList({
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell>{getStatusBadge(ticket.status)}</TableCell>
+                    <TableCell>{getStatusBadge(ticket.status, tt)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {((ticket.createdAt as any)?.toDate?.() || new Date()).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {toSafeDate(ticket.createdAt).toLocaleString(locale === "th" ? "th-TH" : "en-US", { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -617,7 +623,7 @@ function TicketsList({
                         size="sm"
                         className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                         onClick={() => onView(ticket)}
-                        title="ดูรายละเอียด"
+                        title={tt("ดูรายละเอียด", "View details")}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -632,7 +638,7 @@ function TicketsList({
        {hasMore && (
            <div className="flex justify-center p-4">
                <Button variant="outline" size="sm" onClick={onLoadMore} disabled={loading}>
-                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "โหลดเพิ่มเติม"}
+                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : tt("โหลดเพิ่มเติม", "Load more")}
                </Button>
            </div>
        )}

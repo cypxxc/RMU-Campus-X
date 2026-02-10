@@ -3,6 +3,7 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 import { cn } from "@/lib/utils"
 
 /**
@@ -48,6 +49,7 @@ interface UnifiedModalProps {
   closeOnOverlayClick?: boolean
   closeOnEscape?: boolean
   showCloseButton?: boolean
+  fixedHeight?: boolean
 
   // Content
   children: React.ReactNode
@@ -79,11 +81,29 @@ export function UnifiedModal({
   closeOnOverlayClick = true,
   closeOnEscape = true,
   showCloseButton = true,
+  fixedHeight = false,
   children,
   footer,
   bodyClassName,
   footerClassName,
 }: UnifiedModalProps) {
+  const contentRef = React.useRef<HTMLDivElement>(null)
+  const scrollBodyRef = React.useRef<HTMLDivElement>(null)
+
+  // Lock body scroll when modal is open so only the modal scrolls
+  React.useEffect(() => {
+    if (!open) return
+    const html = document.documentElement
+    const prevBodyOverflow = document.body.style.overflow
+    const prevHtmlOverflow = html.style.overflow
+    document.body.style.overflow = "hidden"
+    html.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prevBodyOverflow
+      html.style.overflow = prevHtmlOverflow
+    }
+  }, [open])
+
   // Move focus out of the dialog before close so aria-hidden is never applied
   // to an ancestor of the focused element (avoids "Blocked aria-hidden" a11y warning).
   const handleOpenChange = React.useCallback(
@@ -97,6 +117,15 @@ export function UnifiedModal({
     [onOpenChange]
   )
 
+  // When modal opens, focus the scrollable body so keyboard/screen reader and scroll stay inside modal
+  const handleOpenAutoFocus = React.useCallback((e: Event) => {
+    const el = scrollBodyRef.current ?? contentRef.current
+    if (el) {
+      e.preventDefault()
+      ;(el as HTMLElement).focus({ preventScroll: true })
+    }
+  }, [])
+
   return (
     <DialogPrimitive.Root
       open={open}
@@ -108,9 +137,12 @@ export function UnifiedModal({
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
         />
 
-        {/* Modal Content */}
+        {/* Modal Content - use inline maxHeight so flex body can scroll (Tailwind may not emit dynamic max-h-[...]) */}
         <DialogPrimitive.Content
+          ref={contentRef}
+          data-lenis-prevent
           aria-describedby={undefined}
+          style={fixedHeight ? { maxHeight: maxHeight, height: maxHeight } : { maxHeight: maxHeight }}
           className={cn(
             // Base positioning & appearance
             "fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%]",
@@ -118,11 +150,9 @@ export function UnifiedModal({
             "bg-background rounded-2xl border shadow-2xl",
 
             // Size variant
-            sizeVariants[size],
-
-            // Height constraints
-            `max-h-[${maxHeight}]`
+            sizeVariants[size]
           )}
+          onOpenAutoFocus={handleOpenAutoFocus}
           onEscapeKeyDown={(e) => !closeOnEscape && e.preventDefault()}
           onPointerDownOutside={(e) => !closeOnOverlayClick && e.preventDefault()}
           onInteractOutside={(e) => !closeOnOverlayClick && e.preventDefault()}
@@ -173,10 +203,13 @@ export function UnifiedModal({
             </div>
           </div>
 
-          {/* Body - Scrollable */}
+          {/* Body - Scrollable; focusable so open focus lands here and scroll stays inside modal */}
           <div
+            ref={scrollBodyRef}
+            tabIndex={0}
             className={cn(
               "flex-1 min-h-0 overflow-y-auto scrollbar-hide",
+              "overscroll-contain outline-none",
               "px-6 py-4 sm:px-8 sm:py-6",
               bodyClassName
             )}
@@ -250,6 +283,7 @@ interface UnifiedModalActionsProps {
   // States
   submitDisabled?: boolean
   loading?: boolean
+  loadingText?: string
 
   // Variants
   cancelVariant?: "ghost" | "outline"
@@ -263,15 +297,21 @@ interface UnifiedModalActionsProps {
 export function UnifiedModalActions({
   onCancel,
   onSubmit,
-  cancelText = "ยกเลิก",
-  submitText = "ยืนยัน",
+  cancelText,
+  submitText,
   submitDisabled = false,
   loading = false,
+  loadingText,
   cancelVariant = "outline",
   submitVariant = "default",
   cancelButton,
   submitButton,
 }: UnifiedModalActionsProps) {
+  const { tt } = useI18n()
+  const resolvedCancelText = cancelText ?? tt("ยกเลิก", "Cancel")
+  const resolvedSubmitText = submitText ?? tt("ยืนยัน", "Confirm")
+  const resolvedLoadingText = loadingText ?? tt("กำลังดำเนินการ...", "Processing...")
+
   // Import Button dynamically to avoid circular dependencies
   const { Button } = require("@/components/ui/button")
   const { Loader2 } = require("lucide-react")
@@ -287,7 +327,7 @@ export function UnifiedModalActions({
           disabled={loading}
           className="flex-1 font-bold h-11"
         >
-          {cancelText}
+          {resolvedCancelText}
         </Button>
       ))}
 
@@ -301,7 +341,7 @@ export function UnifiedModalActions({
           className="flex-1 font-bold h-11 shadow-md"
         >
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {loading ? "กำลังดำเนินการ..." : submitText}
+          {loading ? resolvedLoadingText : resolvedSubmitText}
         </Button>
       ))}
     </div>

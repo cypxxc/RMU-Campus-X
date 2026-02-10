@@ -29,20 +29,37 @@ export async function middleware(request: NextRequest) {
     response.headers.set('X-Request-Id', requestId)
     return response
   }
+
+  const method = request.method.toUpperCase()
+  const skipRateLimitMethod = method === 'HEAD' || method === 'OPTIONS'
+  if (skipRateLimitMethod) {
+    const response = NextResponse.next()
+    response.headers.set('X-Request-Id', requestId)
+    response.headers.set('X-RateLimit-Skipped', method.toLowerCase())
+    return response
+  }
+
+  const isReadOnlyMethod = method === 'GET'
   
   const clientIP = getClientIP(request)
   
-  // Determine rate limit based on endpoint type
-  let rateLimitConfig: { limit: number; windowMs: number } = RATE_LIMITS.API
+  // Determine rate limit based on endpoint type and request method
+  let rateLimitConfig: { limit: number; windowMs: number } =
+    isReadOnlyMethod ? RATE_LIMITS.READ : RATE_LIMITS.API
   
-  if (pathname.includes('/upload')) {
+  if (!isReadOnlyMethod && pathname.includes('/upload')) {
     rateLimitConfig = RATE_LIMITS.UPLOAD
-  } else if (pathname.includes('/auth') || pathname.includes('/login') || pathname.includes('/register')) {
+  } else if (
+    !isReadOnlyMethod &&
+    (pathname.includes('/auth') || pathname.includes('/login') || pathname.includes('/register'))
+  ) {
     rateLimitConfig = RATE_LIMITS.AUTH
+  } else if (isReadOnlyMethod && pathname.includes('/search')) {
+    rateLimitConfig = RATE_LIMITS.SEARCH
   }
   
-  // Create unique key for this client + endpoint type
-  const key = `${clientIP}:${pathname.split('/')[2] || 'api'}`
+  // Create unique key for this client + endpoint type + method class
+  const key = `${method}:${clientIP}:${pathname.split('/')[2] || 'api'}`
   
   const { allowed, remaining, resetTime } = await checkRateLimitScalable(
     key,
@@ -78,6 +95,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-RateLimit-Limit', String(rateLimitConfig.limit))
   response.headers.set('X-RateLimit-Remaining', String(remaining))
   response.headers.set('X-RateLimit-Reset', String(Math.ceil(resetTime / 1000)))
+  response.headers.set('X-RateLimit-Policy', isReadOnlyMethod ? 'read' : 'write')
   
   return response
 }

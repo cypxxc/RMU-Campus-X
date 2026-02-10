@@ -16,9 +16,11 @@ import { Heart, AlertCircle, Package } from "lucide-react"
 import type { Item } from "@/types"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { useI18n } from "@/components/language-provider"
 
 export default function FavoritesPage() {
   const { user, loading: authLoading } = useAuth()
+  const { tt } = useI18n()
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
@@ -54,8 +56,8 @@ export default function FavoritesPage() {
             <Heart className="h-8 w-8 fill-current" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">รายการโปรด</h1>
-            <p className="text-muted-foreground">กำลังโหลด...</p>
+            <h1 className="text-3xl font-bold">{tt("รายการโปรด", "Favorites")}</h1>
+            <p className="text-muted-foreground">{tt("กำลังโหลด...", "Loading...")}</p>
           </div>
         </div>
         <ItemCardSkeletonGrid count={6} />
@@ -69,12 +71,12 @@ export default function FavoritesPage() {
         <div className="inline-flex items-center justify-center p-6 bg-muted rounded-full mb-6">
           <AlertCircle className="h-12 w-12 text-muted-foreground" />
         </div>
-        <h1 className="text-2xl font-bold mb-3">กรุณาเข้าสู่ระบบ</h1>
+        <h1 className="text-2xl font-bold mb-3">{tt("กรุณาเข้าสู่ระบบ", "Please sign in")}</h1>
         <p className="text-muted-foreground mb-8">
-          คุณต้องเข้าสู่ระบบเพื่อดูรายการโปรดของคุณ
+          {tt("คุณต้องเข้าสู่ระบบเพื่อดูรายการโปรดของคุณ", "You need to sign in to view your favorites.")}
         </p>
         <Button asChild size="lg" className="w-full">
-          <Link href="/login">ไปหน้าเข้าสู่ระบบ</Link>
+          <Link href="/login">{tt("ไปหน้าเข้าสู่ระบบ", "Go to sign in")}</Link>
         </Button>
       </div>
     )
@@ -87,8 +89,10 @@ export default function FavoritesPage() {
           <Heart className="h-8 w-8 fill-current" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold">รายการโปรด</h1>
-          <p className="text-muted-foreground">รายการที่คุณบันทึกไว้ ({items.length})</p>
+          <h1 className="text-3xl font-bold">{tt("รายการโปรด", "Favorites")}</h1>
+          <p className="text-muted-foreground">
+            {tt(`รายการที่คุณบันทึกไว้ (${items.length})`, `Saved items (${items.length})`)}
+          </p>
         </div>
       </div>
 
@@ -106,7 +110,7 @@ export default function FavoritesPage() {
           </div>
           <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
             <DialogContent className="max-w-4xl overflow-hidden border-none shadow-2xl p-0">
-              <DialogTitle className="sr-only">รายละเอียดสิ่งของ</DialogTitle>
+              <DialogTitle className="sr-only">{tt("รายละเอียดสิ่งของ", "Item details")}</DialogTitle>
               <div className="p-4 sm:p-6 md:p-8">
                 {selectedItem && (
                   <ItemDetailView
@@ -125,9 +129,9 @@ export default function FavoritesPage() {
             <EmptyMedia variant="icon" className="rounded-2xl size-14 [&_svg]:size-8">
               <Heart className="text-muted-foreground" />
             </EmptyMedia>
-            <EmptyTitle>ยังไม่มีรายการโปรด</EmptyTitle>
+            <EmptyTitle>{tt("ยังไม่มีรายการโปรด", "No favorites yet")}</EmptyTitle>
             <EmptyDescription>
-              กดปุ่มหัวใจที่รายการสิ่งของในหน้าหลักเพื่อบันทึกไว้ดูภายหลัง
+              {tt("กดปุ่มหัวใจที่รายการสิ่งของในหน้าหลักเพื่อบันทึกไว้ดูภายหลัง", "Tap the heart icon on items in the dashboard to save them for later.")}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
@@ -135,7 +139,7 @@ export default function FavoritesPage() {
               <Button asChild>
                 <Link href="/dashboard">
                   <Package className="mr-2 h-4 w-4" />
-                  ค้นหาสิ่งของ
+                  {tt("ค้นหาสิ่งของ", "Browse items")}
                 </Link>
               </Button>
             </div>

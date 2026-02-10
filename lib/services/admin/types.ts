@@ -9,6 +9,7 @@ export interface UserData {
   email?: string
   status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED'
   warningCount?: number
+  suspensionCount?: number
   suspendedUntil?: Date | null
   bannedReason?: string | null
   restrictions?: {
@@ -50,7 +51,7 @@ export interface NotificationInput {
   userId: string
   title: string
   message: string
-  type: 'system' | 'warning' | 'info'
+  type: 'system' | 'warning'
   relatedId?: string
   isRead?: boolean
 }
@@ -125,4 +126,7 @@ export interface UpdateStatusResult {
 export interface IssueWarningResult {
   success: boolean
   warningCount: number
+  autoAction?: 'NONE' | 'SUSPENDED' | 'BANNED'
+  suspendedUntil?: Date | null
+  suspensionCount?: number
 }

@@ -4,6 +4,7 @@ import { useMemo, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { TrendingUp } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 import type { Item } from "@/types"
 
 interface ItemsActivityChartProps {
@@ -13,6 +14,7 @@ interface ItemsActivityChartProps {
 export const ItemsActivityChart = memo(function ItemsActivityChart({ 
   items 
 }: ItemsActivityChartProps) {
+  const { locale, tt } = useI18n()
   // ✅ Memoized chart data - only recomputes when items change
   const chartData = useMemo(() => {
     const data = []
@@ -44,7 +46,7 @@ export const ItemsActivityChart = memo(function ItemsActivityChart({
       }).length
       
       data.push({
-        date: date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
+        date: date.toLocaleDateString(locale === "th" ? "th-TH" : "en-US", { day: "numeric", month: "short" }),
         posted,
         available,
         pending,
@@ -52,14 +54,14 @@ export const ItemsActivityChart = memo(function ItemsActivityChart({
     }
     
     return data
-  }, [items]) // Only recompute when items array changes
+  }, [items, locale]) // Only recompute when items array changes
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          กิจกรรมโพส (ย้อนหลัง 7 วัน)
+          {tt("กิจกรรมโพส (ย้อนหลัง 7 วัน)", "Item activity (last 7 days)")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -88,7 +90,7 @@ export const ItemsActivityChart = memo(function ItemsActivityChart({
               dataKey="posted" 
               stroke="hsl(var(--primary))" 
               strokeWidth={2}
-              name="โพสต์ใหม่"
+              name={tt("โพสต์ใหม่", "New posts")}
               dot={{ fill: 'hsl(var(--primary))' }}
             />
             <Line 
@@ -96,7 +98,7 @@ export const ItemsActivityChart = memo(function ItemsActivityChart({
               dataKey="available" 
               stroke="hsl(142 76% 36%)" 
               strokeWidth={2}
-              name="พร้อมให้"
+              name={tt("พร้อมให้", "Available")}
               dot={{ fill: 'hsl(142 76% 36%)' }}
             />
             <Line 
@@ -104,7 +106,7 @@ export const ItemsActivityChart = memo(function ItemsActivityChart({
               dataKey="pending" 
               stroke="hsl(48 96% 53%)" 
               strokeWidth={2}
-              name="รอดำเนินการ"
+              name={tt("รอดำเนินการ", "Pending")}
               dot={{ fill: 'hsl(48 96% 53%)' }}
             />
           </LineChart>

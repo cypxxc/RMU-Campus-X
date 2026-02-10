@@ -13,6 +13,7 @@ export interface GetItemsFilters {
   lastId?: string | null
   searchQuery?: string
   postedBy?: string
+  includeFavoriteStatus?: boolean
 }
 
 export interface GetItemsResult {
@@ -59,6 +60,7 @@ export const getItems = async (
       if (filters?.status) params.set("status", filters.status)
       if (filters?.searchQuery) params.set("search", filters.searchQuery)
       if (filters?.postedBy) params.set("postedBy", filters.postedBy)
+      if (filters?.includeFavoriteStatus === false) params.set("includeFavoriteStatus", "false")
 
       const url = `/api/items?${params.toString()}`
       const res = await authFetchJson(url, { method: "GET" }) as {

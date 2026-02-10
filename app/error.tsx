@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { AlertCircle, RefreshCw, ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useI18n } from "@/components/language-provider"
 
 export default function Error({
   error,
@@ -14,6 +15,7 @@ export default function Error({
   reset: () => void
 }) {
   const router = useRouter()
+  const { tt } = useI18n()
   const isDev = process.env.NODE_ENV === 'development'
 
   useEffect(() => {
@@ -36,11 +38,12 @@ export default function Error({
         {/* Error Message */}
         <div className="space-y-3">
           <h1 className="text-3xl font-bold text-foreground">
-            เกิดข้อผิดพลาด
+            {tt("เกิดข้อผิดพลาด", "Something went wrong")}
           </h1>
           <p className="text-base text-muted-foreground leading-relaxed">
-            ไม่สามารถโหลดหน้านี้ได้ กรุณาลองใหม่อีกครั้ง<br/>
-            หากปัญหายังคงอยู่ กรุณาติดต่อผู้ดูแลระบบ
+            {tt("ไม่สามารถโหลดหน้านี้ได้ กรุณาลองใหม่อีกครั้ง", "Unable to load this page. Please try again.")}
+            <br />
+            {tt("หากปัญหายังคงอยู่ กรุณาติดต่อผู้ดูแลระบบ", "If the issue persists, please contact an administrator.")}
           </p>
         </div>
 
@@ -71,7 +74,7 @@ export default function Error({
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
           <Button onClick={reset} size="default" className="gap-2 shadow-sm">
             <RefreshCw className="h-4 w-4" />
-            ลองใหม่อีกครั้ง
+            {tt("ลองใหม่อีกครั้ง", "Try again")}
           </Button>
           <Button 
             variant="ghost" 
@@ -80,13 +83,13 @@ export default function Error({
             className="gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            ย้อนกลับ
+            {tt("ย้อนกลับ", "Go back")}
           </Button>
         </div>
 
         {/* Helpful tip */}
         <p className="text-xs text-muted-foreground/60 pt-4">
-          💡 คุณสามารถลองรีเฟรชหน้านี้ หรือกลับไปหน้าหลักได้
+          {tt("💡 คุณสามารถลองรีเฟรชหน้านี้ หรือกลับไปหน้าหลักได้", "💡 You can refresh this page or return to the home page.")}
         </p>
       </div>
     </div>

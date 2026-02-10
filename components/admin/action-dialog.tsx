@@ -10,8 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, User as UserIcon } from "lucide-react"
+import { AlertTriangle, Ban, ShieldAlert, CheckCircle2, BellOff, User as UserIcon } from "lucide-react"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
+import { useI18n } from "@/components/language-provider"
 
 export type SuspendDuration = { value: number; unit: "minute" | "hour" | "day" }
 
@@ -24,7 +25,7 @@ export interface UserWithReports {
 
 interface ActionDialogProps {
   open: boolean
-  type: 'warn' | 'suspend' | 'ban' | 'activate' | 'delete' | null
+  type: 'warn' | 'suspend' | 'ban' | 'activate' | 'delete' | 'clearNotifications' | null
   user: UserWithReports | null
   onOpenChange: (open: boolean) => void
   onConfirm: (reason: string, suspendDuration?: SuspendDuration) => Promise<void>
@@ -35,6 +36,7 @@ export function ActionDialog({ open, type, user, onOpenChange, onConfirm }: Acti
   const [durationValue, setDurationValue] = useState("7")
   const [durationUnit, setDurationUnit] = useState<"minute" | "hour" | "day">("day")
   const [processing, setProcessing] = useState(false)
+  const { tt } = useI18n()
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -81,39 +83,46 @@ export function ActionDialog({ open, type, user, onOpenChange, onConfirm }: Acti
   // Configuration map for different action types (minimal UI: title + icon only)
   const config = {
     warn: {
-      title: "ออกคำเตือนผู้ใช้",
+      title: tt("ออกคำเตือนผู้ใช้", "Issue warning"),
       icon: <AlertTriangle className="h-5 w-5" />,
       headerClass: "bg-yellow-50/80 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-900/50",
-      submitText: "ออกคำเตือน",
+      submitText: tt("ออกคำเตือน", "Issue warning"),
       submitVariant: "default" as const,
     },
     suspend: {
-      title: "ระงับการใช้งานชั่วคราว",
+      title: tt("ระงับการใช้งานชั่วคราว", "Temporary suspension"),
       icon: <ShieldAlert className="h-5 w-5" />,
       headerClass: "bg-orange-50/80 dark:bg-orange-950/30 border-orange-200 dark:border-orange-900/50",
-      submitText: "ระงับผู้ใช้",
+      submitText: tt("ระงับผู้ใช้", "Suspend user"),
       submitVariant: "destructive" as const,
     },
     ban: {
-      title: "แบนผู้ใช้ถาวร",
+      title: tt("แบนผู้ใช้ถาวร", "Ban user permanently"),
       icon: <Ban className="h-5 w-5" />,
       headerClass: "bg-red-50/80 dark:bg-red-950/30 border-red-200 dark:border-red-900/50",
-      submitText: "แบนถาวร",
+      submitText: tt("แบนถาวร", "Ban permanently"),
       submitVariant: "destructive" as const,
     },
     delete: {
-      title: "ลบข้อมูลผู้ใช้ถาวร",
+      title: tt("ลบข้อมูลผู้ใช้ถาวร", "Delete user data permanently"),
       icon: <Ban className="h-5 w-5" />,
       headerClass: "bg-red-100/80 dark:bg-red-950/50 border-red-300 dark:border-red-900/80",
-      submitText: "ยืนยันลบ",
+      submitText: tt("ยืนยันลบ", "Confirm delete"),
       submitVariant: "destructive" as const,
     },
     activate: {
-      title: "ปลดล็อคบัญชี",
+      title: tt("ปลดล็อคบัญชี", "Reactivate account"),
       icon: <CheckCircle2 className="h-5 w-5" />,
       headerClass: "bg-green-50/80 dark:bg-green-950/30 border-green-200 dark:border-green-900/50",
-      submitText: "ปลดล็อค",
+      submitText: tt("ปลดล็อค", "Reactivate"),
       submitVariant: "default" as const,
+    },
+    clearNotifications: {
+      title: tt("ลบการแจ้งเตือนผู้ใช้", "Delete user notifications"),
+      icon: <BellOff className="h-5 w-5" />,
+      headerClass: "bg-slate-50/80 dark:bg-slate-950/30 border-slate-200 dark:border-slate-900/50",
+      submitText: tt("ลบการแจ้งเตือน", "Delete notifications"),
+      submitVariant: "destructive" as const,
     },
   }
 
@@ -143,7 +152,7 @@ export function ActionDialog({ open, type, user, onOpenChange, onConfirm }: Acti
         {user && (
           <div className="flex items-center gap-2 text-sm">
             <UserIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-muted-foreground">อีเมล</span>
+            <span className="text-muted-foreground">{tt("อีเมล", "Email")}</span>
             <span className="font-medium text-foreground truncate">{user.email}</span>
           </div>
         )}
@@ -151,16 +160,15 @@ export function ActionDialog({ open, type, user, onOpenChange, onConfirm }: Acti
         {/* Reason (required) */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">
-            เหตุผล <span className="text-destructive">*</span>
+            {tt("เหตุผล", "Reason")} <span className="text-destructive">*</span>
           </label>
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value.slice(0, 500))}
             placeholder={
-              type === 'warn' ? "ระบุเหตุผล" :
-              type === 'suspend' ? "ระบุเหตุผล" :
-              type === 'ban' ? "ระบุเหตุผล" :
-              "ระบุเหตุผล"
+              type === 'clearNotifications'
+                ? tt("ระบุเหตุผลในการลบการแจ้งเตือน", "Provide reason for deleting notifications")
+                : tt("ระบุเหตุผล", "Provide reason")
             }
             rows={3}
             className="resize-none text-sm"
@@ -176,7 +184,7 @@ export function ActionDialog({ open, type, user, onOpenChange, onConfirm }: Acti
         {type === "suspend" && (
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
-              ระยะเวลาระงับ <span className="text-destructive">*</span>
+              {tt("ระยะเวลาระงับ", "Suspension duration")} <span className="text-destructive">*</span>
             </label>
             <div className="flex items-center gap-2">
               <Input
@@ -185,7 +193,7 @@ export function ActionDialog({ open, type, user, onOpenChange, onConfirm }: Acti
                 onChange={(e) => handleDurationChange(e.target.value)}
                 min="1"
                 max={durationUnit === "day" ? 365 : durationUnit === "hour" ? 720 : 10080}
-                placeholder="จำนวน"
+                placeholder={tt("จำนวน", "Amount")}
                 className="w-20 h-9 text-center tabular-nums"
               />
               <Select
@@ -196,9 +204,9 @@ export function ActionDialog({ open, type, user, onOpenChange, onConfirm }: Acti
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="minute">นาที</SelectItem>
-                  <SelectItem value="hour">ชั่วโมง</SelectItem>
-                  <SelectItem value="day">วัน</SelectItem>
+                  <SelectItem value="minute">{tt("นาที", "Minute")}</SelectItem>
+                  <SelectItem value="hour">{tt("ชั่วโมง", "Hour")}</SelectItem>
+                  <SelectItem value="day">{tt("วัน", "Day")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

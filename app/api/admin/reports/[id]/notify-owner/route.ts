@@ -9,6 +9,8 @@ import { FieldValue } from "firebase-admin/firestore"
 import { getAdminDb } from "@/lib/firebase-admin"
 import { verifyAdminAccess, successResponse, errorResponse, AdminErrorCode } from "@/lib/admin-api"
 import { notifyUserReported } from "@/lib/line"
+import { getReportTypeLabel } from "@/lib/reports/report-types"
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,6 +33,7 @@ export async function POST(
       reportType?: string
       targetTitle?: string
       reason?: string
+      description?: string
       targetId?: string
     }
 
@@ -44,12 +47,22 @@ export async function POST(
     }
 
     const targetTitle = report.targetTitle || report.targetId || "รายการของคุณ"
+    const reportType = report.reportType || "item_report"
+    const reportTypeLabel = getReportTypeLabel(reportType) || reportType
+    const reportReason = (report.reason || report.description || "").trim()
 
-    // 1. สร้าง in-app notification
-    const notificationMessage = "ระบบตรวจพบการใช้งานที่ไม่เหมาะสมและอาจกระทบต่อผู้อื่น กรุณาปรับปรุงการใช้งานให้เป็นไปตามกติกาของแพลตฟอร์ม หากมีการกระทำซ้ำ ระบบอาจระงับการใช้งานชั่วคราวหรือถาวร"
+    const notificationLines = [
+      `ประเภทการรายงาน: ${reportTypeLabel}`,
+      `หัวข้อที่ถูกรายงาน: ${targetTitle}`,
+      ...(reportReason ? [`เหตุผล: ${reportReason}`] : []),
+      "โปรดปรับปรุงพฤติกรรมหรือแก้ไขเนื้อหาให้เหมาะสม",
+      "หากมีการกระทำซ้ำ ระบบอาจระงับการใช้งานชั่วคราวหรือถาวร",
+    ]
+    const notificationMessage = notificationLines.join("\n")
+
     await db.collection("notifications").add({
       userId: reportedUserId,
-      title: "พฤติกรรมไม่เหมาะสม",
+      title: "แจ้งเตือนจากผู้ดูแลระบบ",
       message: notificationMessage,
       type: "warning",
       relatedId: reportId,
@@ -57,7 +70,6 @@ export async function POST(
       createdAt: FieldValue.serverTimestamp(),
     })
 
-    // 2. ส่ง LINE ถ้ามี LINE linked
     try {
       const userSnap = await db.collection("users").doc(reportedUserId).get()
       if (userSnap.exists) {
@@ -67,8 +79,9 @@ export async function POST(
         if (lineUserId && lineEnabled) {
           await notifyUserReported(
             lineUserId,
-            report.reportType || "item_report",
-            targetTitle
+            reportType,
+            targetTitle,
+            reportReason || undefined
           )
         }
       }

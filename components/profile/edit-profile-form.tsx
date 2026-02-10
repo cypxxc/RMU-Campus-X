@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Save, Loader2 } from "lucide-react"
+import { useI18n } from "@/components/language-provider"
 
 interface EditProfileFormProps {
   initialDisplayName: string
@@ -23,6 +24,7 @@ export function EditProfileForm({
   userId: _userId, 
   onSave 
 }: EditProfileFormProps) {
+  const { tt } = useI18n()
   const [displayName, setDisplayName] = useState(initialDisplayName)
   const [bio, setBio] = useState(initialBio)
   const [saving, setSaving] = useState(false)
@@ -62,28 +64,28 @@ export function EditProfileForm({
   return (
     <Card className="border-none shadow-soft">
       <CardHeader className="space-y-0 pb-4">
-        <CardTitle className="text-lg">แก้ไขโปรไฟล์</CardTitle>
-        <CardDescription>การเปลี่ยนแปลงจะมีผลทั่วถึงทั้งระบบ</CardDescription>
+        <CardTitle className="text-lg">{tt("แก้ไขโปรไฟล์", "Edit profile")}</CardTitle>
+        <CardDescription>{tt("การเปลี่ยนแปลงจะมีผลทั่วถึงทั้งระบบ", "Changes will apply across the platform.")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="displayName" className="text-sm font-bold">ชื่อที่แสดง (Display Name)</Label>
+          <Label htmlFor="displayName" className="text-sm font-bold">{tt("ชื่อที่แสดง (Display Name)", "Display name")}</Label>
           <Input 
             id="displayName"
-            placeholder="ใส่ชื่อของคุณ..."
+            placeholder={tt("ใส่ชื่อของคุณ...", "Enter your display name...")}
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             className="h-11 bg-muted/20"
           />
-          <p className="text-[11px] text-muted-foreground">ชื่อนี้จะปรากฏเมื่อคุณแชทหรือโพส</p>
+          <p className="text-[11px] text-muted-foreground">{tt("ชื่อนี้จะปรากฏเมื่อคุณแชทหรือโพส", "This name appears in chat and posts.")}</p>
           {errors.displayName && <p className="text-xs text-destructive mt-1">{errors.displayName}</p>}
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="bio" className="text-sm font-bold">แนะนำตัว (Bio)</Label>
+          <Label htmlFor="bio" className="text-sm font-bold">{tt("แนะนำตัว (Bio)", "Bio")}</Label>
           <Textarea
             id="bio"
-            placeholder="แนะนำตัวสั้นๆ หรือบอกเวลาที่สะดวก..."
+            placeholder={tt("แนะนำตัวสั้นๆ หรือบอกเวลาที่สะดวก...", "Write a short introduction or your availability...")}
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             className={`bg-muted/20 min-h-[100px] resize-none ${errors.bio ? "border-destructive focus-visible:ring-destructive" : ""}`}
@@ -91,12 +93,14 @@ export function EditProfileForm({
           />
           <div className="flex justify-between items-start">
              {errors.bio ? <p className="text-xs text-destructive">{errors.bio}</p> : <span />}
-             <p className="text-[11px] text-muted-foreground text-right">{bio.length}/300 ตัวอักษร</p>
+             <p className="text-[11px] text-muted-foreground text-right">
+               {tt(`${bio.length}/300 ตัวอักษร`, `${bio.length}/300 characters`)}
+             </p>
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-bold opacity-50">อีเมล (แก้ไขไม่ได้)</Label>
+          <Label className="text-sm font-bold opacity-50">{tt("อีเมล (แก้ไขไม่ได้)", "Email (read-only)")}</Label>
           <Input 
             disabled
             value={email}
@@ -115,7 +119,7 @@ export function EditProfileForm({
             ) : (
               <Save className="h-4 w-4 mr-2" />
             )}
-            บันทึกการเปลี่ยนแปลง
+            {tt("บันทึกการเปลี่ยนแปลง", "Save changes")}
           </Button>
         </div>
       </CardContent>

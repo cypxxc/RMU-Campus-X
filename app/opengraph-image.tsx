@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og"
 
 // Image metadata - Facebook/LINE/X recommend 1200x630
-export const alt = "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ"
+export const alt = "RMU-Campus X - Campus item exchange platform"
 export const size = {
   width: 1200,
   height: 630,
@@ -93,10 +93,21 @@ export default function Image() {
               maxWidth: "600px",
             }}
           >
-            แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา
+            Campus Item Exchange Platform
           </div>
 
           {/* University - subtle */}
+          <div
+            style={{
+              fontSize: "18px",
+              color: "#4b5563",
+              marginTop: "10px",
+              textAlign: "center",
+            }}
+          >
+            แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา
+          </div>
+
           <div
             style={{
               fontSize: "20px",

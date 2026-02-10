@@ -9,6 +9,7 @@ import { Loader2, Package } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ItemDetailView } from "@/components/item-detail-view"
 import Link from "next/link"
+import { useI18n } from "@/components/language-provider"
 
 export default function ItemDetailPage({
   params,
@@ -19,6 +20,7 @@ export default function ItemDetailPage({
   const [item, setItem] = useState<Item | null>(null)
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
+  const { tt } = useI18n()
 
   useEffect(() => {
     let cancelled = false
@@ -31,8 +33,8 @@ export default function ItemDetailPage({
         } else {
           setItem(null)
           toast({
-            title: "เกิดข้อผิดพลาด",
-            description: result.error || "ไม่สามารถโหลดข้อมูลสิ่งของได้",
+            title: tt("เกิดข้อผิดพลาด", "Error"),
+            description: result.error || tt("ไม่สามารถโหลดข้อมูลสิ่งของได้", "Unable to load item data"),
             variant: "destructive",
           })
         }
@@ -42,8 +44,8 @@ export default function ItemDetailPage({
         console.error("[ItemDetail] Error:", error)
         setItem(null)
         toast({
-          title: "เกิดข้อผิดพลาด",
-          description: "ไม่สามารถโหลดข้อมูลสิ่งของได้",
+          title: tt("เกิดข้อผิดพลาด", "Error"),
+          description: tt("ไม่สามารถโหลดข้อมูลสิ่งของได้", "Unable to load item data"),
           variant: "destructive",
         })
       })
@@ -51,7 +53,7 @@ export default function ItemDetailPage({
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [id])
+  }, [id, toast, tt])
 
   if (loading) {
     return (
@@ -68,10 +70,10 @@ export default function ItemDetailPage({
           <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
             <Package className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="text-xl font-bold mb-2">ไม่พบสิ่งของ</h2>
-          <p className="text-muted-foreground text-sm mb-4">สิ่งของนี้อาจถูกลบหรือไม่มีอยู่</p>
+          <h2 className="text-xl font-bold mb-2">{tt("ไม่พบสิ่งของ", "Item not found")}</h2>
+          <p className="text-muted-foreground text-sm mb-4">{tt("สิ่งของนี้อาจถูกลบหรือไม่มีอยู่", "This item may have been removed or does not exist.")}</p>
           <Button asChild>
-            <Link href="/dashboard">กลับไปหน้าแรก</Link>
+            <Link href="/dashboard">{tt("กลับไปหน้าแรก", "Back to dashboard")}</Link>
           </Button>
         </div>
       </div>

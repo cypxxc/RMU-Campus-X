@@ -1,24 +1,26 @@
 /**
  * LINE Notify Exchange API Route
- * ส่ง LINE notification เมื่อมีคนขอแลกเปลี่ยนสิ่งของ
- * ใช้ Firebase REST API (ไม่ต้อง auth token)
+ * Send LINE notification when someone requests an exchange.
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { notifyExchangeRequest } from "@/lib/line"
 import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
+
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
-interface NotifyExchangeBody {
-  ownerId: string
-  itemTitle: string
-  requesterName: string
-  exchangeId: string
-}
+const notifyExchangeBodySchema = z
+  .object({
+    exchangeId: z.string().min(1),
+    ownerId: z.string().min(1).optional(),
+    itemTitle: z.string().max(200).optional(),
+    requesterName: z.string().max(100).optional(),
+  })
+  .strict()
 
 export async function POST(request: NextRequest) {
   try {
-    // Require authentication (prevents anonymous spam)
     const token = extractBearerToken(request.headers.get("Authorization"))
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -29,24 +31,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    const body = (await request.json()) as Partial<NotifyExchangeBody>
-    const exchangeId = body.exchangeId
-
-    if (!exchangeId) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    const bodyRaw = await request.json().catch(() => null)
+    const parsed = notifyExchangeBodySchema.safeParse(bodyRaw)
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: parsed.error.errors.map((issue) => ({
+            field: issue.path.join(".") || "root",
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      )
     }
 
+    const body = parsed.data
+    const exchangeId = body.exchangeId
     const db = getAdminDb()
     const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
     if (!exchangeSnap.exists) {
       return NextResponse.json({ sent: false, reason: "exchange not found" })
     }
 
-    const exchange = exchangeSnap.data() as any
-    const ownerId = exchange?.ownerId as string | undefined
-    const requesterId = exchange?.requesterId as string | undefined
+    const exchange = exchangeSnap.data() as
+      | {
+          ownerId?: string
+          requesterId?: string
+          requesterName?: string
+          itemTitle?: string
+          itemId?: string
+        }
+      | undefined
+    const ownerId = exchange?.ownerId
+    const requesterId = exchange?.requesterId
 
-    // Only requester can trigger the "request created" notification
+    // Only requester can trigger the "request created" notification.
     if (!requesterId || decoded.uid !== requesterId) {
       return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
     }
@@ -61,39 +81,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ sent: false, reason: "owner not found" })
     }
 
-    const owner = ownerSnap.data() as any
-    const lineUserId = owner?.lineUserId as string | undefined
-    // Default to true if not explicitly set
+    const owner = ownerSnap.data() as
+      | {
+          lineUserId?: string
+          lineNotifications?: {
+            enabled?: boolean
+            exchangeRequest?: boolean
+          }
+        }
+      | undefined
+    const lineUserId = owner?.lineUserId
     const notificationsEnabled = owner?.lineNotifications?.enabled !== false
     const exchangeRequestEnabled = owner?.lineNotifications?.exchangeRequest !== false
 
-    console.log("[LINE Notify Exchange] Owner LINE status:", { 
-      hasLineId: !!lineUserId, 
-      notificationsEnabled, 
-      exchangeRequestEnabled 
+    console.log("[LINE Notify Exchange] Owner LINE status:", {
+      hasLineId: !!lineUserId,
+      notificationsEnabled,
+      exchangeRequestEnabled,
     })
 
     if (!lineUserId) {
       console.log("[LINE Notify Exchange] Owner has no LINE linked")
       return NextResponse.json({ sent: false, reason: "no LINE linked" })
     }
-    const ownerLineUserId: string = lineUserId
 
     if (!notificationsEnabled || !exchangeRequestEnabled) {
       return NextResponse.json({ sent: false, reason: "notifications disabled" })
     }
 
-    const itemTitle = (exchange?.itemTitle as string | undefined) || body.itemTitle || "สิ่งของ"
+    const itemTitle = exchange?.itemTitle || body.itemTitle || "สิ่งของ"
     const requesterName =
       body.requesterName ||
-      (exchange?.requesterName as string | undefined) ||
-      (decoded.email ? decoded.email.split("@")[0] : "ผู้ใช้")
+      exchange?.requesterName ||
+      (decoded.email ? decoded.email.split("@")[0] : "ผู้ใช้") ||
+      "ผู้ใช้"
 
     let itemImage: string | undefined
-    const itemId = exchange?.itemId as string | undefined
+    const itemId = exchange?.itemId
     if (itemId) {
       const itemSnap = await db.collection("items").doc(itemId).get()
-      const itemData = itemSnap.data() as { imagePublicIds?: string[]; imageUrls?: string[]; imageUrl?: string } | undefined
+      const itemData = itemSnap.data() as
+        | {
+            imagePublicIds?: string[]
+            imageUrls?: string[]
+            imageUrl?: string
+          }
+        | undefined
       const ref = itemData?.imagePublicIds?.[0] ?? itemData?.imageUrls?.[0] ?? itemData?.imageUrl
       if (ref) {
         const { resolveImageUrl } = await import("@/lib/cloudinary-url")
@@ -102,19 +135,19 @@ export async function POST(request: NextRequest) {
     }
 
     await notifyExchangeRequest(
-      ownerLineUserId,
-      itemTitle ?? "",
-      requesterName ?? "",
+      lineUserId,
+      itemTitle,
+      requesterName,
       exchangeId,
       BASE_URL,
-      itemImage ?? undefined
+      itemImage
     )
 
     console.log("[LINE Notify Exchange] Sent successfully!")
     return NextResponse.json({ sent: true })
   } catch (error) {
     console.error("[LINE Notify Exchange] Error:", error)
-    // Don't return 500 - LINE notification failure shouldn't break the flow
+    // Notification failure should not break the main user flow.
     return NextResponse.json({ sent: false, error: String(error) })
   }
 }

@@ -265,14 +265,28 @@ export async function notifyNewChatMessage(
  */
 export async function notifyUserReported(
   lineUserId: string,
-  _reportType: string,
-  _targetTitle: string
+  reportType: string,
+  targetTitle: string,
+  reportReason?: string
 ): Promise<LinePushResponse> {
+  const reportTypeLabel = getReportTypeLabel(reportType) || reportType
+  const normalizedTargetTitle = targetTitle.trim() || "รายการของคุณ"
+  const normalizedReportReason = reportReason?.trim()
+
+  const textLines = [
+    "⚠️ แจ้งเตือนจากผู้ดูแลระบบ",
+    "",
+    `ประเภทการรายงาน: ${reportTypeLabel}`,
+    `หัวข้อที่ถูกรายงาน: ${normalizedTargetTitle}`,
+    ...(normalizedReportReason ? [`เหตุผล: ${normalizedReportReason}`] : []),
+    "",
+    "โปรดปรับปรุงพฤติกรรมหรือแก้ไขเนื้อหาให้เหมาะสม",
+    "หากมีการกระทำซ้ำ ระบบอาจระงับการใช้งานชั่วคราวหรือถาวร",
+  ]
+
   const message: LineTextMessage = {
     type: "text",
-    text: `⚠️ พฤติกรรมไม่เหมาะสม
-
-ระบบตรวจพบการใช้งานที่ไม่เหมาะสมและอาจกระทบต่อผู้อื่น กรุณาปรับปรุงการใช้งานให้เป็นไปตามกติกาของแพลตฟอร์ม หากมีการกระทำซ้ำ ระบบอาจระงับการใช้งานชั่วคราวหรือถาวร`,
+    text: textLines.join("\n"),
   }
 
   return sendPushMessage(lineUserId, [message])
