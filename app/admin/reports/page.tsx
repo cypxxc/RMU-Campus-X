@@ -4,10 +4,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { checkIsAdmin, getDocById } from "@/lib/services/client-firestore"
+import { getDocById } from "@/lib/services/client-firestore"
 import { getReports, updateReportStatus } from "@/lib/firestore"
 import type { Report, ReportStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
+import { useAdminGuard } from "@/hooks/use-admin-guard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -100,9 +101,9 @@ interface ReportWithDetails extends Report {
 }
 
 export default function AdminReportsPage() {
+  const { isAdmin } = useAdminGuard()
   const [reports, setReports] = useState<ReportWithDetails[]>([])
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [selectedReport, setSelectedReport] = useState<ReportWithDetails | null>(null)
   const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -111,7 +112,7 @@ export default function AdminReportsPage() {
   const [processing, setProcessing] = useState(false)
   const [notifyOwnerLoading, setNotifyOwnerLoading] = useState(false)
   
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const { locale, tt } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -174,37 +175,9 @@ export default function AdminReportsPage() {
   }, [toast, tt])
 
   useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-
-    const run = async () => {
-      if (!user) return
-
-      try {
-        const isAdmin = await checkIsAdmin(user.email ?? undefined)
-        if (!isAdmin) {
-          toast({
-            title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
-            description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
-            variant: "destructive",
-          })
-          router.push("/dashboard")
-          return
-        }
-
-        setIsAdmin(true)
-        loadData()
-      } catch (error) {
-        console.error("[AdminReports] Error checking admin:", error)
-        router.push("/dashboard")
-      }
-    }
-
-    run()
-  }, [authLoading, loadData, router, toast, user, tt])
+    if (!isAdmin) return
+    loadData()
+  }, [isAdmin, loadData])
 
   useRefreshOnFocus(loadData, { enabled: isAdmin, minIntervalMs: 10_000 })
 

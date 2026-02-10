@@ -5,6 +5,7 @@
  */
 
 import type { ExchangeStatus } from "@/types"
+import type { BilingualLabel } from "@/lib/constants"
 
 export function normalizeExchangePhaseStatus(status: ExchangeStatus): ExchangeStatus {
   return status === "accepted" ? "in_progress" : status
@@ -23,36 +24,38 @@ export const VALID_TRANSITIONS: Record<ExchangeStatus, ExchangeStatus[]> = {
   rejected: [],
 }
 
-export const STATUS_LABELS: Record<ExchangeStatus, string> = {
-  pending: "รอเจ้าของตอบรับ",
-  accepted: "กำลังดำเนินการ",
-  in_progress: "กำลังดำเนินการ",
-  completed: "เสร็จสิ้น",
-  cancelled: "ยกเลิกแล้ว",
-  rejected: "ปฏิเสธแล้ว",
+export const STATUS_LABELS: Record<ExchangeStatus, BilingualLabel> = {
+  pending: { th: "รอเจ้าของตอบรับ", en: "Pending owner response" },
+  accepted: { th: "กำลังดำเนินการ", en: "In progress" },
+  in_progress: { th: "กำลังดำเนินการ", en: "In progress" },
+  completed: { th: "เสร็จสิ้น", en: "Completed" },
+  cancelled: { th: "ยกเลิกแล้ว", en: "Cancelled" },
+  rejected: { th: "ปฏิเสธแล้ว", en: "Rejected" },
 }
 
-export const STATUS_DESCRIPTIONS: Record<ExchangeStatus, string> = {
-  pending: "รอเจ้าของสิ่งของตอบรับคำขอ",
-  accepted: "กำลังดำเนินการ",
-  in_progress: "กำลังดำเนินการ - กำลังส่งมอบ/รับของ",
-  completed: "แลกเปลี่ยนเสร็จสมบูรณ์",
-  cancelled: "การแลกเปลี่ยนถูกยกเลิก",
-  rejected: "เจ้าของปฏิเสธคำขอ",
+export const STATUS_DESCRIPTIONS: Record<ExchangeStatus, BilingualLabel> = {
+  pending: { th: "รอเจ้าของสิ่งของตอบรับคำขอ", en: "Waiting for item owner to accept" },
+  accepted: { th: "กำลังดำเนินการ", en: "In progress" },
+  in_progress: { th: "กำลังดำเนินการ - กำลังส่งมอบ/รับของ", en: "In progress — handing over / receiving items" },
+  completed: { th: "แลกเปลี่ยนเสร็จสมบูรณ์", en: "Exchange completed" },
+  cancelled: { th: "การแลกเปลี่ยนถูกยกเลิก", en: "Exchange cancelled" },
+  rejected: { th: "เจ้าของปฏิเสธคำขอ", en: "Owner rejected the request" },
 }
 
-export function getConfirmButtonLabel(status: ExchangeStatus, role: "owner" | "requester"): string {
+export function getConfirmButtonLabel(status: ExchangeStatus, role: "owner" | "requester"): BilingualLabel {
   const effectiveStatus = normalizeExchangePhaseStatus(status)
   if (effectiveStatus === "in_progress") {
-    return role === "owner" ? "ยืนยันส่งมอบแล้ว" : "ยืนยันรับของแล้ว"
+    return role === "owner"
+      ? { th: "ยืนยันส่งมอบแล้ว", en: "Confirm handoff" }
+      : { th: "ยืนยันรับของแล้ว", en: "Confirm received" }
   }
-  return "ยืนยัน"
+  return { th: "ยืนยัน", en: "Confirm" }
 }
 
-export function getWaitingOtherConfirmationMessage(role: "owner" | "requester"): string {
+export function getWaitingOtherConfirmationMessage(role: "owner" | "requester"): BilingualLabel {
   return role === "owner"
-    ? "คุณยืนยันส่งมอบแล้ว - รออีกฝ่ายยืนยันรับของ"
-    : "คุณยืนยันรับของแล้ว - รออีกฝ่ายยืนยันส่งมอบ"
+    ? { th: "คุณยืนยันส่งมอบแล้ว - รออีกฝ่ายยืนยันรับของ", en: "You confirmed handoff. Waiting for the other party to confirm receipt." }
+    : { th: "คุณยืนยันรับของแล้ว - รออีกฝ่ายยืนยันส่งมอบ", en: "You confirmed receipt. Waiting for the other party to confirm handoff." }
 }
 
 export function isValidTransition(
@@ -80,13 +83,13 @@ export function validateTransition(
   }
 
   if (isTerminalStatus(currentStatus)) {
-    return `Cannot change status: exchange is already ${STATUS_LABELS[currentStatus]}`
+    return `Cannot change status: exchange is already ${STATUS_LABELS[currentStatus].th}`
   }
 
   if (!isValidTransition(currentStatus, newStatus)) {
     const allowed = getNextStatuses(currentStatus)
-    const allowedLabels = allowed.map((s) => STATUS_LABELS[s]).join(", ")
-    return `Invalid status transition from ${STATUS_LABELS[currentStatus]} to ${STATUS_LABELS[newStatus]}. Allowed: ${allowedLabels}`
+    const allowedLabels = allowed.map((s) => STATUS_LABELS[s].th).join(", ")
+    return `Invalid status transition from ${STATUS_LABELS[currentStatus].th} to ${STATUS_LABELS[newStatus].th}. Allowed: ${allowedLabels}`
   }
 
   return null

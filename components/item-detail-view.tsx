@@ -17,7 +17,7 @@ import Link from "next/link"
 const ReportModal = lazy(() => import("@/components/report-modal").then((m) => ({ default: m.ReportModal })))
 import { useAccountStatus } from "@/hooks/use-account-status"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
-import { STATUS_COLORS } from "@/lib/constants"
+import { CATEGORY_LABELS, STATUS_COLORS, STATUS_LABELS } from "@/lib/constants"
 import { FavoriteButton } from "@/components/favorite-button"
 import { OwnerRatingBadge } from "@/components/owner-rating-badge"
 import { useI18n } from "@/components/language-provider"
@@ -128,17 +128,17 @@ export function ItemDetailView({
   const ownerDisplayName = item.postedByName || poster?.displayName || item.postedByEmail.split("@")[0] || tt("ผู้ใช้งาน", "User")
   const ownerRating = item.postedByRating ?? poster?.rating
   const categoryLabelByValue: Record<ItemCategory, string> = {
-    electronics: tt("อิเล็กทรอนิกส์", "Electronics"),
-    books: tt("หนังสือ", "Books"),
-    furniture: tt("เฟอร์นิเจอร์", "Furniture"),
-    clothing: tt("เสื้อผ้า", "Clothing"),
-    sports: tt("อุปกรณ์กีฬา", "Sports"),
-    other: tt("อื่นๆ", "Other"),
+    electronics: tt(CATEGORY_LABELS.electronics.th, CATEGORY_LABELS.electronics.en),
+    books: tt(CATEGORY_LABELS.books.th, CATEGORY_LABELS.books.en),
+    furniture: tt(CATEGORY_LABELS.furniture.th, CATEGORY_LABELS.furniture.en),
+    clothing: tt(CATEGORY_LABELS.clothing.th, CATEGORY_LABELS.clothing.en),
+    sports: tt(CATEGORY_LABELS.sports.th, CATEGORY_LABELS.sports.en),
+    other: tt(CATEGORY_LABELS.other.th, CATEGORY_LABELS.other.en),
   }
   const statusLabelByValue: Record<ItemStatus, string> = {
-    available: tt("พร้อมให้", "Available"),
-    pending: tt("รอดำเนินการ", "Pending"),
-    completed: tt("เสร็จสิ้น", "Completed"),
+    available: tt(STATUS_LABELS.available.th, STATUS_LABELS.available.en),
+    pending: tt(STATUS_LABELS.pending.th, STATUS_LABELS.pending.en),
+    completed: tt(STATUS_LABELS.completed.th, STATUS_LABELS.completed.en),
   }
   const postedAtText =
     locale === "th"

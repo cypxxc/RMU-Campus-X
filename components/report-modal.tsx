@@ -53,21 +53,9 @@ export function ReportModal({ open, onOpenChange, reportType, targetId, targetTi
     folder: "item" 
   })
 
-  const reasonLabelMap: Record<string, string> = {
-    item_fake_info: tt("ข้อมูลสิ่งของไม่ถูกต้องหรือเท็จ", "False or inaccurate item information"),
-    item_inappropriate: tt("เนื้อหาไม่เหมาะสม", "Inappropriate content"),
-    item_spam: tt("สแปมโพส", "Spam post"),
-    item_illegal: tt("สิ่งของผิดกฎหมาย", "Illegal item"),
-    exchange_no_show: tt("ไม่มาตามนัด", "No-show"),
-    exchange_wrong_item: tt("สิ่งของไม่ตรงตามที่ตกลง", "Wrong item compared to agreement"),
-    exchange_unsafe: tt("พฤติกรรมไม่เหมาะสม", "Unsafe or inappropriate behavior"),
-    user_inappropriate: tt("พฤติกรรมไม่เหมาะสม", "Inappropriate behavior"),
-    user_spam: tt("สแปมข้อความ", "Spam messages"),
-    other: tt("อื่นๆ (โปรดระบุ)", "Other (please specify)"),
-  }
   const reasons = (REPORT_REASONS[reportType] || []).map((r) => ({
     ...r,
-    label: reasonLabelMap[r.code] || r.label,
+    label: tt(r.label.th, r.label.en),
   }))
   const selectedReason = reasons.find((r) => r.code === reasonCode)
   const isOtherReason = reasonCode === "other"

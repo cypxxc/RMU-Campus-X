@@ -1,12 +1,11 @@
 "use client"
 
 import { memo, useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { deleteItem, updateItem, createAdminLog } from "@/lib/firestore"
 import { useItems } from "@/hooks/use-items"
 import type { Item, ItemStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
+import { useAdminGuard } from "@/hooks/use-admin-guard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -49,7 +48,7 @@ const PAGE_SIZE = 20
 type StatusFilter = ItemStatus | "all"
 
 export default function AdminItemsPage() {
-  const [isAdmin, setIsAdmin] = useState(false)
+  const { isAdmin } = useAdminGuard()
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
@@ -66,31 +65,9 @@ export default function AdminItemsPage() {
   } | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
 
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const { tt } = useI18n()
-  const router = useRouter()
   const { toast } = useToast()
-
-  const checkAdmin = useCallback(async () => {
-    if (!user) return
-
-    try {
-      const isAdmin = await checkIsAdmin(user.email ?? undefined)
-      if (!isAdmin) {
-        toast({
-          title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
-          description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
-          variant: "destructive",
-        })
-        router.push("/dashboard")
-        return
-      }
-      setIsAdmin(true)
-    } catch (error) {
-      console.error("[AdminItems] Error checking admin:", error)
-      router.push("/dashboard")
-    }
-  }, [router, toast, user, tt])
 
   const fetchItemStats = useCallback(async () => {
     if (!user) return
@@ -117,14 +94,7 @@ export default function AdminItemsPage() {
     }
   }, [user])
 
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [authLoading, checkAdmin, router, user])
+  // Auth check handled by useAdminGuard hook
 
   useEffect(() => {
     const handler = debounce(() => setDebouncedSearchQuery(searchQuery), searchQuery ? 500 : 0)

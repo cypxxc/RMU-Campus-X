@@ -3,10 +3,8 @@
 
 
 import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { getAdminLogs, type AdminLog, type AdminActionType } from "@/lib/firestore"
-import { useAuth } from "@/components/auth-provider"
+import { useAdminGuard } from "@/hooks/use-admin-guard"
 import { useI18n } from "@/components/language-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -59,18 +57,16 @@ const TARGET_TYPE_LABELS: Record<string, { th: string; en: string }> = {
 }
 
 export default function AdminLogsPage() {
+  const { isAdmin } = useAdminGuard()
   const [logs, setLogs] = useState<AdminLog[]>([])
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [filterAction] = useState<string>("all")
   const [filterTarget] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("") // New state
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
-  const { user, loading: authLoading } = useAuth()
   const { locale, tt } = useI18n()
-  const router = useRouter()
   const { toast } = useToast()
 
   const loadLogs = useCallback(async () => {
@@ -100,43 +96,9 @@ export default function AdminLogsPage() {
     }
   }, [filterAction, filterTarget, toast, tt])
 
-  const checkAdmin = useCallback(async () => {
-    if (!user) return
-
-    try {
-      const isAdmin = await checkIsAdmin(user.email ?? undefined)
-      if (!isAdmin) {
-        toast({
-          title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
-          description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
-          variant: "destructive",
-        })
-        router.push("/dashboard")
-        return
-      }
-
-      setIsAdmin(true)
-      loadLogs()
-    } catch (error) {
-      console.error("[AdminLogs] Error checking admin:", error)
-      router.push("/dashboard")
-    }
-  }, [loadLogs, router, toast, user, tt])
-
   useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [authLoading, checkAdmin, router, user])
-
-
-  useEffect(() => {
-    if (isAdmin) {
-      loadLogs()
-    }
+    if (!isAdmin) return
+    loadLogs()
   }, [isAdmin, loadLogs])
 
   useRefreshOnFocus(loadLogs, { enabled: isAdmin, minIntervalMs: 10_000 })

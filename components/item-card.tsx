@@ -32,7 +32,7 @@ export const ItemCard = memo(function ItemCard({
   priority = false,
   variant = "default",
 }: ItemCardProps) {
-  const { tt } = useI18n()
+  const { locale, tt } = useI18n()
   const postedDate = safeToDate(item.postedAt, new Date(0))
   const isAdmin = variant === "admin"
   const imageUrls = getItemImageUrls(item)
@@ -138,7 +138,7 @@ export const ItemCard = memo(function ItemCard({
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Package className="h-3.5 w-3.5" />
-            {CATEGORY_LABELS[item.category]}
+            {CATEGORY_LABELS[item.category]?.[locale === "th" ? "th" : "en"]}
           </span>
           {item.location && (
             <span className="flex items-center gap-1.5">

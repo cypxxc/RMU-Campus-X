@@ -21,15 +21,6 @@ const COLORS: Record<string, string> = {
   other: '#6b7280',
 }
 
-const CATEGORY_LABELS_EN: Record<string, string> = {
-  electronics: "Electronics",
-  books: "Books",
-  furniture: "Furniture",
-  clothing: "Clothing",
-  sports: "Sports",
-  other: "Other",
-}
-
 function CategoryTooltip({
   active,
   payload,
@@ -59,10 +50,11 @@ export const CategoryDistributionChart = memo(function CategoryDistributionChart
 }: CategoryDistributionChartProps) {
   const { locale, tt } = useI18n()
   const resolveCategoryLabel = useCallback(
-    (category: string) =>
-      locale === "th"
-        ? CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] || category
-        : CATEGORY_LABELS_EN[category] || category,
+    (category: string) => {
+      const label = CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS]
+      if (!label) return category
+      return locale === "th" ? label.th : label.en
+    },
     [locale]
   )
 
