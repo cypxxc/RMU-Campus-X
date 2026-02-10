@@ -19,12 +19,14 @@
 - ระบบเลือกภาษาเริ่มต้นจาก `rmu_locale` cookie และรองรับ server-side locale resolution
 - ครอบคลุมหน้าใช้งานหลักทั้งฝั่ง User และ Admin รวมถึงเอกสารสำคัญ (Guide / Terms / Privacy / Guidelines)
 - โครงสร้าง i18n หลัก:
-  - `components/language-provider.tsx`
+  - `components/language-provider.tsx` — `useI18n()` hook (`tt()`, `locale`)
   - `components/language-switcher.tsx`
   - `lib/i18n/config.ts`
   - `lib/i18n/messages.ts`
   - `lib/i18n/translate.ts`
   - `lib/i18n/server.ts`
+  - `lib/constants.ts` — label constants ใช้ `BilingualLabel` type (`{ th, en }`)
+  - `lib/exchange-state-machine.ts` — exchange status labels เป็น bilingual
 
 ---
 
@@ -119,7 +121,6 @@ User Action → Component → lib/db/* (authFetchJson) → API Route → Firesto
 | **TailwindCSS** | 4.1.9 | Styling Framework |
 | **Radix UI** | Latest | Accessible Components |
 | **Framer Motion** | 12.x | Animations |
-| **Three.js** | 0.182.0 | 3D Background Effects |
 
 ### Backend & Services
 
@@ -213,7 +214,7 @@ rmu-campus-x/
 │   ├── api-client.ts                 # authFetch / authFetchJson (retry + backoff), getAuthToken
 │   ├── i18n/                         # locale config, translations, server resolver
 │   ├── breadcrumb-labels.ts          # Route labels สำหรับ breadcrumb
-│   ├── constants.ts                  # หมวดหมู่สิ่งของ (CATEGORY_OPTIONS, CATEGORY_LABELS)
+│   ├── constants.ts                  # bilingual label constants (BilingualLabel, CATEGORY_*, STATUS_*, REPORT_*)
 │   ├── db/                           # Database / API wrappers
 │   │   ├── items.ts                  # Items (เรียก /api/items)
 │   │   ├── exchanges.ts              # Exchanges CRUD
@@ -225,7 +226,7 @@ rmu-campus-x/
 │   │   ├── support.ts                # Support (client ใช้ GET/POST /api/support)
 │   │   └── logs.ts                   # Activity Logs
 │   │
-│   ├── exchange-state-machine.ts     # Exchange status transitions, STATUS_LABELS, getConfirmButtonLabel
+│   ├── exchange-state-machine.ts     # Exchange status transitions, bilingual STATUS_LABELS/DESCRIPTIONS
 │   ├── services/                     # Business Logic Services
 │   │   ├── admin/                    # Admin Services
 │   │   │   └── user-cleanup.ts       # User Deletion Logic
@@ -351,7 +352,7 @@ rmu-campus-x/
 ### 7. ระบบผู้ดูแล (Admin Panel)
 
 - **Dashboard สถิติ** - ภาพรวมระบบ (โหลดผ่าน `/api/admin/stats`, `/api/admin/items`, `/api/admin/reports`, `/api/admin/users`, `/api/admin/support`)
-- **ตรวจสิทธิ์ Admin** - ใช้ `isAdmin` จาก context (GET /api/users/me) ไม่อ่าน Firestore โดยตรง
+- **ตรวจสิทธิ์ Admin** - ใช้ `useAdminGuard()` hook (เรียก `/api/admin/verify` server-side) ไม่อ่าน Firestore โดยตรง
 - **จัดการผู้ใช้** - Suspend/Unsuspend, คำเตือน, ลบผู้ใช้
 - **จัดการสิ่งของ / รายงาน / Support / ประกาศ** - โหลดและจัดการผ่าน Admin API
 - **จัดการประกาศ** - หน้า Admin → ประกาศ (สร้าง/แก้ไข/ลบ แบนเนอร์ประกาศ)
@@ -742,7 +743,7 @@ bun start
 | **Backups** | `.github/workflows/backup.yml` | Automated daily Firestore backups |
 | **Restore** | `scripts/restore-firestore.ts` | Restore data from backup |
 | **Validation** | `lib/api-validation.ts` | Centralized API validation + requireTermsAccepted |
-| **State Machine** | `lib/exchange-state-machine.ts` | Exchange status transitions, STATUS_LABELS, getConfirmButtonLabel, getWaitingOtherConfirmationMessage |
+| **State Machine** | `lib/exchange-state-machine.ts` | Exchange status transitions, bilingual STATUS_LABELS/DESCRIPTIONS, getConfirmButtonLabel, getWaitingOtherConfirmationMessage |
 | **API Client** | `lib/api-client.ts` | authFetch / authFetchJson (idempotent retry policy, exponential backoff + Retry-After, transient network fail-fast), getAuthToken |
 | **Health Check** | `/api/health` | System status monitoring |
 | **App Check** | `lib/app-check.ts` | Firebase App Check (bot protection) |

@@ -1,9 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { useAuth } from "@/components/auth-provider"
+import { useAdminGuard } from "@/hooks/use-admin-guard"
 import { useI18n } from "@/components/language-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -54,14 +53,7 @@ import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
 import { STATUS_LABELS } from "@/lib/exchange-state-machine"
 
-const STATUS_LABELS_EN: Record<string, string> = {
-  pending: "Pending owner response",
-  accepted: "In progress",
-  in_progress: "In progress",
-  completed: "Completed",
-  cancelled: "Cancelled",
-  rejected: "Rejected",
-}
+
 
 interface ExchangeRow {
   id: string
@@ -108,9 +100,9 @@ function DetailRow({
 }
 
 export default function AdminExchangesPage() {
+  const { isAdmin } = useAdminGuard()
   const [exchanges, setExchanges] = useState<ExchangeRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedExchange, setSelectedExchange] = useState<ExchangeRow | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null })
@@ -118,34 +110,9 @@ export default function AdminExchangesPage() {
   const [hasMore, setHasMore] = useState(false)
   const [lastId, setLastId] = useState<string | null>(null)
 
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const { locale, tt } = useI18n()
-  const router = useRouter()
   const { toast } = useToast()
-
-  const checkAdmin = useCallback(async () => {
-    if (!user) return
-    try {
-      const isAdmin = await checkIsAdmin(user.email ?? undefined)
-      if (!isAdmin) {
-        toast({ title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"), variant: "destructive" })
-        router.push("/dashboard")
-        return
-      }
-      setIsAdmin(true)
-    } catch {
-      router.push("/dashboard")
-    }
-  }, [router, toast, user, tt])
-
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [authLoading, checkAdmin, router, user])
 
   const loadExchanges = useCallback(
     async (append = false, nextLastId: string | null = null) => {
@@ -239,9 +206,7 @@ export default function AdminExchangesPage() {
           : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400"
     return (
       <Badge className={c}>
-        {locale === "th"
-          ? STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status
-          : STATUS_LABELS_EN[status] ?? status}
+        {STATUS_LABELS[status as keyof typeof STATUS_LABELS]?.[locale === "th" ? "th" : "en"] ?? status}
       </Badge>
     )
   }
@@ -287,7 +252,7 @@ export default function AdminExchangesPage() {
                   <SelectItem value="all">{tt("ทั้งหมด", "All")}</SelectItem>
                   {Object.entries(STATUS_LABELS).map(([value, label]) => (
                     <SelectItem key={value} value={value}>
-                      {locale === "th" ? label : STATUS_LABELS_EN[value] ?? value}
+                      {locale === "th" ? label.th : label.en}
                     </SelectItem>
                   ))}
                 </SelectContent>

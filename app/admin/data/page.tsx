@@ -1,10 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 import Link from "next/link"
-import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { useAuth } from "@/components/auth-provider"
+import { useAdminGuard } from "@/hooks/use-admin-guard"
 import { useI18n } from "@/components/language-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,15 +11,14 @@ import { Loader2, Package, Users, RefreshCw, MessageSquare, AlertTriangle, Histo
 import { useToast } from "@/hooks/use-toast"
 
 export default function AdminDataPage() {
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [checking, setChecking] = useState(true)
+  const { isAdmin, loading: checking } = useAdminGuard()
   const [cleanupExchangesLoading, setCleanupExchangesLoading] = useState(false)
   const [cleanupOrphansLoading, setCleanupOrphansLoading] = useState(false)
 
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const { tt } = useI18n()
-  const router = useRouter()
   const { toast } = useToast()
+
   const managementLinks = [
     {
       href: "/admin/items",
@@ -59,32 +57,6 @@ export default function AdminDataPage() {
       desc: tt("ดูบันทึกการดำเนินการของแอดมิน", "Review admin activity history"),
     },
   ]
-
-  const checkAdmin = useCallback(async () => {
-    if (!user) return
-    try {
-      const isAdmin = await checkIsAdmin(user.email ?? undefined)
-      if (!isAdmin) {
-        toast({ title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"), variant: "destructive" })
-        router.push("/dashboard")
-        return
-      }
-      setIsAdmin(true)
-    } catch {
-      router.push("/dashboard")
-    } finally {
-      setChecking(false)
-    }
-  }, [router, toast, tt, user])
-
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [authLoading, checkAdmin, router, user])
 
   const handleCleanupOldExchanges = async () => {
     if (!user || cleanupExchangesLoading) return

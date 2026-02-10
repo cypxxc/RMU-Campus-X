@@ -71,7 +71,7 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
                   className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                 />
                 <Icon className={`h-4 w-4 transition-transform duration-200 ${option.color}`} />
-                <Label className="flex-1 cursor-pointer text-sm font-medium">{option.label}</Label>
+                <Label className="flex-1 cursor-pointer text-sm font-medium">{tt(option.label.th, option.label.en)}</Label>
                 {isSelected && <Check className="h-4 w-4 text-primary" />}
               </div>
             )
@@ -94,7 +94,7 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
                 <RadioGroupItem value={option.value} id={`status-${option.value}`} className="sr-only" />
                 <Icon className={`h-4 w-4 transition-transform duration-200 group-hover:scale-110 ${option.color}`} />
                 <Label htmlFor={`status-${option.value}`} className="flex-1 cursor-pointer text-sm font-medium">
-                  {option.label}
+                  {tt(option.label.th, option.label.en)}
                 </Label>
                 {status === option.value && <Check className="h-4 w-4 text-primary" />}
               </div>

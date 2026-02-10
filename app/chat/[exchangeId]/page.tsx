@@ -51,6 +51,7 @@ import {
 import { getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
 import { ExchangeStepIndicator } from "@/components/exchange/exchange-step-indicator"
 import { useI18n } from "@/components/language-provider"
+import { CATEGORY_LABELS } from "@/lib/constants"
 
 
 export default function ChatPage({
@@ -103,12 +104,12 @@ export default function ChatPage({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const categoryLabelByValue: Record<ItemCategory, string> = {
-    electronics: tt("อิเล็กทรอนิกส์", "Electronics"),
-    books: tt("หนังสือ", "Books"),
-    furniture: tt("เฟอร์นิเจอร์", "Furniture"),
-    clothing: tt("เสื้อผ้า", "Clothing"),
-    sports: tt("อุปกรณ์กีฬา", "Sports"),
-    other: tt("อื่นๆ", "Other"),
+    electronics: tt(CATEGORY_LABELS.electronics.th, CATEGORY_LABELS.electronics.en),
+    books: tt(CATEGORY_LABELS.books.th, CATEGORY_LABELS.books.en),
+    furniture: tt(CATEGORY_LABELS.furniture.th, CATEGORY_LABELS.furniture.en),
+    clothing: tt(CATEGORY_LABELS.clothing.th, CATEGORY_LABELS.clothing.en),
+    sports: tt(CATEGORY_LABELS.sports.th, CATEGORY_LABELS.sports.en),
+    other: tt(CATEGORY_LABELS.other.th, CATEGORY_LABELS.other.en),
   }
   const getLocalizedConfirmButtonLabel = (role: "owner" | "requester") =>
     role === "owner" ? tt("ยืนยันส่งมอบแล้ว", "Confirm handoff") : tt("ยืนยันรับของแล้ว", "Confirm received")

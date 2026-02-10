@@ -1,11 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
-import { checkIsAdmin } from "@/lib/services/client-firestore"
 import { replyToTicket, updateTicketStatus, getUserProfile, getSupportTickets } from "@/lib/firestore"
 import type { SupportTicket, User, SupportTicketStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
+import { useAdminGuard } from "@/hooks/use-admin-guard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -92,7 +91,7 @@ interface PaginationState {
 }
 
 export default function AdminSupportPage() {
-  const [isAdmin, setIsAdmin] = useState(false)
+  const { isAdmin } = useAdminGuard()
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null)
   const [ticketUser, setTicketUser] = useState<User | null>(null)
   const [ticketReply, setTicketReply] = useState("")
@@ -114,41 +113,9 @@ export default function AdminSupportPage() {
     historyStateRef.current = historyState
   }, [historyState])
 
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const { locale, tt } = useI18n()
-  const router = useRouter()
   const { toast } = useToast()
-
-  const checkAdmin = useCallback(async () => {
-    if (!user) return
-
-    try {
-      const isAdmin = await checkIsAdmin(user.email ?? undefined)
-      if (!isAdmin) {
-        toast({
-          title: tt("ไม่มีสิทธิ์เข้าถึง", "Access denied"),
-          description: tt("คุณไม่มีสิทธิ์ใช้งานหน้าผู้ดูแลระบบ", "You do not have permission to access admin pages."),
-          variant: "destructive",
-        })
-        router.push("/dashboard")
-        return
-      }
-
-      setIsAdmin(true)
-    } catch (error) {
-      console.error("[AdminSupport] Error checking admin:", error)
-      router.push("/dashboard")
-    }
-  }, [router, toast, user, tt])
-
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    checkAdmin()
-  }, [authLoading, checkAdmin, router, user])
 
   const loadTickets = useCallback(async (tab: 'pending' | 'history', reset = false) => {
     const currentState = tab === 'pending' ? pendingStateRef.current : historyStateRef.current
