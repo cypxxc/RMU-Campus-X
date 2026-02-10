@@ -29,20 +29,17 @@ export default function DashboardPage() {
   const [status, setStatus] = useState<ItemStatus | "all">("available")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
-  const [isSearching, setIsSearching] = useState(false)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { tt } = useI18n()
 
   useEffect(() => {
-    if (searchQuery !== debouncedSearchQuery) setIsSearching(true)
     const handler = debounce(() => {
       setDebouncedSearchQuery(searchQuery)
-      setIsSearching(false)
     }, 500)
     handler()
     return () => handler.cancel()
-  }, [debouncedSearchQuery, searchQuery])
+  }, [searchQuery])
 
   const {
     items,
@@ -60,7 +57,11 @@ export default function DashboardPage() {
     status,
     searchQuery: debouncedSearchQuery,
     pageSize: PAGE_SIZE,
+    enabled: !!user,
   })
+
+  const showItemsLoading = (authLoading && !user) || isLoading
+  const isSearching = searchQuery !== debouncedSearchQuery
 
   useEffect(() => {
     if (isError && error) {
@@ -116,7 +117,7 @@ export default function DashboardPage() {
           <main className="flex-1 min-w-0">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
               <h2 className="text-sm font-medium text-muted-foreground order-2 sm:order-1 flex items-center gap-2" role="status" aria-live="polite">
-                {isLoading ? (
+                {showItemsLoading ? (
                   <>
                     <Loader2 className="h-3 w-3 animate-spin" />
                     {tt("กำลังโหลด...", "Loading...")}
@@ -161,7 +162,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {isLoading ? (
+            {showItemsLoading ? (
               <ItemCardSkeletonGrid count={6} />
             ) : items.length === 0 ? (
               <Empty className="py-16 bg-muted/10 border border-dashed">
@@ -264,7 +265,7 @@ export default function DashboardPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage === 1 || isLoading}
+                        disabled={currentPage === 1 || showItemsLoading}
                         className="gap-1 min-w-[100px]"
                       >
                         <ChevronLeft className="h-4 w-4" />
@@ -277,7 +278,7 @@ export default function DashboardPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages || isLoading}
+                        disabled={currentPage === totalPages || showItemsLoading}
                         className="gap-1 min-w-[100px]"
                       >
                         {tt("ถัดไป", "Next")}

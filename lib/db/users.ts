@@ -2,7 +2,7 @@ import { checkAndAutoUnsuspend as checkAutoUnsuspend } from "./users-auto-unsusp
 
 export { updateUserProfile, getUserProfile, getUserPublicProfile } from "./users-profile"
 export { updateUserStatus, issueWarning, deleteUserAndData } from "./users-status"
-export { getUserWarnings, getAllWarnings } from "./users-warnings"
+export { getUserWarnings, getAllWarnings, deleteUserWarningByAdmin } from "./users-warnings"
 export { getUserLineSettings, updateUserLineSettings, linkLineAccount, unlinkLineAccount } from "./users-line"
 
 const AUTO_UNSUSPEND_TITLE = "🔓 บัญชีของคุณถูกปลดล็อคแล้ว"

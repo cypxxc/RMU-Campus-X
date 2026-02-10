@@ -45,7 +45,7 @@
 |--------|------------|------------------------|
 | 1 | Query รายการ items (orderBy postedAt, limit, where ตาม filter) | 1 query (จำนวน doc = limit หรือมากกว่าเมื่อมี search) |
 | 2 | ถ้ามี `lastId` (pagination) | +1 read (doc นั้นสำหรับ startAfter) |
-| 3 | เมื่อมี **search** | limit = min(pageSize × 3, 100) — ดึงมากแล้ว filter ใน memory |
+| 3 | เมื่อมี **search** | ใช้ index `searchKeywords` array-contains-any แล้ว refine AND เบาๆ (ไม่ scan หนักใน memory) |
 | 4 | โปรไฟล์ผู้โพส (postedByName, rating) | 1 batch `getAll()` ต่อ unique postedBy ในหน้านั้น (ถ้าไม่ cache) |
 | 5 | สถานะ favorite ของ current user | 1 batch `getAll()` ต่อจำนวน item ในหน้า (เช่น 12 docs) |
 
@@ -117,7 +117,7 @@
 |--------|----------|--------|
 | **Waterfall: auth → users/me → items** | ต้องรอ 2 รอบเครือข่ายก่อนเห็นรายการของ | สูง |
 | **GET /api/items ทำหลาย batch (items + users + favorites)** | จำนวน Firestore read สูง, latency สะสม | สูง |
-| **เมื่อมี search: ดึง 3× pageSize แล้ว filter ใน memory** | อ่าน Firestore มากขึ้น + โอนข้อมูลมากขึ้น | กลาง |
+| **เมื่อมี search** | ใช้ full-text index (array-contains-any) แล้ว — อ่านเฉพาะ doc ที่ match | ปรับแล้ว |
 | **Dashboard ไม่มี SSR** | ต้องรอ hydrate + auth + items ถึงจะเห็นของ | กลาง |
 | **GET /api/users/me มีหลาย query (user + admin + userWarnings)** | ช้าเล็กน้อยต่อการโหลดโปรไฟล์ | กลาง |
 | **Announcements + users/me + items เรียกแยกกัน** | หลาย request ต่อการเข้า 1 ครั้ง | กลาง |
@@ -134,17 +134,16 @@
   - เมื่อมี token แล้ว ให้ยิงทั้ง `GET /api/users/me` และ `GET /api/items` พร้อมกัน (ไม่รอ users/me คืนมาก่อนค่อยยิง items)  
   - ปรับได้ที่ hook หรือที่ที่เรียก `getItems()` ให้ไม่ผูกกับ “หลังโหลดโปรไฟล์เสร็จ” ถ้าไม่จำเป็น
 
-- **พิจารณา SSR หรือ Streaming สำหรับรายการของ**  
-  - ใช้ Server Component หรือ getData ฝั่ง server สำหรับ list แรก (เช่น หน้าแรกของ dashboard) แล้ว hydrate  
-  - หรือส่ง HTML เปล่า/ skeleton จาก server แล้ว stream ข้อมูล items เข้ามาทีหลัง เพื่อลดความรู้สึกรอ
+- **ลด waterfall หลัง login แล้ว:** AuthProvider เรียก `setLoading(false)` ทันทีเมื่อมี user (ไม่รอ users/me) ทำให้ dashboard แสดงและยิง GET /api/items ขนานกับ GET /api/users/me — ลดความรู้สึกรอหลัง login
+- **SSR/Streaming เพิ่มเติม (ถ้าต้องการ):** ถ้าต้องการให้ shell ของ dashboard มาจาก server ตั้งแต่แรก ต้องปรับ AuthGuard ให้ไม่ block ทั้ง tree (หรือใช้ cookie-based session สำหรับ server-side auth)
 
 ### 5.2 ลดจำนวน Firestore read และความซับซ้อนของ GET /api/items
 
 - **Cache โปรไฟล์ผู้โพส (postedBy) ฝั่ง server**  
   - มี in-memory cache อยู่แล้ว (posterProfileCache) — ตรวจว่า TTL และ key ครอบคลุม use case แล้วอาจขยาย TTL หรือใช้ Redis ถ้า scale หลาย instance
 
-- **ลดการดึงเมื่อมี search**  
-  - พิจารณาใช้ Full-Text Search (เช่น Firestore extension, Algolia, หรือ search index แยก) แทนการดึง 3× limit แล้ว filter ใน memory เพื่อลดทั้ง read และ payload
+- **ลดการดึงเมื่อมี search (ทำแล้ว)**  
+  - GET /api/items ใช้ `searchKeywords` + Firestore `array-contains-any` (full-text index) ดึงเฉพาะ doc ที่ match อย่างน้อย 1 term แล้ว refine AND ใน memory เบาๆ — ไม่ scan หนักใน memory อีกต่อไป
 
 - **รวมข้อมูลที่จำเป็นใน item document (denormalize)**  
   - เช่น เก็บ `postedByName` (หรือ displayName) ลงใน item ตอนโพส/อัปเดต เพื่อลดการ batch อ่าน users บาง request (ยังคงต้องมีกลยุทธ์ eventual consistency)

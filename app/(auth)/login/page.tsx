@@ -38,6 +38,10 @@ export default function LoginPage() {
     }
   }, [])
 
+  useEffect(() => {
+    router.prefetch("/dashboard")
+  }, [router])
+
   const handleRememberChange = (checked: boolean) => {
     setRememberMe(checked)
     try {
@@ -57,7 +61,7 @@ export default function LoginPage() {
         title: tt("เข้าสู่ระบบสำเร็จ", "Signed in successfully"),
         description: tt("ยินดีต้อนรับ", "Welcome back"),
       })
-      router.push("/dashboard")
+      router.replace("/dashboard")
     } catch (error: unknown) {
       const firebaseError = error as { code?: string; message?: string }
       let title = tt("เข้าสู่ระบบไม่สำเร็จ", "Sign in failed")

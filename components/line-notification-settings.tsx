@@ -9,20 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { 
   MessageSquare,
   Bell,
   CheckCircle,
@@ -31,163 +18,11 @@ import {
   Package,
   ArrowRightLeft,
   Check,
-  Unlink
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { User } from "@/types"
 import { useI18n } from "@/components/language-provider"
-
-// Unlink Button Component
-function UnlinkButton({ userId, onSuccess }: { userId?: string, onSuccess?: () => void }) {
-  const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
-  const { tt } = useI18n()
-
-  const handleUnlink = async () => {
-    if (!userId) return
-    
-    setLoading(true)
-    try {
-      const auth = getAuth()
-      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
-      if (!token) {
-        toast({
-          title: tt("กรุณาเข้าสู่ระบบ", "Please sign in"),
-          variant: "destructive",
-        })
-        return
-      }
-
-      const res = await fetch("/api/line/link", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || tt("ไม่สามารถยกเลิกการเชื่อมต่อได้", "Unable to unlink LINE"))
-      }
-      
-      toast({
-        title: tt("ยกเลิกการเชื่อมต่อสำเร็จ", "LINE unlinked"),
-        description: tt("คุณจะไม่ได้รับการแจ้งเตือนผ่าน LINE อีกต่อไป", "You will no longer receive LINE notifications."),
-      })
-      
-      onSuccess?.()
-    } catch (error) {
-      console.error("[LineNotificationSettings] Unlink error:", error)
-      toast({
-        title: tt("เกิดข้อผิดพลาด", "Error"),
-        description: tt("ไม่สามารถยกเลิกการเชื่อมต่อได้", "Unable to unlink LINE"),
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={loading}
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
-          {tt("ยกเลิก", "Unlink")}
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{tt("ยกเลิกการเชื่อมต่อ LINE?", "Unlink LINE account?")}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {tt(
-              "คุณจะไม่ได้รับการแจ้งเตือนผ่าน LINE อีกต่อไป หากต้องการเปิดใช้งานอีกครั้ง สามารถสแกน QR Code และพิมพ์อีเมลเพื่อเชื่อมใหม่ได้",
-              "You will stop receiving LINE notifications. You can reconnect later by scanning the QR code and submitting your email again."
-            )}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{tt("ยกเลิก", "Cancel")}</AlertDialogCancel>
-          <AlertDialogAction 
-            onClick={handleUnlink}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
-            {tt("ยืนยันยกเลิกการเชื่อมต่อ", "Confirm unlink")}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-}
-
-function LinkByCodeForm({ userId, onSuccess }: { userId?: string; onSuccess?: () => void }) {
-  const [code, setCode] = useState("")
-  const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
-  const { tt } = useI18n()
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!userId || !code.trim()) return
-    const linkCode = code.trim().replace(/\s/g, "")
-    if (linkCode.length !== 6 || !/^\d+$/.test(linkCode)) {
-      toast({ title: tt("กรุณากรอกรหัส 6 หลักจาก LINE", "Please enter a 6-digit LINE code"), variant: "destructive" })
-      return
-    }
-    setLoading(true)
-    try {
-      const auth = getAuth()
-      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
-      if (!token) {
-        toast({ title: tt("กรุณาเข้าสู่ระบบ", "Please sign in"), variant: "destructive" })
-        return
-      }
-      const base = typeof window !== "undefined" ? window.location.origin : ""
-      const res = await fetch(`${base}/api/line/link`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ userId, linkCode }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast({ title: data.error || tt("เชื่อมบัญชีไม่สำเร็จ", "Failed to link account"), variant: "destructive" })
-        return
-      }
-      toast({ title: tt("เชื่อมบัญชี LINE สำเร็จ", "LINE linked successfully") })
-      setCode("")
-      onSuccess?.()
-    } catch {
-      toast({ title: tt("เกิดข้อผิดพลาด", "Error"), variant: "destructive" })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-2">
-      <Label className="text-sm">{tt("หรือกรอกรหัส 6 หลักจาก LINE", "Or enter a 6-digit LINE code")}</Label>
-      <div className="flex gap-2">
-        <Input
-          placeholder="000000"
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-          maxLength={6}
-          className="font-mono text-center"
-          disabled={loading}
-        />
-        <Button type="submit" size="sm" disabled={loading || !userId}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : tt("เชื่อมบัญชี", "Link account")}
-        </Button>
-      </div>
-    </form>
-  )
-}
+import { LineUnlinkButton, LineLinkByCodeForm } from "@/components/line-link-components"
 
 interface LineNotificationSettingsProps {
   profile?: User | null
@@ -208,7 +43,6 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
 
   const isLinked = !!profile?.lineUserId
 
-  // Load settings when profile changes
   useEffect(() => {
     if (profile?.lineNotifications) {
       setSettings(profile.lineNotifications)
@@ -217,35 +51,23 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
 
   const handleUpdateSettings = async (newSettings: typeof settings) => {
     if (!user) return
-
     setLoading(true)
     try {
       const auth = getAuth()
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
       if (!token) {
-        toast({
-          title: tt("กรุณาเข้าสู่ระบบ", "Please sign in"),
-          variant: "destructive",
-        })
+        toast({ title: tt("กรุณาเข้าสู่ระบบ", "Please sign in"), variant: "destructive" })
         return
       }
-
       const res = await fetch("/api/line/link", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: user.uid, settings: newSettings }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || tt("ไม่สามารถบันทึกการตั้งค่าได้", "Unable to save settings"))
-      }
+      if (!res.ok) throw new Error(data.error || tt("ไม่สามารถบันทึกการตั้งค่าได้", "Unable to save settings"))
       setSettings(newSettings)
-      toast({
-        title: tt("บันทึกการตั้งค่าสำเร็จ", "Settings saved"),
-      })
+      toast({ title: tt("บันทึกการตั้งค่าสำเร็จ", "Settings saved") })
     } catch {
       toast({
         title: tt("เกิดข้อผิดพลาด", "Error"),
@@ -281,7 +103,6 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
 
       <CardContent className="space-y-6">
         {!isLinked ? (
-          // Not linked - show only QR Code with instructions
           <div className="flex flex-col items-center py-4">
             <div className="relative bg-white p-4 rounded-2xl shadow-lg border-2 border-[#00B900]/20">
               <Image
@@ -296,8 +117,7 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
                 <QrCode className="h-4 w-4" />
               </div>
             </div>
-            
-            {/* Steps */}
+
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <span className="h-5 w-5 rounded-full bg-[#00B900] text-white text-xs flex items-center justify-center font-bold">1</span>
@@ -317,29 +137,24 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
               </div>
             </div>
 
-            {/* Link by code */}
-            <LinkByCodeForm userId={user?.uid} onSuccess={onUpdate} />
+            <LineLinkByCodeForm userId={user?.uid} onSuccess={onUpdate} />
           </div>
         ) : (
-          // Already linked - show notification settings
           <div className="space-y-4">
             {/* Master toggle */}
             <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Bell className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Bell className="h-5 w-5 text-primary" />
+                </div>
+                <div>
                   <Label className="font-medium">{tt("เปิดรับการแจ้งเตือน", "Enable notifications")}</Label>
                   <p className="text-xs text-muted-foreground">{tt("เปิด/ปิดการแจ้งเตือนผ่าน LINE ทั้งหมด", "Turn all LINE notifications on or off.")}</p>
-                  </div>
                 </div>
+              </div>
               <Switch
                 checked={settings.enabled}
-                onCheckedChange={(checked) => {
-                  const newSettings = { ...settings, enabled: checked }
-                  handleUpdateSettings(newSettings)
-                }}
+                onCheckedChange={(checked) => handleUpdateSettings({ ...settings, enabled: checked })}
                 disabled={loading}
               />
             </div>
@@ -347,7 +162,6 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
             {/* Individual toggles */}
             {settings.enabled && (
               <div className="space-y-3 pl-4 border-l-2 border-primary/20">
-                {/* Exchange Request */}
                 <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-3">
                     <Package className="h-5 w-5 text-muted-foreground" />
@@ -358,15 +172,11 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
                   </div>
                   <Switch
                     checked={settings.exchangeRequest}
-                    onCheckedChange={(checked) => {
-                      const newSettings = { ...settings, exchangeRequest: checked }
-                      handleUpdateSettings(newSettings)
-                    }}
+                    onCheckedChange={(checked) => handleUpdateSettings({ ...settings, exchangeRequest: checked })}
                     disabled={loading}
                   />
                 </div>
 
-                {/* Exchange Status */}
                 <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-3">
                     <ArrowRightLeft className="h-5 w-5 text-muted-foreground" />
@@ -377,15 +187,11 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
                   </div>
                   <Switch
                     checked={settings.exchangeStatus}
-                    onCheckedChange={(checked) => {
-                      const newSettings = { ...settings, exchangeStatus: checked }
-                      handleUpdateSettings(newSettings)
-                    }}
+                    onCheckedChange={(checked) => handleUpdateSettings({ ...settings, exchangeStatus: checked })}
                     disabled={loading}
                   />
                 </div>
 
-                {/* Exchange Complete */}
                 <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-3">
                     <Check className="h-5 w-5 text-muted-foreground" />
@@ -396,10 +202,7 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
                   </div>
                   <Switch
                     checked={settings.exchangeComplete}
-                    onCheckedChange={(checked) => {
-                      const newSettings = { ...settings, exchangeComplete: checked }
-                      handleUpdateSettings(newSettings)
-                    }}
+                    onCheckedChange={(checked) => handleUpdateSettings({ ...settings, exchangeComplete: checked })}
                     disabled={loading}
                   />
                 </div>
@@ -426,7 +229,7 @@ export function LineNotificationSettings({ profile, onUpdate }: LineNotification
                     <p className="text-xs text-muted-foreground">{tt("คุณจะไม่ได้รับการแจ้งเตือนผ่าน LINE อีก", "You will no longer receive LINE notifications.")}</p>
                   </div>
                 </div>
-                <UnlinkButton userId={user?.uid} onSuccess={onUpdate} />
+                <LineUnlinkButton userId={user?.uid} onSuccess={onUpdate} />
               </div>
             </div>
           </div>

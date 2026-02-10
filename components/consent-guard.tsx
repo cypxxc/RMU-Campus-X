@@ -24,18 +24,23 @@ export function ConsentGuard({ children }: { children: React.ReactNode }) {
   const { user, loading, termsAccepted } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
+  const currentPath = pathname ?? ""
+  const allowRenderWhileAuthLoading =
+    isConsentAllowed(currentPath) ||
+    currentPath === "/dashboard" || currentPath.startsWith("/dashboard/")
 
   useEffect(() => {
     if (loading) return
     if (!user) return
     if (termsAccepted) return
-    if (isConsentAllowed(pathname ?? "")) return
+    if (isConsentAllowed(currentPath)) return
     router.replace("/consent")
-  }, [loading, user, termsAccepted, pathname, router])
+  }, [loading, user, termsAccepted, currentPath, router])
 
-  // ลด flash: แสดง loading แทนเนื้อหาเมื่อต้อง redirect ไป consent
-  const needsConsent = !!user && !termsAccepted && !isConsentAllowed(pathname ?? "")
-  if (loading || needsConsent) {
+  const needsConsent = !loading && !!user && !termsAccepted && !isConsentAllowed(currentPath)
+  const shouldBlockOnAuthLoading = loading && !allowRenderWhileAuthLoading
+
+  if (shouldBlockOnAuthLoading || needsConsent) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />

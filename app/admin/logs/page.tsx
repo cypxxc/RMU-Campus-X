@@ -42,7 +42,7 @@ const ACTION_TYPE_LABELS: Record<AdminActionType, { label: { th: string; en: str
   user_ban: { label: { th: "แบนผู้ใช้", en: "Ban user" }, color: "bg-red-100 text-red-800", icon: Ban },
   user_activate: { label: { th: "ปลดล็อคผู้ใช้", en: "Reactivate user" }, color: "bg-green-100 text-green-800", icon: CheckCircle2 },
   report_status_change: { label: { th: "เปลี่ยนสถานะรายงาน", en: "Update report status" }, color: "bg-blue-100 text-blue-800", icon: ClipboardList },
-  report_resolve: { label: { th: "แก้ไขรายงาน", en: "Resolve report" }, color: "bg-green-100 text-green-800", icon: CheckCircle2 },
+  report_resolve: { label: { th: "ปิดเคสรายงาน", en: "Close report" }, color: "bg-green-100 text-green-800", icon: CheckCircle2 },
   item_delete: { label: { th: "ลบโพส", en: "Delete item" }, color: "bg-red-100 text-red-800", icon: Package },
   item_status_change: { label: { th: "เปลี่ยนสถานะโพส", en: "Update item status" }, color: "bg-blue-100 text-blue-800", icon: Package },
   ticket_reply: { label: { th: "ตอบกลับคำร้อง", en: "Reply ticket" }, color: "bg-purple-100 text-purple-800", icon: MessageSquare },

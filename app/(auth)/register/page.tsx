@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, Info, Loader2 } from "lucide-react"
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { registerUser } from "@/lib/auth"
+import { registrationSchema } from "@/lib/schemas"
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("")
@@ -26,10 +27,12 @@ export default function RegisterPage() {
   const { toast } = useToast()
   const { tt } = useI18n()
 
+  useEffect(() => {
+    router.prefetch("/verify-email")
+  }, [router])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    const { registrationSchema } = await import("@/lib/schemas")
     const validation = registrationSchema.safeParse({ email, password, confirmPassword })
 
     if (!validation.success) {

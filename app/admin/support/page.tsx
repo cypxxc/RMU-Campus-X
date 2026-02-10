@@ -256,58 +256,38 @@ export default function AdminSupportPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card className="border shadow-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-primary/10 rounded-lg">
-                <Inbox className="h-5 w-5 text-primary" />
-             </div>
-             <div>
-               {/* Approximate totals based on what we fetched / know */}
-               <div className="text-2xl font-bold">{pendingState.totalCount + historyState.totalCount}</div>
-               <p className="text-xs text-muted-foreground">{tt("ทั้งหมด", "Total")}</p>
-             </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <Card className="border shadow-sm overflow-hidden">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+              <Inbox className="h-6 w-6 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-2xl font-bold tabular-nums">{pendingState.totalCount + historyState.totalCount}</p>
+              <p className="text-xs text-muted-foreground">{tt("ทั้งหมด", "Total")}</p>
+            </div>
           </CardContent>
         </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-blue-100 rounded-lg">
-                <Inbox className="h-5 w-5 text-blue-600" />
-             </div>
-             <div>
-               {/* Note: This count is only accurate if we fetch status specific counts, but our paginated result returns totalCount for that query! */}
-               <div className="text-2xl font-bold text-foreground">
-                   {/* Approximate or need specific count queries. For now using what we have loaded or known total from query */}
-                   {pendingState.data.filter(t => t.status === 'new').length}
-               </div>
-               <p className="text-xs text-muted-foreground">{tt("ใหม่ (โหลดแล้ว)", "New (loaded)")}</p>
-             </div>
+        <Card className="border shadow-sm overflow-hidden">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-950/40">
+              <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-2xl font-bold tabular-nums">{pendingState.data.filter(t => t.status === "in_progress").length}</p>
+              <p className="text-xs text-muted-foreground">{tt("กำลังดำเนินการ", "In progress")}</p>
+            </div>
           </CardContent>
         </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-yellow-100 rounded-lg">
-                <Clock className="h-5 w-5 text-yellow-600" />
-             </div>
-             <div>
-               <div className="text-2xl font-bold text-foreground">
-                   {pendingState.data.filter(t => t.status === 'in_progress').length}
-               </div>
-               <p className="text-xs text-muted-foreground">{tt("กำลังดำเนินการ", "In progress")}</p>
-             </div>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-             <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-             </div>
-             <div>
-               <div className="text-2xl font-bold text-foreground">
-                   {historyState.totalCount}
-               </div>
-               <p className="text-xs text-muted-foreground">{tt("เสร็จสิ้น", "Resolved")}</p>
-             </div>
+        <Card className="border shadow-sm overflow-hidden">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/40">
+              <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-2xl font-bold tabular-nums">{historyState.totalCount}</p>
+              <p className="text-xs text-muted-foreground">{tt("เสร็จสิ้น", "Resolved")}</p>
+            </div>
           </CardContent>
         </Card>
       </div>

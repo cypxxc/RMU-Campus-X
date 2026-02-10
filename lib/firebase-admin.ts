@@ -13,6 +13,7 @@
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { getAuth, type Auth, type DecodedIdToken } from 'firebase-admin/auth'
+import { upstashCache } from '@/lib/upstash-cache'
 
 let adminApp: App | null = null
 let adminDb: Firestore | null = null
@@ -82,52 +83,95 @@ export function getAdminAuth(): Auth {
   return adminAuth
 }
 
-/** Cache ผลตรวจสถานะ user (ลดการอ่าน Firestore ทุก request) — TTL 30 วินาที */
+/**
+ * Two-tier cache for serverless:
+ * L1 = in-memory Map (fast, but lost on cold start)
+ * L2 = Upstash Redis (survives cold starts, shared across instances)
+ */
 const USER_STATUS_CACHE_TTL_MS = 30_000
-const userStatusCache = new Map<string, { status: string; at: number }>()
+const userStatusL1 = new Map<string, { status: string; at: number }>()
 const TOKEN_CACHE_TTL_MS = 60_000
-const tokenCache = new Map<string, { decoded: DecodedIdToken; at: number }>()
+const tokenL1 = new Map<string, { decoded: DecodedIdToken; at: number }>()
 
-function getCachedUserStatus(uid: string): string | null {
-  const entry = userStatusCache.get(uid)
+function getCachedUserStatusL1(uid: string): string | null {
+  const entry = userStatusL1.get(uid)
   if (!entry) return null
   if (Date.now() - entry.at > USER_STATUS_CACHE_TTL_MS) {
-    userStatusCache.delete(uid)
+    userStatusL1.delete(uid)
     return null
   }
   return entry.status
 }
 
-function setCachedUserStatus(uid: string, status: string): void {
-  userStatusCache.set(uid, { status, at: Date.now() })
-  if (userStatusCache.size > 500) {
-    const oldest = [...userStatusCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
-    if (oldest) userStatusCache.delete(oldest[0])
+async function getCachedUserStatus(uid: string): Promise<string | null> {
+  // L1 check
+  const l1 = getCachedUserStatusL1(uid)
+  if (l1 !== null) return l1
+
+  // L2 check (Redis)
+  const l2 = await upstashCache.get<string>(`user-status:${uid}`)
+  if (l2 !== null) {
+    // Backfill L1
+    userStatusL1.set(uid, { status: l2, at: Date.now() })
+    return l2
   }
+
+  return null
+}
+
+async function setCachedUserStatus(uid: string, status: string): Promise<void> {
+  // Write to both tiers
+  userStatusL1.set(uid, { status, at: Date.now() })
+  if (userStatusL1.size > 500) {
+    const oldestKey = userStatusL1.keys().next().value as string | undefined
+    if (oldestKey) userStatusL1.delete(oldestKey)
+  }
+  await upstashCache.set(`user-status:${uid}`, status, USER_STATUS_CACHE_TTL_MS)
 }
 
 function isDecodedTokenExpired(decoded: DecodedIdToken): boolean {
-  // Guard against using a token that is about to expire.
   return decoded.exp * 1000 <= Date.now() + 1000
 }
 
-function getCachedDecodedToken(token: string): DecodedIdToken | null {
-  const entry = tokenCache.get(token)
+function getCachedDecodedTokenL1(token: string): DecodedIdToken | null {
+  const entry = tokenL1.get(token)
   if (!entry) return null
   if (Date.now() - entry.at > TOKEN_CACHE_TTL_MS || isDecodedTokenExpired(entry.decoded)) {
-    tokenCache.delete(token)
+    tokenL1.delete(token)
     return null
   }
   return entry.decoded
 }
 
-function setCachedDecodedToken(token: string, decoded: DecodedIdToken): void {
-  if (isDecodedTokenExpired(decoded)) return
-  tokenCache.set(token, { decoded, at: Date.now() })
-  if (tokenCache.size > 500) {
-    const oldest = [...tokenCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
-    if (oldest) tokenCache.delete(oldest[0])
+async function getCachedDecodedToken(token: string): Promise<DecodedIdToken | null> {
+  // L1 check
+  const l1 = getCachedDecodedTokenL1(token)
+  if (l1 !== null) return l1
+
+  // L2 check (Redis) — use tail of token as key to avoid storing full tokens
+  const tokenKey = `token:${token.slice(-16)}`
+  const l2 = await upstashCache.get<DecodedIdToken>(tokenKey)
+  if (l2 !== null && !isDecodedTokenExpired(l2)) {
+    // Backfill L1
+    tokenL1.set(token, { decoded: l2, at: Date.now() })
+    return l2
   }
+
+  return null
+}
+
+async function setCachedDecodedToken(token: string, decoded: DecodedIdToken): Promise<void> {
+  if (isDecodedTokenExpired(decoded)) return
+
+  // Write to both tiers
+  tokenL1.set(token, { decoded, at: Date.now() })
+  if (tokenL1.size > 500) {
+    const oldestKey = tokenL1.keys().next().value as string | undefined
+    if (oldestKey) tokenL1.delete(oldestKey)
+  }
+
+  const tokenKey = `token:${token.slice(-16)}`
+  await upstashCache.set(tokenKey, decoded, TOKEN_CACHE_TTL_MS)
 }
 
 /**
@@ -138,13 +182,13 @@ function setCachedDecodedToken(token: string, decoded: DecodedIdToken): void {
 export async function verifyIdToken(token: string, checkStatus: boolean = false) {
   try {
     const auth = getAdminAuth()
-    const cachedDecoded = getCachedDecodedToken(token)
+    const cachedDecoded = await getCachedDecodedToken(token)
     const decodedToken = cachedDecoded ?? await auth.verifyIdToken(token)
-    if (!cachedDecoded) setCachedDecodedToken(token, decodedToken)
+    if (!cachedDecoded) await setCachedDecodedToken(token, decodedToken)
 
     if (checkStatus) {
       const uid = decodedToken.uid
-      const cached = getCachedUserStatus(uid)
+      const cached = await getCachedUserStatus(uid)
       if (cached !== null) {
         if (cached !== "ACTIVE" && cached !== "WARNING") return null
         return decodedToken
@@ -160,7 +204,7 @@ export async function verifyIdToken(token: string, checkStatus: boolean = false)
 
       const userData = userDoc.data()
       const status = (userData?.status as string) ?? ""
-      setCachedUserStatus(uid, status)
+      await setCachedUserStatus(uid, status)
 
       if (status !== "ACTIVE" && status !== "WARNING") {
         console.warn(`[Auth] User ${uid} verified but status is ${status}`)

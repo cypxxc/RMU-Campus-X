@@ -1,30 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import dynamic from "next/dynamic"
-
-// Dynamic import for Three.js - loads ONLY when needed (after page ready)
-const ThreeBackgroundLite = dynamic(
-  () => import("@/components/three-background").then((mod) => mod.ThreeBackgroundLite),
-  { ssr: false, loading: () => null }
-)
+import { ThreeBackgroundLite } from "@/components/three-background"
 
 /**
- * Client component that handles the lazy-loaded 3D background.
- * Keeping this separate allows the rest of the landing page to be a Server Component.
+ * Client component that renders the animated background on the landing page.
+ * Now uses lightweight CSS animation instead of Three.js — no lazy loading needed.
  */
 export function LandingHero3D() {
-  // Lazy load 3D background after page is ready
-  const [show3D, setShow3D] = useState(false)
-  
-  useEffect(() => {
-    // Wait for page to be interactive before loading 3D
-    const timer = setTimeout(() => setShow3D(true), 800)
-    return () => clearTimeout(timer)
-  }, [])
-
-  if (!show3D) return null
-
   return (
     <div className="fixed inset-0 h-screen -z-10">
       <ThreeBackgroundLite />

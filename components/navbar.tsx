@@ -5,40 +5,27 @@ import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import {
-  ChevronDown,
   Heart,
   HelpCircle,
   Home,
-  LogOut,
   Megaphone,
-  Menu,
   MessageSquare,
   Package,
   Plus,
-  Shield,
-  User,
 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { Logo } from "@/components/logo"
 import { ModeToggle } from "@/components/mode-toggle"
 import { NotificationBell } from "@/components/notification-bell"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useI18n } from "@/components/language-provider"
 import { useToast } from "@/hooks/use-toast"
 import { signOut } from "@/lib/auth"
 import { resolveImageUrl } from "@/lib/cloudinary-url"
 import { userHasSupportTickets } from "@/lib/db/support"
+import { NavbarMobile } from "@/components/navbar-mobile"
+import { NavbarUserMenu } from "@/components/navbar-user-menu"
 
 const PostItemModal = dynamic(
   () => import("./post-item-modal").then((m) => ({ default: m.PostItemModal })),
@@ -73,12 +60,9 @@ export function Navbar() {
 
   useEffect(() => {
     if (!user) return
-
     const openFromQuery = searchParams.get("openSupport") === "1" || searchParams.get("help") === "1"
     if (!openFromQuery) return
-
     setSupportModalOpen(true)
-
     const params = new URLSearchParams(searchParams.toString())
     params.delete("openSupport")
     params.delete("help")
@@ -96,24 +80,18 @@ export function Navbar() {
   const handleSignOut = async () => {
     try {
       await signOut()
-      toast({
-        title: t("navbar.signOutSuccess"),
-      })
+      toast({ title: t("navbar.signOutSuccess") })
       router.push("/login")
     } catch (error: unknown) {
       const description = error instanceof Error ? error.message : undefined
-      toast({
-        title: t("navbar.errorTitle"),
-        description,
-        variant: "destructive",
-      })
+      toast({ title: t("navbar.errorTitle"), description, variant: "destructive" })
     }
   }
 
   const navItems = [
     { href: "/dashboard", label: t("navbar.home"), icon: Home },
     { href: "/announcements", label: t("navbar.announcements"), icon: Megaphone },
-    { href: "/profile", label: t("navbar.profile"), icon: User },
+    { href: "/profile", label: t("navbar.profile"), icon: Package },
     { href: "/my-exchanges", label: t("navbar.exchanges"), icon: Package },
     { href: "/favorites", label: t("navbar.favorites"), icon: Heart },
   ]
@@ -146,6 +124,9 @@ export function Navbar() {
     }
     return resolveImageUrl(trimmed)
   }
+
+  const avatarSrc = user ? getAvatarSrc(profilePhotoURL ?? user.photoURL) || undefined : undefined
+  const userInitials = user ? getUserInitials(user.email) : "U"
 
   return (
     <>
@@ -188,188 +169,43 @@ export function Navbar() {
           </ul>
 
           <div className="flex flex-nowrap items-center gap-2 shrink-0">
-            <LanguageSwitcher compact className="hidden sm:inline-flex" />
-
             {user ? (
               <>
-                <Button
-                  size="sm"
-                  className="hidden lg:flex gap-2"
-                  onClick={() => setPostModalOpen(true)}
-                >
+                <Button size="sm" className="hidden lg:flex gap-2" onClick={() => setPostModalOpen(true)}>
                   <Plus className="h-4 w-4" />
                   {t("navbar.postItem")}
                 </Button>
 
                 <NotificationBell />
+                <LanguageSwitcher compact className="hidden sm:inline-flex" />
                 <ModeToggle />
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="hidden lg:flex items-center gap-2 pl-1 pr-2 h-9 max-w-[240px]"
-                    >
-                      <Avatar className="h-7 w-7 border">
-                        <AvatarImage
-                          src={getAvatarSrc(profilePhotoURL ?? user.photoURL) || undefined}
-                          alt={user.email || t("navbar.userAlt")}
-                          className="object-cover"
-                        />
-                        <AvatarFallback className="text-[11px] bg-primary/10 text-primary font-semibold">
-                          {getUserInitials(user.email)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="truncate text-sm text-muted-foreground">{user.email}</span>
-                      <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="sr-only">{t("navbar.userMenu")}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
+                <NavbarUserMenu
+                  userEmail={user.email || ""}
+                  isAdmin={isAdmin}
+                  avatarSrc={avatarSrc}
+                  userInitials={userInitials}
+                  onSignOut={handleSignOut}
+                />
 
-                  <DropdownMenuContent align="end" className="w-64 rounded-xl">
-                    <DropdownMenuLabel className="px-2 py-1.5">
-                      <p className="text-xs text-muted-foreground">{t("navbar.userAccount")}</p>
-                      <p className="text-sm font-medium break-all">{user.email}</p>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-
-                    <DropdownMenuItem asChild className="gap-2 cursor-pointer">
-                      <Link href="/profile">
-                        <User className="h-4 w-4" />
-                        {t("navbar.profile")}
-                      </Link>
-                    </DropdownMenuItem>
-
-                    {isAdmin && (
-                      <DropdownMenuItem asChild className="gap-2 cursor-pointer">
-                        <Link href="/admin">
-                          <Shield className="h-4 w-4" />
-                          {t("navbar.admin")}
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-
-                    <DropdownMenuSeparator />
-
-                    <DropdownMenuItem
-                      className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        handleSignOut()
-                      }}
-                    >
-                      <LogOut className="h-4 w-4" />
-                      {t("navbar.signOut")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                  <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" className="lg:hidden">
-                      <Menu className="h-5 w-5" />
-                      <span className="sr-only">{t("navbar.mainMenu")}</span>
-                    </Button>
-                  </SheetTrigger>
-
-                  <SheetContent side="right" className="w-[85vw] max-w-xs sm:max-w-sm">
-                    <SheetTitle className="sr-only">{t("navbar.mainMenu")}</SheetTitle>
-                    <div className="flex flex-col h-full">
-                      <div className="flex items-center gap-3 pb-6 border-b">
-                        <Avatar className="h-10 w-10 border">
-                          <AvatarImage
-                            src={getAvatarSrc(profilePhotoURL ?? user.photoURL) || undefined}
-                            alt={user.email || t("navbar.userAlt")}
-                            className="object-cover"
-                          />
-                          <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                            {getUserInitials(user.email)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium break-all">{user.email}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {isAdmin ? t("navbar.admin") : t("navbar.member")}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <LanguageSwitcher compact />
-                          <ModeToggle />
-                        </div>
-                      </div>
-
-                      <div className="flex-1 py-6 space-y-1">
-                        {navItems.map((item) => (
-                          <Button
-                            key={item.href}
-                            variant={isActive(item.href) ? "secondary" : "ghost"}
-                            className="w-full justify-start gap-3"
-                            asChild
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            <Link href={item.href}>
-                              <item.icon className="h-4 w-4" />
-                              {item.label}
-                            </Link>
-                          </Button>
-                        ))}
-
-                        <div className="pt-2 space-y-2">
-                          <Button
-                            variant="default"
-                            className="w-full justify-start gap-3"
-                            onClick={() => {
-                              setMobileMenuOpen(false)
-                              setPostModalOpen(true)
-                            }}
-                          >
-                            <Plus className="h-4 w-4" />
-                            {t("navbar.postItem")}
-                          </Button>
-
-                          {hasSupportTickets && (
-                            <Button variant="ghost" className="w-full justify-start gap-3" asChild>
-                              <Link href="/support" onClick={() => setMobileMenuOpen(false)}>
-                                <MessageSquare className="h-4 w-4" />
-                                {t("navbar.myTickets")}
-                              </Link>
-                            </Button>
-                          )}
-
-                          <Button
-                            variant="ghost"
-                            className="w-full justify-start gap-3"
-                            onClick={() => {
-                              setMobileMenuOpen(false)
-                              setSupportModalOpen(true)
-                            }}
-                          >
-                            <HelpCircle className="h-4 w-4" />
-                            {t("navbar.help")}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="pt-4 border-t">
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start gap-3"
-                          onClick={() => {
-                            handleSignOut()
-                            setMobileMenuOpen(false)
-                          }}
-                        >
-                          <LogOut className="h-4 w-4" />
-                          {t("navbar.signOut")}
-                        </Button>
-                      </div>
-                    </div>
-                  </SheetContent>
-                </Sheet>
+                <NavbarMobile
+                  open={mobileMenuOpen}
+                  onOpenChange={setMobileMenuOpen}
+                  navItems={navItems}
+                  isActive={isActive}
+                  userEmail={user.email || ""}
+                  isAdmin={isAdmin}
+                  avatarSrc={avatarSrc}
+                  userInitials={userInitials}
+                  hasSupportTickets={hasSupportTickets}
+                  onPostItem={() => setPostModalOpen(true)}
+                  onOpenSupport={() => setSupportModalOpen(true)}
+                  onSignOut={handleSignOut}
+                />
               </>
             ) : (
               <>
+                <LanguageSwitcher compact className="hidden sm:inline-flex" />
                 <ModeToggle />
                 <Button variant="ghost" size="sm" asChild>
                   <Link href="/announcements">{t("navbar.announcements")}</Link>

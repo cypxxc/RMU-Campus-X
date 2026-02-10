@@ -12,6 +12,22 @@
 
 ---
 
+## 🌐 Multilingual Support (TH/EN)
+
+- รองรับ 2 ภาษา: **ไทย (`th`)** และ **อังกฤษ (`en`)**
+- ผู้ใช้สลับภาษาได้จาก **Language Switcher** บนหน้าเว็บ (client-side) พร้อมจำค่าภาษาใน cookie/localStorage
+- ระบบเลือกภาษาเริ่มต้นจาก `rmu_locale` cookie และรองรับ server-side locale resolution
+- ครอบคลุมหน้าใช้งานหลักทั้งฝั่ง User และ Admin รวมถึงเอกสารสำคัญ (Guide / Terms / Privacy / Guidelines)
+- โครงสร้าง i18n หลัก:
+  - `components/language-provider.tsx`
+  - `components/language-switcher.tsx`
+  - `lib/i18n/config.ts`
+  - `lib/i18n/messages.ts`
+  - `lib/i18n/translate.ts`
+  - `lib/i18n/server.ts`
+
+---
+
 ## 🏗 สถาปัตยกรรมระบบ (System Architecture)
 
 ### High-Level Architecture
@@ -158,12 +174,14 @@ rmu-campus-x/
 │   │   ├── reports/                  # Report APIs
 │   │   ├── reviews/                  # รีวิว (list, create — ต้อง terms)
 │   │   ├── support/                  # Support (GET รายการคำร้องของฉัน, POST สร้าง ticket — ต้อง terms)
+│   │   ├── support/[ticketId]/messages/ # Messages ของ ticket
 │   │   ├── upload/                   # Image Upload (sign for direct Cloudinary)
 │   │   ├── users/me/                 # โปรไฟล์ + accept-terms
 │   │   ├── users/[id]/               # โปรไฟล์สาธารณะ (ไม่ต้อง auth)
 │   │   └── health/                   # Health Check
 │   │
 │   ├── dashboard/                    # หน้า Dashboard หลัก
+│   ├── announcements/                # หน้าประวัติประกาศ
 │   ├── chat/[exchangeId]/            # หน้าแชท
 │   ├── item/[id]/                    # หน้ารายละเอียดสิ่งของ
 │   ├── my-exchanges/                 # หน้าการแลกเปลี่ยนของฉัน
@@ -175,6 +193,8 @@ rmu-campus-x/
 ├── components/                       # React Components
 │   ├── ui/                           # Base UI Components (Shadcn)
 │   ├── auth-provider.tsx             # Authentication Context
+│   ├── language-provider.tsx         # i18n Context + locale persistence
+│   ├── language-switcher.tsx         # ปุ่มสลับภาษา TH/EN
 │   ├── announcement-banner.tsx       # แถบประกาศใต้ Navbar (ปิดได้, เรียลไทม์)
 │   ├── announcement-context.tsx      # Context สถานะประกาศ (ให้ Breadcrumb ปรับ top)
 │   ├── consent-guard.tsx              # ส่งผู้ใช้ที่ยังไม่ยอมรับ terms ไป /consent
@@ -191,6 +211,7 @@ rmu-campus-x/
 │
 ├── lib/                              # Utility Libraries
 │   ├── api-client.ts                 # authFetch / authFetchJson (retry + backoff), getAuthToken
+│   ├── i18n/                         # locale config, translations, server resolver
 │   ├── breadcrumb-labels.ts          # Route labels สำหรับ breadcrumb
 │   ├── constants.ts                  # หมวดหมู่สิ่งของ (CATEGORY_OPTIONS, CATEGORY_LABELS)
 │   ├── db/                           # Database / API wrappers
@@ -224,6 +245,7 @@ rmu-campus-x/
 │
 ├── hooks/                            # Custom React Hooks
 │   ├── use-auth.ts                   # Authentication Hook
+│   ├── use-refresh-on-focus.ts       # Refresh data เมื่อกลับมาโฟกัสหน้า
 │   └── use-mobile.ts                 # Responsive Hook
 │
 ├── types/                            # TypeScript Types
@@ -264,6 +286,14 @@ rmu-campus-x/
 ---
 
 ## ⭐ ฟีเจอร์หลัก (Key Features)
+
+### 0. ระบบหลายภาษา (Multilingual: TH/EN)
+
+- รองรับไทย/อังกฤษทั้งฝั่ง **User** และ **Admin** ด้วย `useI18n()` (`tt()`/`t()`)
+- จำค่าภาษาของผู้ใช้ด้วย `rmu_locale` cookie + localStorage
+- มี `Language Switcher` สำหรับสลับภาษาแบบทันที
+- รองรับ locale-aware formatting (เช่น วันที่/เวลา `th-TH` และ `en-US`)
+- ครอบคลุมหน้าเอกสารสำคัญ: `guide`, `terms`, `privacy`, `guidelines`
 
 ### 1. ระบบผู้ใช้งาน (User Management)
 
@@ -596,6 +626,7 @@ bun start
 | กลุ่ม | Method | Endpoint | คำอธิบาย |
 |-------|--------|----------|----------|
 | **Announcements** | GET | `/api/announcements` | list ประกาศสำหรับแบนเนอร์ + nextCheckInMs (ไม่ต้อง auth) |
+| | GET | `/api/announcements/history` | ประวัติประกาศย้อนหลังสำหรับหน้า Announcements |
 | **Items** | GET | `/api/items` | list (filter, search, pagination) |
 | | POST | `/api/items` | สร้าง item (ต้อง auth + terms + canPost) |
 | | GET | `/api/items/[id]` | ดึงรายการเดียว |
@@ -618,13 +649,17 @@ bun start
 | **Exchanges** | GET | `/api/exchanges` | list การแลกเปลี่ยน (ไม่รวมที่ผู้ใช้ซ่อนแล้ว) |
 | | POST | `/api/exchanges` | สร้างคำขอแลกเปลี่ยน (ต้อง terms) |
 | | POST | `/api/exchanges/respond` | ตอบรับ/ปฏิเสธ (ต้อง auth + terms) |
+| | PATCH | `/api/exchanges/[id]` | อัปเดตสถานะการแลกเปลี่ยน |
+| | POST | `/api/exchanges/[id]/hide` | ซ่อนรายการจากหน้าการแลกเปลี่ยนของฉัน |
 | **Support** | GET | `/api/support` | รายการคำร้องของฉัน (ต้อง auth) |
 | | POST | `/api/support` | สร้าง ticket (ต้อง auth + terms) |
-| | PATCH | `/api/exchanges/[id]` | อัปเดตสถานะ |
-| | POST | `/api/exchanges/[id]/hide` | ซ่อนจากรายการของฉัน |
+| | GET / POST | `/api/support/[ticketId]/messages` | อ่าน/ส่งข้อความในคำร้อง |
 | **Reports** | POST | `/api/reports` | สร้างรายงาน (ต้อง terms) |
 | **Admin Announcements** | GET/POST | `/api/admin/announcements` | list / สร้างประกาศ |
 | | GET/PATCH/DELETE | `/api/admin/announcements/[id]` | ดึง / แก้ไข / ลบประกาศ |
+| **Admin Support** | POST | `/api/admin/support/[ticketId]/reply` | ตอบกลับคำร้องจากฝั่งแอดมิน |
+| | PATCH | `/api/admin/support/[ticketId]/status` | เปลี่ยนสถานะ ticket |
+| **Admin User Notifications** | GET | `/api/admin/users/[id]/notifications` | ดึงรายการแจ้งเตือนของผู้ใช้ |
 | **Admin / LINE / Upload** | - | `/api/admin/*`, `/api/line/*`, `/api/upload`, `/api/upload/sign` | ดู docs/API.md |
 
 ### Rate Limiting

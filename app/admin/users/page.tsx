@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { authFetchJson } from "@/lib/api-client"
-import { getReports, updateUserStatus, issueWarning, getUserWarnings, deleteUserAndData, deleteUserNotificationsByAdmin } from "@/lib/firestore"
+import { getReports, updateUserStatus, issueWarning, getUserWarnings, deleteUserAndData, deleteUserWarningByAdmin } from "@/lib/firestore"
 import type { Report, User, UserStatus, UserWarning } from "@/types"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
@@ -29,7 +29,7 @@ import {
   User as UserIcon, 
   Search
 } from "lucide-react"
-import { UserDetailModal, type AdminUserNotificationItem } from "@/components/admin/admin-modals"
+import { UserDetailModal } from "@/components/admin/admin-modals"
 import { ActionDialog, type SuspendDuration } from "@/components/admin/action-dialog"
 import { Input } from "@/components/ui/input"
 import { useI18n } from "@/components/language-provider"
@@ -48,8 +48,7 @@ export default function AdminReportedUsersPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserWithReportsRow | null>(null)
   const [userWarnings, setUserWarnings] = useState<UserWarning[]>([])
-  const [userNotifications, setUserNotifications] = useState<AdminUserNotificationItem[]>([])
-  const [deletingNotifications, setDeletingNotifications] = useState(false)
+  const [deletingWarningId, setDeletingWarningId] = useState<string | null>(null)
   const [userDetail, setUserDetail] = useState<{
     displayName?: string
     createdAt?: string
@@ -221,9 +220,9 @@ export default function AdminReportedUsersPage() {
     setSelectedUser(userRow)
     setUserDetail(null)
     setUserWarnings([])
-    setUserNotifications([])
+    setDeletingWarningId(null)
     try {
-      const [warningsRes, detailRes, notificationsRes] = await Promise.all([
+      const [warningsRes, detailRes] = await Promise.all([
         getUserWarnings(userRow.uid),
         (async () => {
           try {
@@ -239,45 +238,8 @@ export default function AdminReportedUsersPage() {
             return null
           }
         })(),
-        (async () => {
-          try {
-            const res = await authFetchJson<{
-              notifications?: Array<{
-                id?: string
-                title?: string
-                message?: string
-                type?: string
-                isRead?: boolean
-                createdAt?: string | null
-              }>
-            }>(`/api/admin/users/${userRow.uid}/notifications?limit=100`, { method: "GET" })
-            return res?.data?.notifications ?? []
-          } catch {
-            return []
-          }
-        })(),
       ])
       setUserWarnings(warningsRes)
-      setUserNotifications(
-        notificationsRes
-          .filter((n) => typeof n?.id === "string" && (n.id as string).trim().length > 0)
-          .map((n) => {
-            const createdAt =
-              typeof n.createdAt === "string" && n.createdAt
-                ? new Date(n.createdAt)
-                : null
-
-            return {
-              id: String(n.id),
-              title: typeof n.title === "string" ? n.title : "",
-              message: typeof n.message === "string" ? n.message : "",
-              type: typeof n.type === "string" ? n.type : "system",
-              isRead: Boolean(n.isRead),
-              createdAt:
-                createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null,
-            }
-          })
-      )
       if (detailRes?.user || detailRes?.stats) {
         const u = detailRes.user ?? {}
         const toDateStr = (v: unknown): string | undefined => {
@@ -302,35 +264,59 @@ export default function AdminReportedUsersPage() {
     }
   }
 
-  const handleDeleteSelectedNotifications = async (notificationIds: string[]) => {
-    if (!selectedUser || notificationIds.length === 0) return
+  const handleDeleteWarning = async (warningId: string) => {
+    if (!selectedUser || !warningId) return
+    const targetUserId = selectedUser.uid
 
-    const uniqueIds = Array.from(new Set(notificationIds.map((id) => id.trim()).filter(Boolean)))
-    if (uniqueIds.length === 0) return
+    const isValidUserStatus = (value: unknown): value is UserStatus =>
+      value === "ACTIVE" || value === "WARNING" || value === "SUSPENDED" || value === "BANNED"
 
     try {
-      setDeletingNotifications(true)
-      const result = await deleteUserNotificationsByAdmin(selectedUser.uid, {
-        reason: tt("ลบการแจ้งเตือนที่เลือกโดยผู้ดูแลระบบ", "Delete selected notifications by administrator"),
-        notificationIds: uniqueIds,
+      setDeletingWarningId(warningId)
+      const result = await deleteUserWarningByAdmin(
+        targetUserId,
+        warningId,
+        tt("ลบคำเตือนจากหน้าจัดการผู้ใช้", "Delete warning from user management")
+      )
+
+      setUserWarnings((prev) => prev.filter((w) => w.id !== warningId))
+
+      const nextWarningCount = Math.max(0, Number(result.warningCount) || 0)
+      const nextStatus = isValidUserStatus(result.userStatus) ? result.userStatus : undefined
+
+      setSelectedUser((prev) => {
+        if (!prev || prev.uid !== targetUserId) return prev
+        return {
+          ...prev,
+          warningCount: nextWarningCount,
+          status: nextStatus ?? prev.status,
+        }
       })
 
-      setUserNotifications((prev) => prev.filter((n) => !uniqueIds.includes(n.id)))
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.uid === targetUserId
+            ? {
+                ...u,
+                warningCount: nextWarningCount,
+                status: nextStatus ?? u.status,
+              }
+            : u
+        )
+      )
+
       toast({
-        title: tt("ลบการแจ้งเตือนสำเร็จ", "Notifications deleted"),
-        description:
-          result.deletedCount > 0
-            ? tt(`ลบแล้ว ${result.deletedCount} รายการ`, `Deleted ${result.deletedCount} records`)
-            : tt("ไม่พบการแจ้งเตือนที่ต้องลบ", "No notifications matched"),
+        title: tt("ลบคำเตือนสำเร็จ", "Warning deleted"),
+        description: tt("สามารถลบคำเตือนได้จากรายการโดยตรงแล้ว", "Warning was removed from the selected row."),
       })
     } catch (error: any) {
       toast({
-        title: tt("ลบการแจ้งเตือนไม่สำเร็จ", "Failed to delete notifications"),
-        description: error?.message || tt("เกิดข้อผิดพลาดในการลบการแจ้งเตือน", "Unexpected error while deleting notifications"),
+        title: tt("ลบคำเตือนไม่สำเร็จ", "Failed to delete warning"),
+        description: error?.message || tt("เกิดข้อผิดพลาดในการลบคำเตือน", "Unexpected error while deleting warning"),
         variant: "destructive",
       })
     } finally {
-      setDeletingNotifications(false)
+      setDeletingWarningId(null)
     }
   }
 
@@ -643,7 +629,7 @@ export default function AdminReportedUsersPage() {
             if (!open) {
               setSelectedUser(null)
               setUserDetail(null)
-              setUserNotifications([])
+              setDeletingWarningId(null)
             }
           }}
           email={selectedUser.email}
@@ -662,9 +648,8 @@ export default function AdminReportedUsersPage() {
             issuedByEmail: w.issuedByEmail,
             issuedAt: (w.issuedAt as any)?.toDate?.() || new Date()
           }))}
-          notifications={userNotifications}
-          deletingNotifications={deletingNotifications}
-          onDeleteSelectedNotifications={handleDeleteSelectedNotifications}
+          deletingWarningId={deletingWarningId}
+          onDeleteWarning={handleDeleteWarning}
           onAction={(type) => {
             const validTypes = ["suspend", "ban", "warn", "activate", "delete"]
             if (validTypes.includes(type)) {

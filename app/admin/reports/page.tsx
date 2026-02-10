@@ -73,8 +73,8 @@ const statusLabels: Record<string, { th: string; en: string }> = {
   new: { th: "ใหม่", en: "New" },
   under_review: { th: "กำลังตรวจสอบ", en: "Under review" },
   waiting_user: { th: "รอข้อมูลเพิ่มเติม", en: "Waiting for user" },
-  action_taken: { th: "ดำเนินการแล้ว", en: "Action taken" },
-  resolved: { th: "แก้ไขแล้ว", en: "Resolved" },
+  action_taken: { th: "แจ้งเจ้าของแล้ว", en: "Owner notified" },
+  resolved: { th: "ปิดเคสแล้ว", en: "Closed" },
   closed: { th: "ปิดเคส", en: "Closed" },
   rejected: { th: "ปฏิเสธ", en: "Rejected" },
 }
@@ -369,7 +369,7 @@ export default function AdminReportsPage() {
               <div className="text-2xl font-bold text-foreground">
                 {reports.filter(r => ['resolved', 'action_taken', 'rejected', 'closed'].includes(r.status)).length}
               </div>
-              <p className="text-xs text-muted-foreground">{tt("จบแล้ว (แก้ไข/ปิด/ปฏิเสธ)", "Completed (resolved/closed/rejected)")}</p>
+              <p className="text-xs text-muted-foreground">{tt("จบแล้ว (แจ้งเจ้าของ/ปิดเคส/ปฏิเสธ)", "Completed (notified/closed/rejected)")}</p>
             </div>
           </CardContent>
         </Card>

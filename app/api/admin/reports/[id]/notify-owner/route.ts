@@ -90,6 +90,12 @@ export async function POST(
       // In-app notification succeeded, LINE is optional
     }
 
+    // ปรับสถานะรายงานเป็น "action_taken" (แจ้งเจ้าของแล้ว) — ไม่มีระบบแก้ไขโพสเอง มีแค่แจ้งเตือนหรือปฏิเสธ
+    await db.collection("reports").doc(reportId).update({
+      status: "action_taken",
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
     return successResponse({ success: true, message: "แจ้งเตือนเจ้าของโพสแล้ว" })
   } catch (err) {
     console.error("[Admin Report Notify Owner] Error:", err)

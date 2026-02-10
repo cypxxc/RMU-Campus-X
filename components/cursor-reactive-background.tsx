@@ -11,6 +11,19 @@ const BLOBS = [
   { size: 300, color: "var(--primary)", opacity: 0.2 },
 ]
 
+function shouldAnimateCursorBackground(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return true
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false
+  return window.matchMedia("(pointer: fine)").matches
+}
+
+function getStateUpdateIntervalMs(): number {
+  if (typeof window === "undefined" || !window.matchMedia) return Math.round(1000 / 24)
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return Math.round(1000 / 8)
+  if (window.matchMedia("(pointer: coarse)").matches) return Math.round(1000 / 12)
+  return Math.round(1000 / 24)
+}
+
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
 }
@@ -28,14 +41,10 @@ export function CursorReactiveBackground() {
       y: 0.5 + (i % 2 === 0 ? 0.05 : -0.05),
     }))
   )
-  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!mounted || typeof window === "undefined") return
+    if (typeof window === "undefined") return
+    if (!shouldAnimateCursorBackground()) return
 
     const el = containerRef.current
     if (!el) return
@@ -67,7 +76,7 @@ export function CursorReactiveBackground() {
       window.removeEventListener("mousemove", onMove)
       cancelAnimationFrame(rafId)
     }
-  }, [mounted])
+  }, [])
 
   const [blobPositions, setBlobPositions] = useState(() =>
     BLOBS.map((_, i) => ({
@@ -77,21 +86,14 @@ export function CursorReactiveBackground() {
   )
 
   useEffect(() => {
-    if (!mounted) return
+    if (!shouldAnimateCursorBackground()) return
+    const intervalMs = getStateUpdateIntervalMs()
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
       setBlobPositions(blobRef.current.map((b) => ({ ...b })))
-    }, 1000 / 30) // ~30fps for React state updates (smooth but not every frame)
+    }, intervalMs)
     return () => clearInterval(interval)
-  }, [mounted])
-
-  if (!mounted) {
-    return (
-      <div
-        className="pointer-events-none fixed inset-0 z-0 bg-background"
-        aria-hidden
-      />
-    )
-  }
+  }, [])
 
   return (
     <div
