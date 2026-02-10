@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Firebase](https://img.shields.io/badge/Firebase-12.5-orange?logo=firebase)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/Tests-119%20unit%20%7C%2070%20E2E-success)]()
+[![Tests](https://img.shields.io/badge/Tests-120%20unit%20%7C%20E2E-success)]()
 [![Sentry](https://img.shields.io/badge/Sentry-Enabled-362D59?logo=sentry)](https://sentry.io)
 
 ---
@@ -56,6 +56,8 @@
 ```
 
 ### Data Flow Diagram
+
+- **Retry policy details:** retry is limited to idempotent methods (`GET`, `HEAD`, `OPTIONS`); write methods (`POST`, `PATCH`, `PUT`, `DELETE`) are single-attempt to avoid duplicate mutations.
 
 - **Client → API:** ฟีเจอร์หลักโหลดผ่าน API ทั้งหมด (dashboard, profile, admin, notifications, exchanges, reviews, reports, **support**) — เรียกผ่าน `lib/api-client` (`authFetch` / `authFetchJson`) มี retry + exponential backoff เมื่อได้ 429, 5xx หรือ network error และเคารพ header `Retry-After`
 - **API → Firestore:** API Routes ใช้ Firebase Admin SDK อ่าน/เขียน Firestore และตรวจ auth, termsAccepted, สิทธิ์
@@ -117,7 +119,7 @@ User Action → Component → lib/db/* (authFetchJson) → API Route → Firesto
 
 | เทคโนโลยี | เวอร์ชัน | การใช้งาน |
 |-----------|----------|-----------|
-| **Vitest** | 4.0.17 | Unit Testing (119 tests) |
+| **Vitest** | 4.0.17 | Unit Testing (120 tests) |
 | **Playwright** | 1.57.0 | E2E Testing (84 tests, 4 browsers; WebKit บางชุด skip) |
 | **ESLint** | 8.57.1 | Code Linting |
 | **Zod** | 3.25.76 | Schema Validation |
@@ -303,8 +305,8 @@ rmu-campus-x/
 - **ยืนยัน/ปฏิเสธ** - เจ้าของเลือกอนุมัติ (ได้ทั้งหน้ารายการและหน้าแชท)
 - **ระบบแชท** - สนทนานัดรับของ ชื่อคู่สนทนากดไปดูโปรไฟล์สาธารณะได้
 - **แชทผ่าน LINE Bot** - พิมพ์ "แชท" ใน LINE เลือกรายการ ส่งข้อความได้แม้อีกฝ่ายยังไม่เชื่อม LINE (ข้อความจะแสดงบนเว็บ)
-- **ติดตามสถานะ** - Step-by-step: รอตอบรับ → ตอบรับแล้ว → กำลังดำเนินการ → เสร็จสิ้น (`ExchangeStepIndicator`)
-- **ปุ่มยืนยันชัดเจน** - accepted → "เริ่มดำเนินการ", in_progress → "ยืนยันส่งมอบ/รับของแล้ว"
+- **ติดตามสถานะ** - Step-by-step: รอเจ้าของโพสต์ตอบรับ -> กำลังดำเนินการ -> เสร็จสิ้น (`ExchangeStepIndicator`)
+- **ปุ่มยืนยันชัดเจน** - ในเฟส in_progress แสดงปุ่ม "ยืนยันส่งมอบ/รับของแล้ว" (legacy accepted จะถูก map เป็น in_progress)
 - **รออีกฝ่ายยืนยัน** - แสดงข้อความเมื่อยืนยันฝ่ายเดียวแล้ว (รออีกฝ่ายกดยืนยัน)
 - **ซ่อนจากรายการ** - ผู้ใช้สามารถซ่อนการแลกเปลี่ยนจากรายการของตนได้ (อีกฝ่ายยังเห็นอยู่)
 - **แจ้งเตือนเมื่ออีกฝ่ายยืนยัน** - แจ้งให้อีกฝ่ายทราบเมื่อมีการกดยืนยันการแลกเปลี่ยน
@@ -358,12 +360,20 @@ rmu-campus-x/
 | **Middleware Optimization** | Exclude static files จาก Edge Function เพื่อลด Latency |
 | **Vercel Best Practices** | ปฏิบัติตามมาตรฐาน Vercel Labs (Core Web Vitals) |
 | **Memory Leak Prevention** | ใช้ `mountedRef` / `cancelled` ใน async effects (dashboard, profile, chat, notifications, favorites, item detail) เพื่อไม่ให้ setState หลัง component unmount |
-| **API Retry & Backoff** | Client (`lib/api-client`) retry สูงสุด 3 ครั้ง พร้อม exponential backoff และเคารพ `Retry-After` เมื่อได้ 429 |
+| **API Retry & Backoff** | Client (`lib/api-client`) retries idempotent methods only (`GET/HEAD/OPTIONS`, max 2 attempts) for 429/5xx using exponential backoff + `Retry-After`; write methods do not auto-retry to avoid duplicate mutations. |
 | **Client Data via API Only** | Dashboard, โปรไฟล์, แจ้งเตือน, การแลกเปลี่ยน, รีวิว, รายงาน, **Support (รายการคำร้อง)**, Admin โหลดข้อมูลผ่าน API เท่านั้น (ไม่ใช้ Firestore SDK บน client) — ลดปัญหา Firestore permission และความสอดคล้องของ cache |
+
+### 10.1 Network Resilience (Offline / Network Change)
+
+- API polling checks `navigator.onLine` and skips requests while offline, reducing noisy `ERR_NETWORK_CHANGED` / `ERR_INTERNET_DISCONNECTED` bursts.
+- `lib/api-client` uses fail-fast handling for transient network transport errors and a short recovery window before new requests.
+- Firestore realtime listeners in `lib/services/client-firestore.ts` auto-unsubscribe on `offline` and auto-resubscribe on `online`.
+- Firestore client log level is set to `error` to reduce verbose WebChannel transport logs during temporary connection switches.
+- `/api/line/notify-chat` enforces participant-only access and only allows notifying the opposite party in the same exchange.
 
 ### 11. Testing & Quality Assurance
 
-- **Unit Tests** - Vitest ~119 tests (API validation, security, exchange state machine, db, reports, auth, rate-limit, item-deletion, utils)
+- **Unit Tests** - Vitest ~120 tests (API validation, security, exchange state machine, db, reports, auth, rate-limit, item-deletion, utils)
 - **E2E Tests** - Playwright 84 tests (API security, dashboard, navigation, auth pages) — รัน 4 browsers; ชุด Basic Navigation / Landing / Auth Pages ข้ามบน WebKit เนื่องจาก Next.js hydration ใน Playwright
 - **Firestore Rules Tests** - `npm run test:rules` (ต้องรัน Firebase Emulator)
 - **Coverage** - `npm run test:coverage`
@@ -506,6 +516,7 @@ UPSTASH_REDIS_REST_TOKEN=your_token
 
 - **ระยะเวลาลิงก์:** ลิงก์ยืนยันอีเมลใช้ได้ **3 วัน** (ค่าเริ่มต้นของ Firebase)
 - **ยืนยันอัตโนมัติเมื่อกดลิงก์:** เมื่อผู้ใช้คลิกลิงก์จากอีเมล ระบบจะยืนยันให้อัตโนมัติแล้วนำไป Dashboard
+- **ปุ่มเปิด Gmail:** ในหน้า `/verify-email` มีปุ่ม **เปิด Gmail** เพื่อเข้ากล่องจดหมายได้ทันที (`https://mail.google.com`)
 - **ตั้งค่า Custom Action URL (แนะนำ):** เพื่อให้ลิงก์ในอีเมลเปิดมาที่แอปของคุณ — ไปที่ [Firebase Console](https://console.firebase.google.com/) → **Authentication** → **Templates** → แก้ไขเทมเพลตอีเมลที่ใช้ → **Customize action URL** กำหนดเป็น `https://your-domain.com/verify-email` (และเพิ่มโดเมนใน Authorized domains ถ้ายังไม่มี)
 
 ---
@@ -625,6 +636,8 @@ bun start
 | Authentication | 5 requests | 1 minute |
 
 เมื่อเกินกำหนด (429) API จะส่ง header `Retry-After` และ client จะ retry อัตโนมัติด้วย exponential backoff (ดู `lib/api-client.ts`)
+- Retry อัตโนมัติจะเกิดกับ idempotent requests (`GET/HEAD/OPTIONS`) เท่านั้น; write requests ไม่ retry เพื่อป้องกัน duplicate action.
+- เมื่อ browser offline หรือเกิด transient network error client จะ fail-fast และรอ network กลับมาก่อน request รอบถัดไป.
 
 ### Response Format
 
@@ -695,7 +708,7 @@ bun start
 | **Restore** | `scripts/restore-firestore.ts` | Restore data from backup |
 | **Validation** | `lib/api-validation.ts` | Centralized API validation + requireTermsAccepted |
 | **State Machine** | `lib/exchange-state-machine.ts` | Exchange status transitions, STATUS_LABELS, getConfirmButtonLabel, getWaitingOtherConfirmationMessage |
-| **API Client** | `lib/api-client.ts` | authFetch / authFetchJson (retry + exponential backoff สำหรับ 429/5xx/network), getAuthToken |
+| **API Client** | `lib/api-client.ts` | authFetch / authFetchJson (idempotent retry policy, exponential backoff + Retry-After, transient network fail-fast), getAuthToken |
 | **Health Check** | `/api/health` | System status monitoring |
 | **App Check** | `lib/app-check.ts` | Firebase App Check (bot protection) |
 | **Announcement Context** | `components/announcement-context.tsx` | สถานะแถบประกาศ (ให้ Breadcrumb ปรับ top-16/top-28) |
