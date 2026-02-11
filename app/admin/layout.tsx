@@ -24,7 +24,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/announcements", label: tt("ประกาศ", "Announcements"), icon: Megaphone },
     { href: "/admin/items", label: tt("จัดการโพส", "Manage items"), icon: Package },
     { href: "/admin/users", label: tt("จัดการผู้ใช้", "Manage users"), icon: Users },
-    { href: "/admin/exchanges", label: tt("จัดการการแลกเปลี่ยน", "Manage exchanges"), icon: RefreshCw },
+    { href: "/admin/exchanges", label: tt("\u0e1b\u0e23\u0e30\u0e27\u0e31\u0e15\u0e34\u0e01\u0e32\u0e23\u0e41\u0e25\u0e01\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19", "Exchange history"), icon: RefreshCw },
     { href: "/admin/support", label: tt("จัดการคำร้อง", "Manage support"), icon: MessageSquare },
     { href: "/admin/reports", label: tt("รายงานความไม่เหมาะสม", "Reports"), icon: AlertTriangle },
     { href: "/admin/logs", label: tt("ประวัติกิจกรรม", "Activity logs"), icon: History },
