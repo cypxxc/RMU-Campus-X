@@ -51,6 +51,16 @@ export function getCloudinaryUrl(
 }
 
 const AUTO_OPTIMIZE = "f_auto,q_auto"
+const CLOUDINARY_DELIVERY_URL_REGEX = /^(?:https?:)?\/\/res\.cloudinary\.com\//i
+const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL_REGEX = /^(?:[a-z][a-z\d+\-.]*:)?\/\//i
+
+function isCloudinaryDeliveryUrl(value: string): boolean {
+  return CLOUDINARY_DELIVERY_URL_REGEX.test(value)
+}
+
+function isAbsoluteUrlLike(value: string): boolean {
+  return ABSOLUTE_OR_PROTOCOL_RELATIVE_URL_REGEX.test(value)
+}
 
 /** Fallback เมื่อไม่มี CLOUD_NAME (manual URL) */
 function buildFallbackUrl(publicId: string, options?: CloudinaryTransformOptions): string {
@@ -83,19 +93,29 @@ export function resolveImageUrl(
   options?: CloudinaryTransformOptions
 ): string {
   if (!ref || typeof ref !== "string") return ""
-  // Legacy: full Cloudinary URL - inject f_auto,q_auto ก่อน public_id (options.width ไม่ใช้กับ legacy URL)
-  if (ref.startsWith("https://res.cloudinary.com/") || ref.startsWith("http://res.cloudinary.com/")) {
-    const match = ref.match(/^((?:https?:)?\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)/)
+  const normalized = ref.trim()
+  if (!normalized) return ""
+  // Legacy: full Cloudinary URL - inject f_auto,q_auto before public_id
+  if (isCloudinaryDeliveryUrl(normalized)) {
+    const match = normalized.match(/^((?:https?:)?\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)/)
     const prefix = match?.[1]
-    if (prefix && !ref.includes("/f_auto,")) {
-      return `${prefix}${AUTO_OPTIMIZE}/${ref.slice(prefix.length)}`
+    if (prefix && !normalized.includes("/f_auto,")) {
+      return `${prefix}${AUTO_OPTIMIZE}/${normalized.slice(prefix.length)}`
     }
-    return ref
+    return normalized
   }
-  // New: public_id — ใช้ width ได้
-  return getCloudinaryUrl(ref, options)
+  // External URL / protocol-relative URL / local public asset path
+  if (
+    isAbsoluteUrlLike(normalized) ||
+    normalized.startsWith("data:") ||
+    normalized.startsWith("blob:") ||
+    normalized.startsWith("/")
+  ) {
+    return normalized
+  }
+  // New: public_id
+  return getCloudinaryUrl(normalized, options)
 }
-
 /**
  * Get all displayable image URLs from an item.
  * Supports imagePublicIds (new) and imageUrls/imageUrl (legacy).
@@ -127,7 +147,7 @@ export function getItemImageUrlAt(
   options?: CloudinaryTransformOptions
 ): string {
   const publicId = item.imagePublicIds?.[index]
-  if (publicId && !publicId.startsWith("http")) {
+  if (publicId && !isAbsoluteUrlLike(publicId)) {
     return getCloudinaryUrl(publicId, options)
   }
   const urls = getItemImageUrls(item)
@@ -153,7 +173,7 @@ export function getItemPrimaryImageUrl(
   options?: ItemImageUrlOptions
 ): string {
   const publicId = item.imagePublicIds?.[0]
-  if (publicId && !publicId.startsWith("http")) {
+  if (publicId && !isAbsoluteUrlLike(publicId)) {
     return getCloudinaryUrl(publicId, { width: options?.width })
   }
   const urls = getItemImageUrls(item)
@@ -170,7 +190,7 @@ export function getItemPrimaryImageSrcSet(item: {
   imageUrl?: string
 }): string | undefined {
   const publicId = item.imagePublicIds?.[0]
-  if (publicId && !publicId.startsWith("http")) return getCloudinarySrcSet(publicId)
+  if (publicId && !isAbsoluteUrlLike(publicId)) return getCloudinarySrcSet(publicId)
   return undefined
 }
 
