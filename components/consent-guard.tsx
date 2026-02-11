@@ -21,7 +21,7 @@ function isConsentAllowed(path: string) {
 }
 
 export function ConsentGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading, termsAccepted } = useAuth()
+  const { user, loading, termsAccepted, termsResolved } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
   const currentPath = pathname ?? ""
@@ -31,16 +31,18 @@ export function ConsentGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return
+    if (!termsResolved) return
     if (!user) return
     if (termsAccepted) return
     if (isConsentAllowed(currentPath)) return
     router.replace("/consent")
-  }, [loading, user, termsAccepted, currentPath, router])
+  }, [loading, termsResolved, user, termsAccepted, currentPath, router])
 
-  const needsConsent = !loading && !!user && !termsAccepted && !isConsentAllowed(currentPath)
+  const needsConsent = !loading && termsResolved && !!user && !termsAccepted && !isConsentAllowed(currentPath)
+  const shouldWaitForTermsResolution = !loading && !!user && !termsResolved && !isConsentAllowed(currentPath)
   const shouldBlockOnAuthLoading = loading && !allowRenderWhileAuthLoading
 
-  if (shouldBlockOnAuthLoading || needsConsent) {
+  if (shouldBlockOnAuthLoading || shouldWaitForTermsResolution || needsConsent) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />

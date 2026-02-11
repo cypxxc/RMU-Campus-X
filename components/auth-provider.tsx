@@ -28,6 +28,8 @@ interface AuthContextType {
   accountStatus: AccountStatusInfo | null
   /** true only when user doc has termsAccepted === true */
   termsAccepted: boolean
+  /** true when termsAccepted has been resolved from user profile/fallback */
+  termsResolved: boolean
   logout: () => Promise<void>
   /** Call after updating user doc (e.g. termsAccepted) to refresh context */
   refreshUserProfile: () => Promise<void>
@@ -93,6 +95,7 @@ const AuthContext = createContext<AuthContextType>({
   profilePhotoURL: null,
   accountStatus: null,
   termsAccepted: false,
+  termsResolved: false,
   logout: async () => {},
   refreshUserProfile: async () => {},
   markTermsAccepted: () => {},
@@ -105,6 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profilePhotoURL, setProfilePhotoURL] = useState<string | null>(null)
   const [accountStatus, setAccountStatus] = useState<AccountStatusInfo | null>(null)
   const [termsAccepted, setTermsAccepted] = useState(false)
+  const [termsResolved, setTermsResolved] = useState(false)
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined
@@ -130,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false)
 
           if (user) {
+            setTermsResolved(false)
             try {
               const offline = typeof navigator !== "undefined" && navigator.onLine === false
               if (!offline) {
@@ -156,12 +161,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     const accepted = u.termsAccepted === true
                     setTermsAccepted(accepted)
                     if (accepted && typeof sessionStorage !== "undefined") sessionStorage.setItem(TERMS_ACCEPTED_KEY, "1")
+                    setTermsResolved(true)
                     // Auto-unsuspend ทำฝั่ง server ใน GET /api/users/me แล้ว
                   } else {
                     setIsAdmin(false)
                     setProfilePhotoURL(user.photoURL ?? null)
                     setAccountStatus(DEFAULT_ACCOUNT_STATUS)
                     setTermsAccepted(false)
+                    setTermsResolved(true)
                   }
                 } else {
                   setIsAdmin(false)
@@ -169,6 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   setAccountStatus(DEFAULT_ACCOUNT_STATUS)
                   const fallback = typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1"
                   setTermsAccepted(fallback)
+                  setTermsResolved(true)
                   // 401 after retry: sign out only when this is not a freshly created account.
                   if (res.status === 401) {
                     const createdAtMs = user.metadata.creationTime ? new Date(user.metadata.creationTime).getTime() : 0
@@ -185,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setAccountStatus(DEFAULT_ACCOUNT_STATUS)
                 const fallback = typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1"
                 setTermsAccepted(fallback)
+                setTermsResolved(true)
               }
             } catch (error) {
               if (process.env.NODE_ENV === "development" && !isTransientNetworkError(error)) {
@@ -195,13 +204,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setAccountStatus(DEFAULT_ACCOUNT_STATUS)
               if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1") {
                 setTermsAccepted(true)
+              } else {
+                setTermsAccepted(false)
               }
+              setTermsResolved(true)
             }
           } else {
             setIsAdmin(false)
             setProfilePhotoURL(null)
             setAccountStatus(null)
             setTermsAccepted(false)
+            setTermsResolved(true)
           }
         })
       } catch {
@@ -240,6 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const u = json?.data?.user
         if (u) {
           setTermsAccepted(u.termsAccepted === true)
+          setTermsResolved(true)
           setIsAdmin(Boolean(u.isAdmin))
           setProfilePhotoURL(typeof u.photoURL === "string" && u.photoURL.trim() ? u.photoURL : null)
           setAccountStatus(mapAccountStatus(u as Record<string, unknown>))
@@ -254,12 +268,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const markTermsAccepted = useCallback(() => {
     setTermsAccepted(true)
+    setTermsResolved(true)
     if (typeof sessionStorage !== "undefined") sessionStorage.setItem(TERMS_ACCEPTED_KEY, "1")
   }, [])
 
   const value = useMemo(
-    () => ({ user, loading, isAdmin, profilePhotoURL, accountStatus, termsAccepted, logout, refreshUserProfile, markTermsAccepted }),
-    [user, loading, isAdmin, profilePhotoURL, accountStatus, termsAccepted, logout, refreshUserProfile, markTermsAccepted]
+    () => ({ user, loading, isAdmin, profilePhotoURL, accountStatus, termsAccepted, termsResolved, logout, refreshUserProfile, markTermsAccepted }),
+    [user, loading, isAdmin, profilePhotoURL, accountStatus, termsAccepted, termsResolved, logout, refreshUserProfile, markTermsAccepted]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
