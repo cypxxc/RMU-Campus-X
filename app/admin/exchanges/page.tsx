@@ -29,22 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import {
   Loader2,
   Package,
-  Trash2,
-  Pencil,
+  Eye,
   User,
   Clock,
   Mail,
@@ -52,8 +41,6 @@ import {
 import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
 import { STATUS_LABELS } from "@/lib/exchange-state-machine"
-
-
 
 interface ExchangeRow {
   id: string
@@ -105,8 +92,6 @@ export default function AdminExchangesPage() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedExchange, setSelectedExchange] = useState<ExchangeRow | null>(null)
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null })
-  const [processing, setProcessing] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [lastId, setLastId] = useState<string | null>(null)
 
@@ -170,33 +155,6 @@ export default function AdminExchangesPage() {
     { enabled: isAdmin, minIntervalMs: 10_000 }
   )
 
-  const handleDelete = async () => {
-    const id = deleteDialog.id
-    if (!id || !user || processing) return
-    setProcessing(true)
-    try {
-      const token = await user.getIdToken()
-      const res = await fetch(`/api/admin/exchanges/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error?.message || tt("ลบไม่สำเร็จ", "Delete failed"))
-      setExchanges((prev) => prev.filter((e) => e.id !== id))
-      setDeleteDialog({ open: false, id: null })
-      if (selectedExchange?.id === id) setSelectedExchange(null)
-      toast({ title: tt("ลบการแลกเปลี่ยนแล้ว", "Exchange deleted") })
-    } catch (e) {
-      toast({
-        title: tt("ลบไม่สำเร็จ", "Delete failed"),
-        description: e instanceof Error ? e.message : undefined,
-        variant: "destructive",
-      })
-    } finally {
-      setProcessing(false)
-    }
-  }
-
   const getStatusBadge = (status: string) => {
     const c =
       status === "completed"
@@ -227,9 +185,9 @@ export default function AdminExchangesPage() {
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <Package className="h-8 w-8 text-primary" />
-                {tt("จัดการการแลกเปลี่ยน", "Manage exchanges")}
+                {tt("ประวัติการแลกเปลี่ยนทั้งหมด", "All exchange history")}
               </h1>
-              <p className="text-muted-foreground">{tt("ดูและลบรายการการแลกเปลี่ยนบนเว็บ ไม่ต้องเข้า Firestore", "View and delete exchange records directly from the web admin.")}</p>
+              <p className="text-muted-foreground">{tt("ดูประวัติการแลกเปลี่ยนทั้งหมดในระบบเพื่อใช้ตรวจสอบกรณีมีปัญหาระหว่างผู้ใช้", "Review complete exchange history across the system for dispute investigation.")}</p>
             </div>
           </div>
         </div>
@@ -239,7 +197,7 @@ export default function AdminExchangesPage() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5 text-primary" />
-                {tt("รายการการแลกเปลี่ยน", "Exchange list")}
+                {tt("ประวัติการแลกเปลี่ยน", "Exchange history")}
                 <Badge variant="secondary" className="ml-2 px-3 py-1">
                   {tt(`${exchanges.length} รายการ`, `${exchanges.length} records`)}
                 </Badge>
@@ -277,7 +235,7 @@ export default function AdminExchangesPage() {
                     <TableHead>{tt("ผู้ขอ", "Requester")}</TableHead>
                     <TableHead>{tt("สถานะ", "Status")}</TableHead>
                     <TableHead>{tt("สร้างเมื่อ", "Created at")}</TableHead>
-                    <TableHead className="w-[80px]">{tt("จัดการ", "Actions")}</TableHead>
+                    <TableHead className="w-[100px]">{tt("รายละเอียด", "Details")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -300,9 +258,9 @@ export default function AdminExchangesPage() {
                           size="sm"
                           className="h-8 w-8 p-0"
                           onClick={() => setSelectedExchange(ex)}
-                          title={tt("ดู/แก้ไขรายละเอียด", "View details")}
+                          title={tt("ดูรายละเอียด", "View details")}
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Eye className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -329,11 +287,16 @@ export default function AdminExchangesPage() {
               <span className="rounded-lg bg-primary/10 p-2">
                 <Package className="h-5 w-5 text-primary" />
               </span>
-              {tt("รายละเอียดการแลกเปลี่ยน", "Exchange details")}
+              {tt("รายละเอียดประวัติการแลกเปลี่ยน", "Exchange history details")}
             </DialogTitle>
           </DialogHeader>
           {selectedExchange && (
             <div className="rounded-xl border border-border/60 bg-gradient-to-b from-muted/30 to-muted/10 px-6 py-5 max-h-[70vh] overflow-y-auto">
+              <DetailRow
+                label={tt("รหัส", "ID")}
+                value={selectedExchange.id}
+                valueClassName="font-mono text-xs text-muted-foreground"
+              />
               <DetailRow
                 label={tt("สิ่งของ", "Item")}
                 value={selectedExchange.itemTitle ?? tt("—", "-")}
@@ -372,44 +335,9 @@ export default function AdminExchangesPage() {
             <Button variant="outline" onClick={() => setSelectedExchange(null)}>
               {tt("ปิด", "Close")}
             </Button>
-            {selectedExchange && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  setDeleteDialog({ open: true, id: selectedExchange.id })
-                  setSelectedExchange(null)
-                }}
-              >
-                <Trash2 className="h-4 w-4 mr-1.5" />
-                {tt("ลบ", "Delete")}
-              </Button>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => !open && setDeleteDialog({ open: false, id: null })}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{tt("ยืนยันการลบ", "Confirm deletion")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {tt("การลบจะรวมแชทที่เกี่ยวข้องด้วย ไม่สามารถกู้คืนได้", "Deletion includes related chat data and cannot be undone.")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{tt("ยกเลิก", "Cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={processing}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {processing && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {tt("ลบ", "Delete")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
