@@ -89,7 +89,7 @@ export async function PATCH(
     const linkLabel = hasKey(body, "linkLabel") ? parseOptionalText(body.linkLabel) : (current.linkLabel ?? null)
     const imagePublicId = hasKey(body, "imagePublicId")
       ? parseOptionalText(body.imagePublicId)
-      : (current.imagePublicId ?? null)
+      : (parseOptionalText(current.imagePublicId) ?? parseOptionalText(current.imageUrl))
 
     const startInput = hasKey(body, "startAt")
       ? parseDateInput(body.startAt)
@@ -150,4 +150,3 @@ export async function DELETE(
     return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to delete announcement", 500)
   }
 }
-

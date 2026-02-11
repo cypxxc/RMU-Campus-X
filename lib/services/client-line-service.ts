@@ -2,7 +2,7 @@ import { getAuth } from "firebase/auth"
 
 const BASE_URL = typeof window !== 'undefined' 
   ? window.location.origin 
-  : process.env.NEXT_PUBLIC_BASE_URL || 'https://rmu-app-3-1-2569-wwn2.vercel.app'
+  : process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://rmu-app-3-1-2569-wwn2.vercel.app'
 
 /**
  * Send a notification request to the LINE Notification API

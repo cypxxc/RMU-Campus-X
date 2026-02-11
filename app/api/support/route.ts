@@ -1,9 +1,7 @@
 /**
  * Support Tickets API Route
- * GET: รายการคำร้องของฉัน (auth)
- * POST: สร้าง Support Ticket พร้อมส่ง LINE Notification ไปยัง Admin
- *
- * ✅ Uses withValidation wrapper for consistent validation and auth
+ * GET: List current user's support tickets (auth required)
+ * POST: Create support ticket and notify admins (in-app + LINE)
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -16,7 +14,7 @@ import type { User } from "@/types"
 import { sanitizeText } from "@/lib/security"
 import { getAuthToken } from "@/lib/api-response"
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
 function toISO(v: unknown): string | null {
   if (!v) return null
@@ -27,7 +25,9 @@ function toISO(v: unknown): string | null {
   return null
 }
 
-/** GET /api/support – รายการคำร้องของฉัน (ต้อง auth) */
+/**
+ * GET /api/support - list current user's tickets
+ */
 export async function GET(request: NextRequest) {
   try {
     const token = getAuthToken(request) ?? extractBearerToken(request.headers.get("Authorization"))
@@ -80,22 +80,22 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * Zod schema for support ticket creation
- */
 const createTicketSchema = z.object({
-  subject: z.string().min(1, "กรุณาระบุหัวข้อ").max(200, "หัวข้อยาวเกินไป").transform(sanitizeText),
+  subject: z.string().min(1, "Please provide a subject").max(200, "Subject is too long").transform(sanitizeText),
   category: z.enum(["general", "technical", "account", "exchange", "report", "other"], {
-    errorMap: () => ({ message: "กรุณาเลือกหมวดหมู่" })
+    errorMap: () => ({ message: "Please select a category" }),
   }),
-  description: z.string().min(10, "คำอธิบายต้องมีอย่างน้อย 10 ตัวอักษร").max(2000, "คำอธิบายยาวเกินไป").transform(sanitizeText),
+  description: z
+    .string()
+    .min(10, "Description must be at least 10 characters")
+    .max(2000, "Description is too long")
+    .transform(sanitizeText),
 })
 
 type CreateTicketInput = z.infer<typeof createTicketSchema>
 
 /**
- * POST /api/support
- * Create a new support ticket
+ * POST /api/support - create support ticket
  */
 export const POST = withValidation(
   createTicketSchema,
@@ -111,7 +111,6 @@ export const POST = withValidation(
       const db = getAdminDb()
       const { subject, category, description } = data
 
-      // Create ticket document
       const ticketData = {
         subject,
         category,
@@ -124,20 +123,19 @@ export const POST = withValidation(
       }
 
       const docRef = await db.collection("support_tickets").add(ticketData)
+      const adminUsers = await getAdminUsersByEmail(db)
 
-      // Create in-app notifications for admins (fire and forget)
-      notifyAdminsInApp(db, subject, ctx.email || "", docRef.id).catch(err => {
+      notifyAdminsInApp(db, adminUsers, subject, ctx.email || "", docRef.id).catch((err) => {
         console.error("[Support API] Admin notification error:", err)
       })
 
-      // LINE Notification to Admins (fire and forget)
-      sendAdminLineNotifications(db, subject, category, ctx.email || "").catch(err => {
+      sendAdminLineNotifications(adminUsers, subject, category, ctx.email || "").catch((err) => {
         console.error("[Support API] LINE notification error:", err)
       })
 
       return NextResponse.json({
         success: true,
-        data: { ticketId: docRef.id }
+        data: { ticketId: docRef.id },
       })
     } catch (error) {
       console.error("[Support API] Error:", error)
@@ -150,63 +148,96 @@ export const POST = withValidation(
   { requireAuth: true, requireTermsAccepted: true }
 )
 
-// Helper: Notify admins in-app
+function chunk<T>(items: T[], size: number): T[][] {
+  if (items.length === 0) return []
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size))
+  }
+  return out
+}
+
+async function getAdminUsersByEmail(db: FirebaseFirestore.Firestore): Promise<User[]> {
+  const adminsSnapshot = await db.collection("admins").get()
+  const adminEmails = Array.from(
+    new Set(
+      adminsSnapshot.docs
+        .map((doc) => doc.data().email)
+        .filter((email): email is string => typeof email === "string")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  )
+
+  if (adminEmails.length === 0) return []
+
+  const usersByEmail = new Map<string, User>()
+  for (const emailChunk of chunk(adminEmails, 10)) {
+    const usersSnapshot = await db
+      .collection("users")
+      .where("email", "in", emailChunk)
+      .get()
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data() as User
+      const key = typeof userData.email === "string" ? userData.email.trim().toLowerCase() : ""
+      if (key && !usersByEmail.has(key)) {
+        usersByEmail.set(key, userData)
+      }
+    }
+  }
+
+  return adminEmails
+    .map((email) => usersByEmail.get(email))
+    .filter((user): user is User => Boolean(user))
+}
+
 async function notifyAdminsInApp(
-  db: FirebaseFirestore.Firestore, 
-  subject: string, 
+  db: FirebaseFirestore.Firestore,
+  adminUsers: User[],
+  subject: string,
   userEmail: string,
   ticketId: string
 ): Promise<void> {
-  const adminsSnapshot = await db.collection("admins").get()
-  
-  for (const adminDoc of adminsSnapshot.docs) {
-    const adminData = adminDoc.data()
-    const usersSnapshot = await db.collection("users")
-      .where("email", "==", adminData.email)
-      .get()
+  const adminUserIds = Array.from(
+    new Set(
+      adminUsers
+        .map((user) => (typeof user.uid === "string" ? user.uid.trim() : ""))
+        .filter(Boolean)
+    )
+  )
+  if (adminUserIds.length === 0) return
 
-    if (!usersSnapshot.empty && usersSnapshot.docs[0]) {
-      const adminUserId = usersSnapshot.docs[0].data().uid
-      await db.collection("notifications").add({
-        userId: adminUserId,
-        title: "📩 Support Ticket ใหม่",
-        message: `"${subject}" จาก ${userEmail}`,
-        type: "support",
-        relatedId: ticketId,
-        isRead: false,
-        createdAt: FieldValue.serverTimestamp(),
-      })
-    }
+  const batch = db.batch()
+  for (const adminUserId of adminUserIds) {
+    const ref = db.collection("notifications").doc()
+    batch.set(ref, {
+      userId: adminUserId,
+      title: "New support ticket",
+      message: `"${subject}" from ${userEmail}`,
+      type: "support",
+      relatedId: ticketId,
+      isRead: false,
+      createdAt: FieldValue.serverTimestamp(),
+    })
   }
+  await batch.commit()
 }
 
-// Helper: Send LINE notifications to admins
 async function sendAdminLineNotifications(
-  db: FirebaseFirestore.Firestore,
+  adminUsers: User[],
   subject: string,
   category: string,
   userEmail: string
 ): Promise<void> {
-  const adminsSnapshot = await db.collection("admins").get()
-  const adminEmails = adminsSnapshot.docs.map(doc => doc.data().email)
-
-  if (adminEmails.length === 0) return
-
-  const lineUserIds: string[] = []
-
-  for (const email of adminEmails) {
-    const usersSnapshot = await db.collection("users")
-      .where("email", "==", email)
-      .get()
-
-    if (!usersSnapshot.empty) {
-      const userData = usersSnapshot.docs[0]!.data() as User
-      const enabled = userData.lineNotifications?.enabled !== false
-      if (userData.lineUserId && enabled) {
-        lineUserIds.push(userData.lineUserId)
-      }
-    }
-  }
+  const lineUserIds = Array.from(
+    new Set(
+      adminUsers
+        .filter((user) => user.lineNotifications?.enabled !== false)
+        .map((user) => (typeof user.lineUserId === "string" ? user.lineUserId.trim() : ""))
+        .filter(Boolean)
+    )
+  )
 
   if (lineUserIds.length > 0) {
     await notifyAdminsNewSupportTicket(lineUserIds, subject, category, userEmail, BASE_URL)

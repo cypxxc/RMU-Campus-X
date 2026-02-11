@@ -15,7 +15,7 @@ import { ApiErrors, getAuthToken } from "@/lib/api-response"
 import { validateTransition } from "@/lib/exchange-state-machine"
 import type { Exchange, ExchangeStatus, User } from "@/types"
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
 interface UpdateStatusBody {
   status: ExchangeStatus

@@ -540,6 +540,8 @@ LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 LINE_CHANNEL_SECRET=your_channel_secret
 
 # Application
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+# Optional backward compatibility key (legacy code paths)
 NEXT_PUBLIC_BASE_URL=https://your-domain.com
 
 # System Hardening (Production)
@@ -597,6 +599,20 @@ npx playwright show-report
 npm run test
 npm run test:e2e
 ```
+
+### QA Result Snapshot (2026-02-11)
+
+- White-box: `npm run type-check` passed, `npm run test` passed (`15` files, `130` tests).
+- Black-box: `npm run test:e2e -- --project=chromium` passed (`21/21` tests).
+- Production build: `npm run build` passed.
+
+### Defect Fixes Included
+
+1. Fixed exchange ownership spoofing in `POST /api/exchanges` by resolving owner from item source-of-truth (`items.postedBy`) instead of trusting client payload.
+2. Fixed announcement image compatibility by supporting legacy `imageUrl` fallback in public/admin announcement APIs and converter layer.
+3. Reduced data exposure in public announcement endpoints by removing `createdByEmail` from public responses.
+4. Improved support-ticket admin notification performance by replacing N+1 user lookups with batched `where("email", "in", ...)` queries and batched notification writes.
+5. Unified deployment base URL usage to prefer `NEXT_PUBLIC_APP_URL` (with `NEXT_PUBLIC_BASE_URL` compatibility fallback) across key notification/auth routes.
 
 ### Test Coverage
 

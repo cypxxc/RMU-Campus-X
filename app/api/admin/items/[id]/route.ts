@@ -124,7 +124,10 @@ export async function PATCH(
 
     // แจ้งเตือน LINE (ถ้าเจ้าของเชื่อม LINE และเปิดการแจ้งเตือน)
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        new URL(request.url).origin
       const token = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') || ''
       await fetch(`${baseUrl}/api/line/notify-user-action`, {
           method: 'POST',

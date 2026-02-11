@@ -101,7 +101,7 @@ export const deleteUserAndData = async (userId: string) => {
 
   const baseUrl = typeof window !== "undefined"
     ? window.location.origin
-    : process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
+    : process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
   try {
     const response = await fetch(`${baseUrl}/api/admin/users/${userId}/delete`, {

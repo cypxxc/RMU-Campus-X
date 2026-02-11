@@ -16,6 +16,13 @@ function normalizeLimit(input: string | null): number {
   return Math.min(Math.max(Math.floor(parsed), 1), 200)
 }
 
+function getAnnouncementImageRef(data: Record<string, unknown>): string | null {
+  const raw = data.imagePublicId ?? data.imageUrl
+  if (typeof raw !== "string") return null
+  const value = raw.trim()
+  return value.length > 0 ? value : null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const limit = normalizeLimit(request.nextUrl.searchParams.get("limit"))
@@ -38,9 +45,9 @@ export async function GET(request: NextRequest) {
         endAt: data.endAt ?? null,
         linkUrl: data.linkUrl ?? null,
         linkLabel: data.linkLabel ?? null,
-        imagePublicId: data.imagePublicId ?? null,
-        createdBy: data.createdBy ?? "",
-        createdByEmail: data.createdByEmail ?? undefined,
+        imagePublicId: getAnnouncementImageRef(data),
+        // Public endpoint should not expose admin identity/email.
+        createdBy: "",
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       }
@@ -52,4 +59,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, announcements: [] }, { status: 500 })
   }
 }
-

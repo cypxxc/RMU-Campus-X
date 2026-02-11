@@ -71,17 +71,18 @@ export async function GET(request: NextRequest) {
 /**
  * Zod schema for exchange creation request
  * - Validates required fields with Thai error messages
- * - Ensures ownerId !== requesterId
+ * - Ensures ownerId !== requesterId when ownerId is provided
  */
 const createExchangeSchema = z.object({
   itemId: z.string().min(1, "กรุณาระบุ Item ID"),
   itemTitle: z.string().optional().transform(val => val ? sanitizeText(val) : val),
-  ownerId: z.string().min(1, "กรุณาระบุเจ้าของ"),
+  // Keep for backward compatibility from older clients, but do not trust this value.
+  ownerId: z.string().optional(),
   ownerEmail: z.string().optional(),
   requesterId: z.string().min(1, "กรุณาระบุผู้ขอ"),
   requesterEmail: z.string().optional(),
   requesterName: z.string().optional().transform(val => val ? sanitizeText(val) : val),
-}).refine(data => data.ownerId !== data.requesterId, {
+}).refine(data => !data.ownerId || data.ownerId !== data.requesterId, {
   message: "ไม่สามารถขอสิ่งของของตัวเองได้",
   path: ["requesterId"],
 })
@@ -95,7 +96,6 @@ type CreateExchangeInput = z.infer<typeof createExchangeSchema>
 export const POST = withValidation(
   createExchangeSchema,
   async (_request, data: CreateExchangeInput, ctx: ValidationContext | null) => {
-    // ctx is guaranteed to be non-null because requireAuth: true
     if (!ctx) {
       return NextResponse.json(
         { error: "Authentication context missing", code: "AUTH_ERROR" },
@@ -106,8 +106,7 @@ export const POST = withValidation(
     const {
       itemId,
       itemTitle,
-      ownerId,
-      ownerEmail,
+      ownerId: clientOwnerId,
       requesterId,
       requesterEmail,
       requesterName,
@@ -132,7 +131,7 @@ export const POST = withValidation(
       const db = getAdminDb()
       
       // Transaction: Check Availability + Create Exchange + Update Item
-      const exchangeId = await db.runTransaction(async (transaction) => {
+      const createdExchange = await db.runTransaction(async (transaction) => {
         // a. Check Item Availability
         const itemRef = db.collection("items").doc(itemId)
         const itemDoc = await transaction.get(itemRef)
@@ -146,13 +145,30 @@ export const POST = withValidation(
           throw new Error(`สิ่งของนี้ไม่พร้อมให้แลกเปลี่ยนแล้ว (สถานะ: ${itemData?.status})`)
         }
 
+        // Resolve owner from source of truth (item document), not from client payload.
+        const actualOwnerId = typeof itemData?.postedBy === "string" ? itemData.postedBy : ""
+        if (!actualOwnerId) {
+          throw new Error("ไม่พบข้อมูลเจ้าของสิ่งของ")
+        }
+        if (actualOwnerId === requesterId) {
+          throw new Error("ไม่สามารถขอสิ่งของของตัวเองได้")
+        }
+        if (clientOwnerId && clientOwnerId !== actualOwnerId) {
+          throw new Error("ข้อมูลเจ้าของไม่ตรงกับรายการสิ่งของ")
+        }
+
+        const actualOwnerEmail = typeof itemData?.postedByEmail === "string" ? itemData.postedByEmail : ""
+        const resolvedItemTitle =
+          (typeof itemTitle === "string" && itemTitle.trim() ? itemTitle : null) ||
+          (typeof itemData?.title === "string" ? itemData.title : "")
+
         // b. Create Exchange Doc
         const exchangeRef = db.collection("exchanges").doc()
         transaction.set(exchangeRef, {
           itemId,
-          itemTitle: itemTitle || itemData.title || "",
-          ownerId,
-          ownerEmail: ownerEmail || "",
+          itemTitle: resolvedItemTitle,
+          ownerId: actualOwnerId,
+          ownerEmail: actualOwnerEmail,
           requesterId,
           requesterEmail: requesterEmail || "",
           status: "pending",
@@ -168,28 +184,38 @@ export const POST = withValidation(
           updatedAt: FieldValue.serverTimestamp()
         })
         
-        return exchangeRef.id
+        return {
+          exchangeId: exchangeRef.id,
+          ownerId: actualOwnerId,
+          itemTitle: resolvedItemTitle,
+        }
       })
 
       // Create In-App Notification (async, non-blocking for response)
       await db.collection("notifications").add({
-        userId: ownerId,
+        userId: createdExchange.ownerId,
         title: "มีคำขอใหม่",
-        message: `มีผู้ขอแลกเปลี่ยน "${itemTitle}" ของคุณ`,
+        message: `มีผู้ขอแลกเปลี่ยน "${createdExchange.itemTitle}" ของคุณ`,
         type: "exchange",
-        relatedId: exchangeId,
+        relatedId: createdExchange.exchangeId,
         isRead: false,
         createdAt: FieldValue.serverTimestamp()
       })
 
       // LINE Notification (fire and forget, don't block response)
-      sendLineNotification(ownerId, itemTitle || "", requesterName, requesterEmail || "", exchangeId).catch(err => {
+      sendLineNotification(
+        createdExchange.ownerId,
+        createdExchange.itemTitle,
+        requesterName,
+        requesterEmail || "",
+        createdExchange.exchangeId
+      ).catch(err => {
         console.error("[Exchange API] LINE notification error:", err)
       })
 
       return NextResponse.json({
         success: true,
-        data: { exchangeId }
+        data: { exchangeId: createdExchange.exchangeId }
       })
 
     } catch (error) {
@@ -209,10 +235,22 @@ export const POST = withValidation(
           { status: 404 }
         )
       }
+      if (errorMessage.includes("ไม่สามารถขอสิ่งของของตัวเองได้")) {
+        return NextResponse.json(
+          { error: errorMessage, code: "FORBIDDEN" },
+          { status: 403 }
+        )
+      }
+      if (errorMessage.includes("ข้อมูลเจ้าของไม่ตรงกับรายการสิ่งของ")) {
+        return NextResponse.json(
+          { error: errorMessage, code: "VALIDATION_ERROR" },
+          { status: 400 }
+        )
+      }
 
       console.error("[Exchange API] Error:", error)
       return NextResponse.json(
-        { error: errorMessage, code: "INTERNAL_ERROR" },
+        { error: "Internal server error", code: "INTERNAL_ERROR" },
         { status: 500 }
       )
     }

@@ -33,6 +33,12 @@ function parseType(input: unknown): AnnouncementType {
   return VALID_TYPES.includes(input as AnnouncementType) ? (input as AnnouncementType) : "info"
 }
 
+function parseImageRef(input: unknown): string | null {
+  if (typeof input !== "string") return null
+  const value = input.trim()
+  return value.length > 0 ? value : null
+}
+
 export async function GET(request: NextRequest) {
   const { authorized, error } = await verifyAdminAccess(request)
   if (!authorized) return error!
@@ -57,7 +63,7 @@ export async function GET(request: NextRequest) {
         endAt: data.endAt ?? null,
         linkUrl: data.linkUrl ?? null,
         linkLabel: data.linkLabel ?? null,
-        imagePublicId: data.imagePublicId ?? null,
+        imagePublicId: parseImageRef(data.imagePublicId) ?? parseImageRef(data.imageUrl),
         createdBy: data.createdBy ?? "",
         createdByEmail: data.createdByEmail ?? undefined,
         createdAt: data.createdAt,
@@ -121,4 +127,3 @@ export async function POST(request: NextRequest) {
     return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to create announcement", 500)
   }
 }
-

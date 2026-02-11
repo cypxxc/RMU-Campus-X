@@ -9,7 +9,10 @@ import { notifyItemPosted, notifyItemUpdated, notifyItemDeleted } from "@/lib/li
 import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 import { isAdmin } from "@/lib/admin-auth"
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
+const BASE_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXT_PUBLIC_BASE_URL ||
+  "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
 const notifyItemBodySchema = z
   .object({
