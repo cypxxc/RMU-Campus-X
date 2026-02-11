@@ -1,6 +1,11 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import withPWA from "@ducanh2912/next-pwa";
 
+const cloudinaryCloudName =
+  process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
+  process.env.CLOUDINARY_CLOUD_NAME ||
+  "";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Performance optimizations
@@ -13,6 +18,12 @@ const nextConfig = {
     removeConsole: process.env.NODE_ENV === "production",
   },
 
+  // Ensure client-side image URL resolver can build Cloudinary URLs
+  // even when only CLOUDINARY_CLOUD_NAME is configured in deployment.
+  env: {
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: cloudinaryCloudName,
+  },
+
   // Image optimization - CDN + โปรไฟล์ผู้ใช้ (Google, Firebase)
   images: {
     unoptimized: false,
@@ -20,8 +31,11 @@ const nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     remotePatterns: [
       { protocol: "https", hostname: "**.firebasestorage.app" },
+      { protocol: "https", hostname: "firebasestorage.googleapis.com" },
+      { protocol: "https", hostname: "storage.googleapis.com" },
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "profile.line-scdn.net" },
     ],
   },
 
