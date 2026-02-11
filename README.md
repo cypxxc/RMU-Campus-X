@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Firebase](https://img.shields.io/badge/Firebase-12.5-orange?logo=firebase)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/Tests-120%20unit%20%7C%20E2E-success)]()
+[![Tests](https://img.shields.io/badge/Tests-130%20unit%20%7C%2084%20e2e-success)]()
 [![Sentry](https://img.shields.io/badge/Sentry-Enabled-362D59?logo=sentry)](https://sentry.io)
 
 ---
@@ -136,8 +136,8 @@ User Action → Component → lib/db/* (authFetchJson) → API Route → Firesto
 
 | เทคโนโลยี | เวอร์ชัน | การใช้งาน |
 |-----------|----------|-----------|
-| **Vitest** | 4.0.17 | Unit Testing (120 tests) |
-| **Playwright** | 1.57.0 | E2E Testing (84 tests, 4 browsers; WebKit บางชุด skip) |
+| **Vitest** | 4.0.17 | White-box Testing (130 unit/integration tests) |
+| **Playwright** | 1.57.0 | Black-box Testing (84 E2E scenarios, 4 browsers; WebKit บางชุด skip) |
 | **ESLint** | 8.57.1 | Code Linting |
 | **Zod** | 3.25.76 | Schema Validation |
 | **GitHub Actions** | - | CI/CD Pipeline |
@@ -404,16 +404,21 @@ rmu-campus-x/
 
 ### 11. Testing & Quality Assurance
 
-- **Unit Tests** - Vitest ~120 tests (API validation, security, exchange state machine, db, reports, auth, rate-limit, item-deletion, utils)
-- **E2E Tests** - Playwright 84 tests (API security, dashboard, navigation, auth pages) — รัน 4 browsers; ชุด Basic Navigation / Landing / Auth Pages ข้ามบน WebKit เนื่องจาก Next.js hydration ใน Playwright
+- **White-box Tests** - Vitest 130 tests (API validation, security, exchange state machine, db, reports, auth, rate-limit, item-deletion, utils)
+- **Black-box Tests** - Playwright 84 scenarios (API security, dashboard, navigation, auth pages) — รัน 4 browsers; ชุด Basic Navigation / Landing / Auth Pages ข้ามบน WebKit เนื่องจาก Next.js hydration ใน Playwright
 - **Firestore Rules Tests** - `npm run test:rules` (ต้องรัน Firebase Emulator)
 - **Coverage** - `npm run test:coverage`
+- **Latest local verification (February 11, 2026)** - White-box: `130 passed, 0 failed`; Black-box: `70 passed, 14 skipped, 0 failed`
 
 ```bash
-# Unit tests
+# White-box tests (Vitest)
 npm run test
 
-# E2E tests (Chromium, Firefox, WebKit, Mobile Chrome)
+# Black-box tests (Playwright: Chromium, Firefox, WebKit, Mobile Chrome)
+npm run test:e2e
+
+# Full QA (white-box + black-box)
+npm run test
 npm run test:e2e
 
 # Type-check + unit test + build
@@ -554,20 +559,20 @@ UPSTASH_REDIS_REST_TOKEN=your_token
 
 ## 🧪 การทดสอบ (Testing)
 
-### Unit Tests (Vitest)
+### White-box Tests (Vitest)
 
 ```bash
 # รันทุก test
-bun run test
+npm run test
 
 # รันพร้อม watch mode
-bun run test:watch
+npm run test:watch
 
 # รันพร้อม coverage report
-bun run test:coverage
+npm run test:coverage
 ```
 
-### E2E Tests (Playwright)
+### Black-box Tests (Playwright)
 
 ```bash
 # ติดตั้ง browsers (ครั้งแรก)
@@ -584,6 +589,14 @@ npx playwright show-report
 ```
 
 **หมายเหตุ:** ชุด Basic Navigation, Landing Page Content และ Auth Pages จะถูก **skip บน WebKit** เนื่องจากปัญหา Next.js hydration ใน Playwright; เคสอื่นรันครบทั้ง 4 browsers
+
+### Overall QA Run
+
+```bash
+# รันทดสอบรวมทั้ง White-box + Black-box
+npm run test
+npm run test:e2e
+```
 
 ### Test Coverage
 
