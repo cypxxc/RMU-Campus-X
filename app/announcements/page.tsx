@@ -191,6 +191,7 @@ export default function AnnouncementsPage() {
               {announcements.map((announcement) => {
                 const status = getStatus(announcement, now)
                 const typeBadge = getTypeBadge(announcement.type)
+                const imageUrl = resolveImageUrl(announcement.imagePublicId, { width: 1200 })
 
                 return (
                   <li key={announcement.id} className="rounded-xl border bg-card p-4">
@@ -235,10 +236,10 @@ export default function AnnouncementsPage() {
                         ) : null}
                       </div>
 
-                      {announcement.imagePublicId ? (
+                      {imageUrl ? (
                         <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border bg-muted">
                           <Image
-                            src={resolveImageUrl(announcement.imagePublicId, { width: 1200 })}
+                            src={imageUrl}
                             alt={announcement.title}
                             fill
                             className="object-cover"

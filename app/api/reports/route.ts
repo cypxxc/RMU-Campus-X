@@ -13,7 +13,7 @@ import { createFirebaseAdminReportDeps } from "@/lib/services/reports/firebase-a
 import { isReportServiceError } from "@/lib/services/reports/errors"
 import { sanitizeText } from "@/lib/security"
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
 /**
  * Zod schema for report creation

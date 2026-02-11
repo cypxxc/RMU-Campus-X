@@ -131,6 +131,7 @@ export function AnnouncementBanner() {
         {visible.map((a) => {
           const styles = getAnnouncementStyles(a.type)
           const Icon = styles.icon
+          const imageUrl = resolveImageUrl(a.imagePublicId, { width: 1200 })
           return (
             <div
               key={a.id}
@@ -140,10 +141,10 @@ export function AnnouncementBanner() {
               <div className="flex-1 min-w-0 max-w-2xl text-center">
                 <p className="font-semibold text-sm">{a.title}</p>
                 <p className="text-sm opacity-95 line-clamp-2">{a.message}</p>
-                {a.imagePublicId && (
+                {imageUrl && (
                   <div className="mt-2 overflow-hidden rounded-md border border-white/25 bg-black/10">
                     <Image
-                      src={resolveImageUrl(a.imagePublicId, { width: 1200 })}
+                      src={imageUrl}
                       alt={a.title}
                       width={1200}
                       height={675}

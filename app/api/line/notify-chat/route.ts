@@ -8,7 +8,10 @@ import { z } from "zod"
 import { notifyNewChatMessage, notifyExchangeStatusChange } from "@/lib/line"
 import { getAdminDb, verifyIdToken, extractBearerToken } from "@/lib/firebase-admin"
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569-wwn2.vercel.app"
+const BASE_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXT_PUBLIC_BASE_URL ||
+  "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
 const exchangeStatusSchema = z.enum([
   "pending",

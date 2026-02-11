@@ -18,6 +18,13 @@ function toDate(v: unknown): Date | null {
   return null
 }
 
+function getAnnouncementImageRef(data: Record<string, unknown>): string | null {
+  const raw = data.imagePublicId ?? data.imageUrl
+  if (typeof raw !== "string") return null
+  const value = raw.trim()
+  return value.length > 0 ? value : null
+}
+
 export async function GET() {
   try {
     const db = getAdminDb()
@@ -51,9 +58,9 @@ export async function GET() {
         endAt: data.endAt ?? null,
         linkUrl: data.linkUrl ?? null,
         linkLabel: data.linkLabel ?? null,
-        imagePublicId: data.imagePublicId ?? null,
-        createdBy: data.createdBy ?? "",
-        createdByEmail: data.createdByEmail ?? undefined,
+        imagePublicId: getAnnouncementImageRef(data),
+        // Public endpoint should not expose admin identity/email.
+        createdBy: "",
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       })

@@ -137,6 +137,7 @@ export default function AdminAnnouncementsPage() {
   const { toast } = useToast()
 
   const isEditMode = useMemo(() => !!editingId, [editingId])
+  const previewImageUrl = resolveImageUrl(form.imagePublicId, { width: 1200 })
 
   const fetchList = useCallback(async () => {
     if (!user) return
@@ -310,16 +311,17 @@ export default function AdminAnnouncementsPage() {
               <ul className="space-y-3">
                 {list.map((announcement) => {
                   const typeBadge = getTypeBadge(announcement.type, tt)
+                  const imageUrl = resolveImageUrl(announcement.imagePublicId, { width: 600 })
                   return (
                     <li
                       key={announcement.id}
                       className="rounded-lg border bg-card p-4 hover:bg-muted/20"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row">
-                        {announcement.imagePublicId ? (
+                        {imageUrl ? (
                           <div className="relative h-24 w-full overflow-hidden rounded-md border sm:h-20 sm:w-36 shrink-0">
                             <Image
-                              src={resolveImageUrl(announcement.imagePublicId, { width: 600 })}
+                              src={imageUrl}
                               alt={announcement.title}
                               fill
                               className="object-cover"
@@ -489,10 +491,10 @@ export default function AdminAnnouncementsPage() {
                 ) : null}
               </div>
 
-              {form.imagePublicId ? (
+              {form.imagePublicId && previewImageUrl ? (
                 <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border bg-card">
                   <Image
-                    src={resolveImageUrl(form.imagePublicId, { width: 1200 })}
+                    src={previewImageUrl}
                     alt={tt("รูปประกาศ", "Announcement image")}
                     fill
                     className="object-cover"

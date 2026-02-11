@@ -25,7 +25,7 @@ import { z } from "zod"
 
 function getVerificationContinueUrl(): string {
   if (typeof window !== "undefined") return `${window.location.origin}/verify-email`
-  return `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/verify-email`
+  return `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/verify-email`
 }
 
 function getEmailVerificationActionCodeSettings(): ActionCodeSettings {

@@ -199,7 +199,7 @@ export const announcementConverter = {
       endAt: d.endAt ?? null,
       linkUrl: d.linkUrl ?? null,
       linkLabel: d.linkLabel ?? null,
-      imagePublicId: d.imagePublicId ?? null,
+      imagePublicId: d.imagePublicId ?? d.imageUrl ?? null,
       createdBy: d.createdBy ?? "",
       createdByEmail: d.createdByEmail,
       createdAt: d.createdAt,

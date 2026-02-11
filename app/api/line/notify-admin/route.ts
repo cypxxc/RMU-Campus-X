@@ -106,7 +106,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Admin Notify] Received notification request - Type: ${type}`)
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://rmu-app-3-1-2569.vercel.app"
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      "https://rmu-app-3-1-2569.vercel.app"
     
     // Get all admin LINE user IDs
     const adminLineIds = await getAdminLineUserIds()
