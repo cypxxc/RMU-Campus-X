@@ -16,11 +16,16 @@ export async function POST(request: NextRequest) {
 
     const db = getAdminDb()
     const ref = db.collection("users").doc(decoded.uid)
-    await ref.update({
-      termsAccepted: true,
-      termsAcceptedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    })
+    await ref.set(
+      {
+        uid: decoded.uid,
+        email: decoded.email ?? "",
+        termsAccepted: true,
+        termsAcceptedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
     return NextResponse.json({ success: true, message: "Terms accepted" })
   } catch (e) {
     console.error("[Users Me accept-terms] POST Error:", e)
