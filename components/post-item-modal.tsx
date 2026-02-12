@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useQueryClient } from "@tanstack/react-query"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UnifiedModal, UnifiedModalActions } from "@/components/ui/unified-modal"
 import { useToast } from "@/hooks/use-toast"
@@ -37,6 +38,7 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
   const { user } = useAuth()
   const { toast } = useToast()
   const { tt } = useI18n()
+  const queryClient = useQueryClient()
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
   const categoryLabelByValue: Record<ItemCategory, string> = {
     electronics: tt(CATEGORY_LABELS.electronics.th, CATEGORY_LABELS.electronics.en),
@@ -218,6 +220,9 @@ export function PostItemModal({ open, onOpenChange, onSuccess }: PostItemModalPr
 
       resetForm()
       onOpenChange(false)
+
+      // Refresh dashboard items list immediately (react-query cache)
+      await queryClient.invalidateQueries({ queryKey: ["items"] })
       
       // Reload items - call onSuccess callback to refresh list
       if (onSuccess) {
