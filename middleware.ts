@@ -23,12 +23,7 @@ export async function middleware(request: NextRequest) {
   // Generate unique request ID for tracing
   const requestId = request.headers.get('X-Request-Id') || generateRequestId()
   
-  // Only apply rate limiting to API routes
-  if (!pathname.startsWith('/api')) {
-    const response = NextResponse.next()
-    response.headers.set('X-Request-Id', requestId)
-    return response
-  }
+  // Note: config.matcher restricts this middleware to /api routes only
 
   // Auth bootstrap endpoint is called frequently during login/register flow.
   // Skip rate-limit overhead here to reduce perceived auth latency.

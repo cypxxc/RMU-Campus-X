@@ -73,6 +73,9 @@ export const registerUser = async (rawEmail: string, password: string) => {
     const userDocRef = doc(db, "users", userCredential.user.uid)
 
     // Run independent operations in parallel to reduce register latency.
+    // NOTE: If sendEmailVerification succeeds but setDoc fails, the rollback
+    // deletes the auth user but the verification email was already sent.
+    // This is acceptable — the email link will simply be invalid.
     await Promise.all([
       sendEmailVerification(userCredential.user, getEmailVerificationActionCodeSettings()),
       setDoc(userDocRef, {
@@ -153,13 +156,13 @@ export const loginUser = async (email: string, password: string, remember: boole
   if (!remember) clearPersistentAuthStorage()
 
   // 1. Verify Email
-    if (!userCredential.user.emailVerified) {
-      await firebaseSignOut(auth) // Force sign out if not verified
-      throw new Error("กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ (Please verify your email)")
-    }
-    // Profile/status policy checks are handled by /api/users/me in AuthProvider.
-    
-    return userCredential.user
+  if (!userCredential.user.emailVerified) {
+    await firebaseSignOut(auth) // Force sign out if not verified
+    throw new Error("กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ (Please verify your email)")
+  }
+  // Profile/status policy checks are handled by /api/users/me in AuthProvider.
+
+  return userCredential.user
 }
 
 export const signOut = async () => {

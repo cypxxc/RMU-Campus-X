@@ -10,6 +10,7 @@
  *    FIREBASE_ADMIN_CLIENT_EMAIL=your_client_email
  *    FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
  */
+import { createHash } from 'crypto'
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { getAuth, type Auth, type DecodedIdToken } from 'firebase-admin/auth'
@@ -143,13 +144,18 @@ function getCachedDecodedTokenL1(token: string): DecodedIdToken | null {
   return entry.decoded
 }
 
+/** Hash token for safe use as cache key (avoids collision from slice) */
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex').slice(0, 32)
+}
+
 async function getCachedDecodedToken(token: string): Promise<DecodedIdToken | null> {
   // L1 check
   const l1 = getCachedDecodedTokenL1(token)
   if (l1 !== null) return l1
 
-  // L2 check (Redis) — use tail of token as key to avoid storing full tokens
-  const tokenKey = `token:${token.slice(-16)}`
+  // L2 check (Redis) — use SHA-256 hash to avoid storing full tokens and prevent collision
+  const tokenKey = `token:${hashToken(token)}`
   const l2 = await upstashCache.get<DecodedIdToken>(tokenKey)
   if (l2 !== null && !isDecodedTokenExpired(l2)) {
     // Backfill L1
@@ -170,7 +176,7 @@ async function setCachedDecodedToken(token: string, decoded: DecodedIdToken): Pr
     if (oldestKey) tokenL1.delete(oldestKey)
   }
 
-  const tokenKey = `token:${token.slice(-16)}`
+  const tokenKey = `token:${hashToken(token)}`
   await upstashCache.set(tokenKey, decoded, TOKEN_CACHE_TTL_MS)
 }
 

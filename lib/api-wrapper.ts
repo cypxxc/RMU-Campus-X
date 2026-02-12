@@ -31,15 +31,18 @@ export async function withTimeout<T>(
   timeoutMs: number,
   operationName: string = 'Operation'
 ): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`${operationName} timeout after ${timeoutMs}ms`)),
-        timeoutMs
-      )
-    ),
-  ])
+  let timer: ReturnType<typeof setTimeout>
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${operationName} timeout after ${timeoutMs}ms`)),
+      timeoutMs
+    )
+  })
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    clearTimeout(timer!)
+  }
 }
 
 /**

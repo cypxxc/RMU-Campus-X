@@ -86,15 +86,16 @@ export function sanitizeUrl(url: string): string | null {
 }
 
 /**
- * Check for potential SQL injection patterns (for logging/alerting)
+ * Check for potential XSS / script-injection patterns (for logging/alerting).
+ * Focuses on patterns actually dangerous in a web/NoSQL context.
  */
 export function hasSuspiciousPatterns(input: string): boolean {
   if (!input) return false
   
   const patterns = [
-    /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER)\b)/i,
-    /(--)|(;)|(\/\*)/,
-    /(\bOR\b|\bAND\b).*[=<>]/i,
+    /<script[\s>]/i,
+    /javascript:/i,
+    /on(?:error|load|click|mouseover)=/i,
   ]
   
   return patterns.some(pattern => pattern.test(input))
@@ -113,15 +114,13 @@ export function sanitizeFilename(filename: string): string {
 }
 
 /**
- * Generate safe random ID
+ * Generate cryptographically-secure random ID
  */
 export function generateSafeId(length: number = 16): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let result = ''
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
+  const bytes = new Uint8Array(length)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, b => chars[b % chars.length]).join('')
 }
 
 /**

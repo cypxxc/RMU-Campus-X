@@ -29,7 +29,7 @@ service cloud.firestore {
     function hasRMUEmail() {
       return isAuthenticated()
         && request.auth.token.email != null
-        && request.auth.token.email.matches('^[0-9]{12}@rmu\\.ac\\.th$');
+        && request.auth.token.email.matches('^[a-zA-Z0-9._+\\-]{1,64}@rmu[.]ac[.]th$');
     }
 
     function isVerifiedEmail() {
@@ -163,7 +163,7 @@ service cloud.firestore {
       }
 
       function isValidStatusTransition(oldStatus, newStatus) {
-        return (oldStatus == 'pending' && newStatus in ['accepted', 'rejected', 'cancelled'])
+        return (oldStatus == 'pending' && newStatus in ['accepted', 'in_progress', 'rejected', 'cancelled'])
             || (oldStatus == 'accepted' && newStatus in ['in_progress', 'cancelled'])
             || (oldStatus == 'in_progress' && newStatus in ['completed', 'cancelled'])
             || (oldStatus == newStatus); // allow no-op

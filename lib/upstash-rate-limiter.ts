@@ -20,35 +20,56 @@ const UPSTASH_CONFIGURED = !!(
   process.env.UPSTASH_REDIS_REST_TOKEN
 )
 
-// Lazy-loaded Upstash client
-let upstashRatelimit: unknown = null
+// Lazy-loaded Upstash Redis client (shared across all rate limit instances)
+let upstashRedis: unknown = null
 
-async function getUpstashRatelimit() {
+async function getUpstashRedis() {
   if (!UPSTASH_CONFIGURED) return null
-  
-  if (!upstashRatelimit) {
+
+  if (!upstashRedis) {
     try {
-      const { Ratelimit } = await import('@upstash/ratelimit')
       const { Redis } = await import('@upstash/redis')
-      
-      const redis = new Redis({
+      upstashRedis = new Redis({
         url: process.env.UPSTASH_REDIS_REST_URL!,
         token: process.env.UPSTASH_REDIS_REST_TOKEN!,
       })
-      
-      upstashRatelimit = new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(100, '1 m'), // Default: 100 requests per minute
-        analytics: true,
-        prefix: 'rmu-campus-x',
-      })
     } catch (error) {
-      console.warn('[Rate Limit] Failed to initialize Upstash, falling back to in-memory:', error)
+      console.warn('[Rate Limit] Failed to initialize Upstash Redis:', error)
       return null
     }
   }
-  
-  return upstashRatelimit as InstanceType<typeof import('@upstash/ratelimit').Ratelimit>
+
+  return upstashRedis
+}
+
+// Per-configuration Ratelimit instances (keyed by "limit:windowMs")
+const upstashRatelimitMap = new Map<string, unknown>()
+
+async function getUpstashRatelimit(limit: number, windowMs: number) {
+  const redis = await getUpstashRedis()
+  if (!redis) return null
+
+  const cacheKey = `${limit}:${windowMs}`
+  let instance = upstashRatelimitMap.get(cacheKey)
+
+  if (!instance) {
+    try {
+      const { Ratelimit } = await import('@upstash/ratelimit')
+      const windowSec = Math.max(1, Math.round(windowMs / 1000))
+      instance = new Ratelimit({
+        redis: redis as ConstructorParameters<typeof Ratelimit>[0]['redis'],
+        limiter: Ratelimit.slidingWindow(limit, `${windowSec} s`),
+        analytics: true,
+        prefix: `rmu-campus-x:${cacheKey}`,
+      })
+      upstashRatelimitMap.set(cacheKey, instance)
+    } catch (error) {
+      console.warn('[Rate Limit] Failed to initialize Upstash Ratelimit:', error)
+      return null
+    }
+  }
+
+  return instance as InstanceType<typeof import('@upstash/ratelimit').Ratelimit>
 }
 
 /**
@@ -59,8 +80,8 @@ export async function checkRateLimitScalable(
   limit: number = RATE_LIMITS.API.limit,
   windowMs: number = RATE_LIMITS.API.windowMs
 ): Promise<RateLimitResult> {
-  // Try Upstash first
-  const ratelimit = await getUpstashRatelimit()
+  // Try Upstash first (with per-endpoint configuration)
+  const ratelimit = await getUpstashRatelimit(limit, windowMs)
   
   if (ratelimit) {
     try {

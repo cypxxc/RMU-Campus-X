@@ -27,7 +27,7 @@ service firebase.storage {
     function hasRMUEmail() {
       return isAuthenticated() 
           && request.auth.token.email != null
-          && request.auth.token.email.matches('^[0-9]{12}@rmu[.]ac[.]th$');
+          && request.auth.token.email.matches('^[a-zA-Z0-9._+\\-]{1,64}@rmu[.]ac[.]th$');
     }
     
     // Verified Email Check

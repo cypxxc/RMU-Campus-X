@@ -112,15 +112,18 @@ describe('Security Utilities', () => {
   })
 
   describe('hasSuspiciousPatterns', () => {
-    it('should detect SQL injection patterns', () => {
-      expect(hasSuspiciousPatterns("'; DROP TABLE users;--")).toBe(true)
-      expect(hasSuspiciousPatterns("1 OR 1=1")).toBe(true)
-      expect(hasSuspiciousPatterns("SELECT * FROM users")).toBe(true)
+    it('should detect XSS patterns', () => {
+      expect(hasSuspiciousPatterns('<script>alert(1)</script>')).toBe(true)
+      expect(hasSuspiciousPatterns('javascript:alert(1)')).toBe(true)
+      expect(hasSuspiciousPatterns('<img onerror=alert(1)>')).toBe(true)
+      expect(hasSuspiciousPatterns('<div onload=fetch(x)>')).toBe(true)
     })
 
     it('should not flag normal text', () => {
       expect(hasSuspiciousPatterns('Hello World')).toBe(false)
       expect(hasSuspiciousPatterns('This is a normal message')).toBe(false)
+      expect(hasSuspiciousPatterns('SELECT a book and UPDATE your shelf')).toBe(false)
+      expect(hasSuspiciousPatterns('1 OR 2 items; pick one')).toBe(false)
     })
   })
 
