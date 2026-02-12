@@ -98,14 +98,34 @@ let runtimeFlags: Record<string, Partial<FeatureFlag>> = {}
  * Load flags from external source (database, API, etc.)
  */
 export async function loadFlags(): Promise<void> {
-  // In production, load from Firestore or external service:
-  // const snapshot = await getDocs(collection(db, 'featureFlags'))
-  // runtimeFlags = snapshot.docs.reduce((acc, doc) => {
-  //   acc[doc.id] = doc.data()
-  //   return acc
-  // }, {})
+  try {
+    // Load from Firestore in production
+    if (process.env.NODE_ENV === "production") {
+      const { getAdminDb } = await import("@/lib/firebase-admin")
+      const db = getAdminDb()
+      const snapshot = await db.collection("featureFlags").get()
+      
+      runtimeFlags = snapshot.docs.reduce((acc, doc) => {
+        const data = doc.data()
+        acc[doc.id] = {
+          enabled: data.enabled ?? false,
+          description: data.description ?? "",
+          rolloutPercentage: data.rolloutPercentage,
+          allowedUsers: data.allowedUsers,
+          startDate: data.startDate ? new Date(data.startDate) : undefined,
+          endDate: data.endDate ? new Date(data.endDate) : undefined,
+        }
+        return acc
+      }, {} as Record<string, Partial<FeatureFlag>>)
+      
+      console.log(`[FeatureFlags] Loaded ${snapshot.docs.length} flags from database`)
+      return
+    }
+  } catch (error) {
+    console.warn("[FeatureFlags] Failed to load from database:", error)
+  }
   
-  // For now, use environment variables
+  // Fallback to environment variables
   if (process.env.FEATURE_FLAGS) {
     try {
       runtimeFlags = JSON.parse(process.env.FEATURE_FLAGS)

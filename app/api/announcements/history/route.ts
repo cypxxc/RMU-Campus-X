@@ -8,7 +8,7 @@ import { getAdminDb } from "@/lib/firebase-admin"
 import type { Announcement } from "@/types"
 
 export const dynamic = "force-dynamic"
-export const revalidate = 0
+export const revalidate = 60 // Cache for 60 seconds
 
 function normalizeLimit(input: string | null): number {
   const parsed = Number(input)

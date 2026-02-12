@@ -10,24 +10,8 @@ import { useI18n } from "@/components/language-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatDate, toDate } from "@/lib/date-utils"
 
-function toDate(value: unknown): Date | null {
-  if (!value) return null
-  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
-    const d = (value as { toDate: () => Date }).toDate()
-    return Number.isNaN(d.getTime()) ? null : d
-  }
-  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
-    const d = new Date((value as { toMillis: () => number }).toMillis())
-    return Number.isNaN(d.getTime()) ? null : d
-  }
-  if (typeof value === "object" && value !== null && "_seconds" in (value as object)) {
-    const d = new Date((value as { _seconds: number })._seconds * 1000)
-    return Number.isNaN(d.getTime()) ? null : d
-  }
-  const d = new Date(String(value))
-  return Number.isNaN(d.getTime()) ? null : d
-}
 
 export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
@@ -36,15 +20,11 @@ export default function AnnouncementsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const { locale, tt } = useI18n()
 
-  const intlLocale = locale === "th" ? "th-TH" : "en-US"
-
-  const formatDate = useCallback(
+  const formatDateCallback = useCallback(
     (value: unknown): string => {
-      const d = toDate(value)
-      if (!d) return "-"
-      return d.toLocaleString(intlLocale, { dateStyle: "medium", timeStyle: "short" })
+      return formatDate(value, locale as "th" | "en")
     },
-    [intlLocale]
+    [locale]
   )
 
   const getStatus = useCallback(
@@ -105,11 +85,26 @@ export default function AnnouncementsPage() {
     else setLoading(true)
 
     try {
-      const response = await fetch("/api/announcements/history?limit=200", { cache: "no-store" })
-      if (!response.ok) throw new Error(`Announcements history request failed (${response.status})`)
+      const response = await fetch("/api/announcements/history?limit=200", { 
+        next: { revalidate: 60 }
+      })
+      if (!response.ok) {
+        throw new Error(`Announcements history request failed (${response.status})`)
+      }
       const data = await response.json()
-      const list = Array.isArray(data.announcements) ? data.announcements : []
-      setAnnouncements(list)
+      
+      // Improved error handling and logging
+      if (!data.success) {
+        console.error("[Announcements Page] API returned success:false:", data)
+        throw new Error(data.error || "API request failed")
+      }
+      
+      if (!Array.isArray(data.announcements)) {
+        console.error("[Announcements Page] Unexpected response format:", data)
+        throw new Error("Invalid response format from server")
+      }
+      
+      setAnnouncements(data.announcements)
       setErrorMessage(null)
     } catch (error) {
       console.error("[Announcements Page] load error:", error)
@@ -130,7 +125,7 @@ export default function AnnouncementsPage() {
     loadAnnouncements()
   }, [loadAnnouncements])
 
-  const now = useMemo(() => new Date(), [announcements.length, refreshing])
+  const now = useMemo(() => new Date(), [])
 
   return (
     <div className="space-y-6">
@@ -212,16 +207,16 @@ export default function AnnouncementsPage() {
                         <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1">
                             <CalendarClock className="h-3.5 w-3.5" />
-                            {tt("สร้างเมื่อ", "Created")} {formatDate(announcement.createdAt)}
+                            {tt("สร้างเมื่อ", "Created")} {formatDateCallback(announcement.createdAt)}
                           </span>
-                          {announcement.startAt ? (
+                          {formatDateCallback(announcement.startAt) ? (
                             <span>
-                              {tt("เริ่มแสดง", "Starts")} {formatDate(announcement.startAt)}
+                              {tt("เริ่มแสดง", "Starts")} {formatDateCallback(announcement.startAt)}
                             </span>
                           ) : null}
-                          {announcement.endAt ? (
+                          {formatDateCallback(announcement.endAt) ? (
                             <span>
-                              {tt("หมดอายุ", "Ends")} {formatDate(announcement.endAt)}
+                              {tt("หมดอายุ", "Ends")} {formatDateCallback(announcement.endAt)}
                             </span>
                           ) : null}
                         </div>
@@ -237,17 +232,17 @@ export default function AnnouncementsPage() {
                       </div>
 
                       {imageUrl ? (
-                        <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border bg-muted">
+                        <div className="relative aspect-video w-full overflow-hidden rounded-lg border bg-muted">
                           <Image
                             src={imageUrl}
-                            alt={announcement.title}
+                            alt={formatDateCallback(announcement.createdAt)}
                             fill
                             className="object-cover"
                             sizes="(max-width: 1024px) 100vw, 280px"
                           />
                         </div>
                       ) : (
-                        <div className="flex aspect-[16/9] items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
+                        <div className="flex aspect-video items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
                           {tt("ไม่มีรูปประกาศ", "No image")}
                         </div>
                       )}

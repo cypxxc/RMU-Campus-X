@@ -16,6 +16,7 @@ import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import type { DocumentData, QueryDocumentSnapshot } from "firebase-admin/firestore"
 import type { NotificationType } from "@/types"
+import { log } from "@/lib/logger"
 
 const ALLOWED_NOTIFICATION_TYPES: NotificationType[] = [
   "exchange",
@@ -292,7 +293,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Internal server error"
-    console.error("[Notifications API] GET Error:", e)
+    log.apiError("GET", "/api/notifications", e, { operation: "list-notifications" })
     if (message.includes("index") || message.includes("FAILED_PRECONDITION")) {
       return ApiErrors.internalError(
         "Notifications query requires a Firestore index. Run: firebase deploy --only firestore:indexes"
@@ -343,7 +344,7 @@ export async function POST(request: NextRequest) {
 
     return successResponse({ success: true, notificationId: notificationRef.id })
   } catch (error: unknown) {
-    console.error("[Notifications API] Error:", error)
+    log.apiError("POST", "/api/notifications", error, { operation: "create-notification" })
     const message = error instanceof Error ? error.message : "Internal server error"
     return ApiErrors.internalError(message)
   }

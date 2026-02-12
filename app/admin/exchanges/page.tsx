@@ -22,13 +22,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import {
   Loader2,
@@ -90,7 +83,6 @@ export default function AdminExchangesPage() {
   const { isAdmin } = useAdminGuard()
   const [exchanges, setExchanges] = useState<ExchangeRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedExchange, setSelectedExchange] = useState<ExchangeRow | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [lastId, setLastId] = useState<string | null>(null)
@@ -107,7 +99,6 @@ export default function AdminExchangesPage() {
         const token = await user.getIdToken()
         const params = new URLSearchParams()
         params.set("limit", "50")
-        if (statusFilter && statusFilter !== "all") params.set("status", statusFilter)
         const cursor = append ? (nextLastId ?? lastId) : null
         if (cursor) params.set("lastId", cursor)
         const res = await fetch(`/api/admin/exchanges?${params}`, {
@@ -139,13 +130,13 @@ export default function AdminExchangesPage() {
         setLoading(false)
       }
     },
-    [user, statusFilter, lastId, toast, tt, locale]
+    [user, lastId, toast, tt, locale]
   )
 
   useEffect(() => {
     if (!isAdmin || !user) return
     loadExchanges(false)
-  }, [isAdmin, user, statusFilter, loadExchanges])
+  }, [isAdmin, user, loadExchanges])
 
   useRefreshOnFocus(
     useCallback(() => {
@@ -202,19 +193,6 @@ export default function AdminExchangesPage() {
                   {tt(`${exchanges.length} รายการ`, `${exchanges.length} records`)}
                 </Badge>
               </CardTitle>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder={tt("สถานะ", "Status")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{tt("ทั้งหมด", "All")}</SelectItem>
-                  {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {locale === "th" ? label.th : label.en}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </CardHeader>
           <CardContent className="p-0">

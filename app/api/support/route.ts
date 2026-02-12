@@ -13,6 +13,7 @@ import { notifyAdminsNewSupportTicket } from "@/lib/line"
 import type { User } from "@/types"
 import { sanitizeText } from "@/lib/security"
 import { getAuthToken } from "@/lib/api-response"
+import { log } from "@/lib/logger"
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: { tickets } })
   } catch (error) {
-    console.error("[Support API] GET Error:", error)
+    log.apiError("GET", "/api/support", error, { endpoint: "support-tickets" })
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 })
   }
 }
@@ -126,11 +127,11 @@ export const POST = withValidation(
       const adminUsers = await getAdminUsersByEmail(db)
 
       notifyAdminsInApp(db, adminUsers, subject, ctx.email || "", docRef.id).catch((err) => {
-        console.error("[Support API] Admin notification error:", err)
+        log.warn("Failed to send admin in-app notification", { error: err, ticketId: docRef.id }, "SUPPORT")
       })
 
       sendAdminLineNotifications(adminUsers, subject, category, ctx.email || "").catch((err) => {
-        console.error("[Support API] LINE notification error:", err)
+        log.warn("Failed to send admin LINE notification", { error: err, ticketId: docRef.id }, "SUPPORT")
       })
 
       return NextResponse.json({
@@ -138,7 +139,7 @@ export const POST = withValidation(
         data: { ticketId: docRef.id },
       })
     } catch (error) {
-      console.error("[Support API] Error:", error)
+      log.apiError("POST", "/api/support", error, { operation: "create-ticket" })
       return NextResponse.json(
         { error: "Internal server error", code: "INTERNAL_ERROR" },
         { status: 500 }
