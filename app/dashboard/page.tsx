@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useState } from "react"
 import debounce from "lodash/debounce"
-import { ChevronDown, ChevronLeft, ChevronRight, Loader2, Package, Search, Sparkles, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Package, Search, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 import type { Item, ItemCategory, ItemStatus } from "@/types"
 import { useAuth } from "@/components/auth-provider"
@@ -44,13 +44,11 @@ export default function DashboardPage() {
   const {
     items,
     isLoading,
-    isFetching,
     isError,
     error,
     currentPage,
     totalPages,
     totalCount,
-    hasMore,
     goToPage,
   } = useItems({
     categories,

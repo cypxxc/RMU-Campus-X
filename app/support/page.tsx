@@ -331,7 +331,7 @@ export default function SupportPage() {
                           </span>
                           <Button
                             variant="ghost"
-                            size="xs"
+                            size="sm"
                             className="text-xs text-destructive hover:text-destructive hover:bg-destructive/5 px-2 h-7"
                             onClick={(e) => {
                               e.stopPropagation()
