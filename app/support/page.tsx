@@ -41,6 +41,7 @@ export default function SupportPage() {
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null)
   const [replyText, setReplyText] = useState("")
   const [replying, setReplying] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [ticketMessages, setTicketMessages] = useState<any[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const { user, loading: authLoading } = useAuth()
@@ -173,6 +174,41 @@ export default function SupportPage() {
     }
   }
 
+  const handleDeleteTicket = async (ticketId: string) => {
+    if (!user) return
+    const confirmed = window.confirm(
+      tt(
+        "ต้องการลบคำร้องนี้หรือไม่? คุณจะไม่เห็นคำร้องนี้ในรายการของคุณอีกต่อไป",
+        "Do you want to delete this ticket? It will no longer appear in your list."
+      )
+    )
+    if (!confirmed) return
+
+    setDeletingId(ticketId)
+    try {
+      await authFetchJson(`/api/support/${ticketId}`, { method: "DELETE" })
+      if (selectedTicket?.id === ticketId) {
+        setSelectedTicket(null)
+      }
+      await loadTickets()
+      toast({
+        title: tt("ลบคำร้องแล้ว", "Ticket deleted"),
+      })
+    } catch (error: unknown) {
+      console.error("[Support] Error deleting ticket:", error)
+      toast({
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description:
+          error instanceof Error
+            ? error.message
+            : tt("ไม่สามารถลบคำร้องได้", "Unable to delete ticket"),
+        variant: "destructive",
+      })
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   useEffect(() => {
     if (!selectedTicket || tickets.length === 0) return
     const updated = tickets.find((ticket) => ticket.id === selectedTicket.id)
@@ -288,10 +324,27 @@ export default function SupportPage() {
                           <StatusIcon className="h-3 w-3" />
                           {status.label}
                         </Badge>
-                        <span className="text-xs font-medium text-primary flex items-center gap-1">
-                          {tt("ดูและตอบกลับ", "View and reply")}
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-xs font-medium text-primary flex items-center gap-1">
+                            {tt("ดูและตอบกลับ", "View and reply")}
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-xs text-destructive hover:text-destructive hover:bg-destructive/5 px-2 h-7"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteTicket(ticket.id)
+                            }}
+                            disabled={deletingId === ticket.id}
+                          >
+                            {deletingId === ticket.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            ) : null}
+                            {tt("ลบคำร้อง", "Delete ticket")}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>

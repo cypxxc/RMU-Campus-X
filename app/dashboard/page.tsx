@@ -74,11 +74,6 @@ export default function DashboardPage() {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  const handleLoadMore = () => {
-    goToPage(currentPage + 1)
-    window.scrollTo({ top: 0, behavior: "smooth" })
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b bg-linear-to-b from-primary/5 to-background">
@@ -235,25 +230,6 @@ export default function DashboardPage() {
                     />
                   ))}
                 </div>
-
-                {hasMore && (
-                  <div className="mt-8 flex justify-center">
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={handleLoadMore}
-                      disabled={isFetching}
-                      className="gap-2 min-w-[160px]"
-                    >
-                      {isFetching ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                      {isFetching ? tt("กำลังโหลด...", "Loading...") : tt("โหลดเพิ่ม", "Load more")}
-                    </Button>
-                  </div>
-                )}
 
                 {totalPages > 1 && (
                   <div className="mt-6 flex items-center justify-between border-t pt-4">

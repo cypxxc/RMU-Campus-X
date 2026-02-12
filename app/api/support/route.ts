@@ -54,25 +54,28 @@ export async function GET(request: NextRequest) {
       .limit(100)
       .get()
 
-    const tickets = snapshot.docs.map((d) => {
-      const data = d.data()
-      return {
-        id: d.id,
-        subject: data.subject,
-        category: data.category,
-        description: data.description,
-        userId: data.userId,
-        userEmail: data.userEmail,
-        status: data.status,
-        adminReply: data.adminReply,
-        messages: data.messages ?? [],
-        repliedBy: data.repliedBy,
-        repliedAt: data.repliedAt ? toISO(data.repliedAt) : null,
-        resolvedAt: data.resolvedAt ? toISO(data.resolvedAt) : null,
-        createdAt: data.createdAt ? toISO(data.createdAt) : null,
-        updatedAt: data.updatedAt ? toISO(data.updatedAt) : null,
-      }
-    })
+    const tickets = snapshot.docs
+      .map((d) => {
+        const data = d.data()
+        if (data.deletedByUser) return null
+        return {
+          id: d.id,
+          subject: data.subject,
+          category: data.category,
+          description: data.description,
+          userId: data.userId,
+          userEmail: data.userEmail,
+          status: data.status,
+          adminReply: data.adminReply,
+          messages: data.messages ?? [],
+          repliedBy: data.repliedBy,
+          repliedAt: data.repliedAt ? toISO(data.repliedAt) : null,
+          resolvedAt: data.resolvedAt ? toISO(data.resolvedAt) : null,
+          createdAt: data.createdAt ? toISO(data.createdAt) : null,
+          updatedAt: data.updatedAt ? toISO(data.updatedAt) : null,
+        }
+      })
+      .filter((t): t is NonNullable<typeof t> => t !== null)
 
     return NextResponse.json({ success: true, data: { tickets } })
   } catch (error) {
