@@ -171,7 +171,12 @@ export function Navbar() {
           <div className="flex flex-nowrap items-center gap-2 shrink-0">
             {user ? (
               <>
-                <Button size="sm" className="hidden lg:flex gap-2" onClick={() => setPostModalOpen(true)}>
+                <Button
+                  size="sm"
+                  className="hidden lg:flex gap-2"
+                  onClick={() => setPostModalOpen(true)}
+                  data-post-item-trigger
+                >
                   <Plus className="h-4 w-4" />
                   {t("navbar.postItem")}
                 </Button>
