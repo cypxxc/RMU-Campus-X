@@ -79,28 +79,64 @@ export type ItemFromFirestore = z.infer<typeof itemFromFirestoreSchema>
  */
 export function parseItemFromFirestore(id: string, data: unknown): Item | null {
   try {
-    const raw = typeof data === "object" && data !== null ? data as Record<string, unknown> : {}
+    const raw = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {}
     const withId = { id, ...raw }
     const result = itemFromFirestoreSchema.safeParse(withId)
-    if (!result.success) return null
-    const parsed = result.data
+
+    if (result.success) {
+      const parsed = result.data
+      return {
+        id: parsed.id,
+        title: parsed.title,
+        description: parsed.description,
+        category: parsed.category as ItemCategory,
+        status: parsed.status as ItemStatus,
+        location: parsed.location ?? undefined,
+        locationDetail: parsed.locationDetail ?? undefined,
+        imagePublicIds: parsed.imagePublicIds ?? undefined,
+        imageUrls: parsed.imageUrls ?? undefined,
+        imageUrl: parsed.imageUrl,
+        postedBy: parsed.postedBy,
+        postedByEmail: parsed.postedByEmail,
+        postedByName: parsed.postedByName ?? undefined,
+        postedAt: (raw.postedAt ?? parsed.postedAt) as Item["postedAt"],
+        updatedAt: (raw.updatedAt ?? parsed.updatedAt) as Item["updatedAt"],
+        searchKeywords: parsed.searchKeywords,
+      }
+    }
+
+    // Fallback: lenient parsing for legacy / manually created documents
+    const fallbackTitle = typeof raw.title === "string" ? raw.title : ""
+    if (!fallbackTitle.trim()) return null
+
+    const fallbackDescription = typeof raw.description === "string" ? raw.description : ""
+    const fallbackCategory =
+      (typeof raw.category === "string" ? (raw.category as ItemCategory) : "other")
+    const fallbackStatus =
+      (typeof raw.status === "string" ? (raw.status as ItemStatus) : "available")
+
+    const fallbackPostedAt =
+      (raw.postedAt as Item["postedAt"] | undefined) ?? (result.success ? result.data.postedAt : new Date())
+    const fallbackUpdatedAt =
+      (raw.updatedAt as Item["updatedAt"] | undefined) ?? fallbackPostedAt
+
     return {
-      id: parsed.id,
-      title: parsed.title,
-      description: parsed.description,
-      category: parsed.category as ItemCategory,
-      status: parsed.status as ItemStatus,
-      location: parsed.location ?? undefined,
-      locationDetail: parsed.locationDetail ?? undefined,
-      imagePublicIds: parsed.imagePublicIds ?? undefined,
-      imageUrls: parsed.imageUrls ?? undefined,
-      imageUrl: parsed.imageUrl,
-      postedBy: parsed.postedBy,
-      postedByEmail: parsed.postedByEmail,
-      postedByName: parsed.postedByName ?? undefined,
-      postedAt: (raw.postedAt ?? parsed.postedAt) as Item["postedAt"],
-      updatedAt: (raw.updatedAt ?? parsed.updatedAt) as Item["updatedAt"],
-      searchKeywords: parsed.searchKeywords,
+      id,
+      title: fallbackTitle,
+      description: fallbackDescription,
+      category: fallbackCategory,
+      status: fallbackStatus,
+      location: typeof raw.location === "string" ? raw.location : undefined,
+      locationDetail: typeof raw.locationDetail === "string" ? raw.locationDetail : undefined,
+      imagePublicIds: Array.isArray(raw.imagePublicIds) ? (raw.imagePublicIds as string[]) : undefined,
+      imageUrls: Array.isArray(raw.imageUrls) ? (raw.imageUrls as string[]) : undefined,
+      imageUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : undefined,
+      postedBy: (typeof raw.postedBy === "string" && raw.postedBy) ? raw.postedBy : "unknown",
+      postedByEmail: typeof raw.postedByEmail === "string" ? raw.postedByEmail : "",
+      postedByName: typeof raw.postedByName === "string" ? raw.postedByName : undefined,
+      postedAt: fallbackPostedAt,
+      updatedAt: fallbackUpdatedAt,
+      searchKeywords: Array.isArray(raw.searchKeywords) ? (raw.searchKeywords as string[]) : undefined,
     }
   } catch {
     return null
