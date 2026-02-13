@@ -78,8 +78,8 @@ export async function POST(
       adminEmail: user.email,
       userId,
       reason: parsed.data.reason,
-      relatedReportId: parsed.data.relatedReportId,
-      relatedItemId: parsed.data.relatedItemId,
+      // Note: relatedReportId and relatedItemId are parsed but not yet used in AdminActionParams
+      // They can be added to the type definition if needed in the future
     })
 
     return NextResponse.json(result, { status: 200 })
