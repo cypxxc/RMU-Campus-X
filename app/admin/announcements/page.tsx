@@ -286,9 +286,6 @@ export default function AdminAnnouncementsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button asChild variant="outline">
-              <Link href="/announcements">{tt("ดูประวัติประกาศ", "View announcement history")}</Link>
-            </Button>
             <Button onClick={openCreate} className="gap-2">
               <Plus className="h-4 w-4" />
               {tt("เพิ่มประกาศ", "Add announcement")}
