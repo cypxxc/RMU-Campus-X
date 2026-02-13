@@ -42,7 +42,7 @@ export const registrationSchema = z.object({
   email: z
     .string()
     .email("รูปแบบอีเมลไม่ถูกต้อง")
-    .regex(/^[a-zA-Z0-9._+-]{1,64}@rmu\.ac\.th$/i, "ต้องเป็นอีเมล @rmu.ac.th (นักศึกษาหรือบุคลากร ม.ราชภัฏมหาสารคาม)"),
+    .regex(/^[a-zA-Z0-9._+-]{1,64}@rmu\.ac\.th$/i, "ต้องเป็นอีเมล @rmu.ac.th (นักศึกษาหรืออาจารย์ ม.ราชภัฏมหาสารคาม)"),
   password: z
     .string()
     .min(6, "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร")

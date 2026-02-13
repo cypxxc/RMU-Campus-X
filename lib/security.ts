@@ -41,7 +41,7 @@ export function sanitizeEmail(email: string): string {
 }
 
 /**
- * Validate RMU email format — รองรับทั้งนักศึกษา (รหัส 12 หลัก) และอาจารย์/บุคลากร (ตัวอักษร)
+ * Validate RMU email format — รองรับทั้งนักศึกษา (รหัส 12 หลัก) และอาจารย์ (ตัวอักษร)
  */
 export function isValidRMUEmail(email: string): boolean {
   if (!email) return false

@@ -88,7 +88,7 @@ export default function DashboardPage() {
             </h1>
             <p className="text-muted-foreground max-w-lg text-sm sm:text-base">
               {tt(
-                "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากรมหาวิทยาลัยราชภัฏมหาสารคาม",
+                "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษามหาวิทยาลัยราชภัฏมหาสารคาม",
                 "A platform to share and request useful items for RMU students and staff."
               )}
             </p>

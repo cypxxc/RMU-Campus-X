@@ -36,10 +36,10 @@ export async function generateMetadata(): Promise<Metadata> {
     ? "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของ"
     : "RMU-Campus X - Campus Item Exchange Platform"
   const description = isThai
-    ? "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม"
+    ? "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม"
     : "A campus item exchange platform for students and staff at Rajabhat Maha Sarakham University."
   const ogDescription = isThai
-    ? "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษาและบุคลากร มหาวิทยาลัยราชภัฏมหาสารคาม — ฟรี ไม่มีค่าใช้จ่าย"
+    ? "แพลตฟอร์มแลกเปลี่ยนและขอรับสิ่งของ สำหรับนักศึกษา มหาวิทยาลัยราชภัฏมหาสารคาม — ฟรี ไม่มีค่าใช้จ่าย"
     : "Exchange and request items across campus community — free for RMU students and staff."
   const imageAlt = isThai
     ? "RMU-Campus X - แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา RMU"

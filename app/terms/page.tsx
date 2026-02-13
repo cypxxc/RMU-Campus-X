@@ -50,7 +50,7 @@ const SECTIONS: TermsSection[] = [
     icon: UserCheck,
     title: { th: "2) คุณสมบัติผู้ใช้งาน", en: "2) User eligibility" },
     points: [
-      { th: "ต้องเป็นนักศึกษา บุคลากร หรืออาจารย์ของ RMU", en: "You must be an RMU student or staff member." },
+      { th: "ต้องเป็นนักศึกษา หรืออาจารย์ของ RMU", en: "You must be an RMU student or staff member." },
       { th: "ต้องลงทะเบียนด้วยอีเมลโดเมน @rmu.ac.th", en: "Registration requires an @rmu.ac.th email." },
       { th: "ต้องยืนยันอีเมลก่อนใช้งานฟังก์ชันหลัก", en: "Email verification is required before full usage." },
     ],

@@ -143,7 +143,7 @@ export default function GuidePage() {
         <h1 className="text-3xl font-bold mb-2">{tt("คู่มือการใช้งาน", "User Guide")}</h1>
         <p className="text-muted-foreground mb-2">
           {tt(
-            "RMU-Campus X — คู่มือใช้งานแพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษาและบุคลากร",
+            "RMU-Campus X — คู่มือใช้งานแพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษา",
             "RMU-Campus X — Usage guide for the campus item exchange platform."
           )}
         </p>

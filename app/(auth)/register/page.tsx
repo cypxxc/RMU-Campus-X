@@ -118,7 +118,7 @@ export default function RegisterPage() {
                   <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                   <span>
                     {tt(
-                      "ใช้ได้เฉพาะอีเมล @rmu.ac.th (นักศึกษาหรือบุคลากร)",
+                      "ใช้ได้เฉพาะอีเมล @rmu.ac.th (นักศึกษาหรืออาจารย์)",
                       "Only @rmu.ac.th emails are allowed (students or staff)."
                     )}
                   </span>

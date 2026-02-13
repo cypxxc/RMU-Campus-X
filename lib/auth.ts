@@ -32,7 +32,7 @@ function getEmailVerificationActionCodeSettings(): ActionCodeSettings {
   return { url: getVerificationContinueUrl(), handleCodeInApp: false }
 }
 
-/** รองรับทั้งอีเมลนักศึกษา (รหัส 12 หลัก) และอาจารย์/บุคลากร (ตัวอักษร) @rmu.ac.th */
+/** รองรับทั้งอีเมลนักศึกษา (รหัส 12 หลัก) และอาจารย์ (ตัวอักษร) @rmu.ac.th */
 const RMU_EMAIL_REGEX = /^[a-zA-Z0-9._+-]{1,64}@rmu\.ac\.th$/i
 
 export const validateRMUEmail = (email: string): boolean => {
