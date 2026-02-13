@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react"
 import Image from "next/image"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { useI18n } from "@/components/language-provider"
