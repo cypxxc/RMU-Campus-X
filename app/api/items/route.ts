@@ -171,6 +171,16 @@ export async function GET(request: NextRequest) {
   let favoriteMs = 0
 
   try {
+    // ตรวจสอบ Firebase Admin SDK credentials ก่อน (สำหรับ debug ใน production)
+    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
+    if (!projectId) {
+      console.error("[Items API] FIREBASE_ADMIN_PROJECT_ID is missing")
+      return NextResponse.json(
+        { error: "Server configuration error", code: "CONFIG_ERROR" },
+        { status: 500 }
+      )
+    }
+
     const db = getAdminDb()
     const authHeader = request.headers.get("Authorization")
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null
@@ -178,7 +188,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 })
     }
     const verifyStartedAt = Date.now()
-    const decoded = await verifyIdToken(token, true)
+    // ผ่อนเงื่อนไขสำหรับการ "ดูรายการสิ่งของ" ให้ตรวจแค่ token ถูกต้อง
+    // ไม่เช็คสถานะผู้ใช้แบบเข้มงวด (ACTIVE / WARNING) เพื่อป้องกันกรณี profile หายแล้วโหลด Dashboard ไม่ได้
+    const decoded = await verifyIdToken(token, false)
     verifyMs = Date.now() - verifyStartedAt
     if (!decoded) {
       return NextResponse.json({ error: "Invalid or expired token", code: "INVALID_TOKEN" }, { status: 401 })
@@ -233,54 +245,112 @@ export async function GET(request: NextRequest) {
       let pageQuery = baseQuery.limit(query.pageSize + 1)
       if (pagingCursor) pageQuery = pageQuery.startAfter(pagingCursor)
       const listQueryStartedAt = Date.now()
-      const snapshot = await pageQuery.get()
+      let snapshot
+      try {
+        snapshot = await pageQuery.get()
+      } catch (queryError) {
+        console.error("[Items API] Firestore query failed:", queryError)
+        // Fallback: ลอง query แบบง่าย ๆ โดยไม่ใช้ orderBy ถ้า orderBy fail (อาจเป็นเพราะ index ไม่มี)
+        try {
+          let simpleQuery: FirebaseFirestore.Query = itemsCollection() as unknown as FirebaseFirestore.Query
+          if (query.postedBy) {
+            simpleQuery = simpleQuery.where("postedBy", "==", query.postedBy)
+          }
+          if (query.status) {
+            simpleQuery = simpleQuery.where("status", "==", query.status)
+          }
+          if (query.categories && query.categories.length > 0) {
+            simpleQuery = simpleQuery.where("category", "in", query.categories.slice(0, 10))
+          }
+          simpleQuery = simpleQuery.limit(query.pageSize + 1)
+          snapshot = await simpleQuery.get()
+          console.warn("[Items API] Used fallback query (without orderBy)")
+        } catch (fallbackError) {
+          console.error("[Items API] Fallback query also failed:", fallbackError)
+          throw queryError // Throw original error
+        }
+      }
       listQueryMs = Date.now() - listQueryStartedAt
       const items = snapshot.docs
         .map((d) => parseItemFromFirestore(d.id, d.data()))
         .filter((x): x is Item => x !== null)
       hasMore = items.length > query.pageSize
       page = items.slice(0, query.pageSize)
-    } else {
-      // Search: ใช้ full-text index (array-contains-any) — ดึงเฉพาะ doc ที่ match อย่างน้อย 1 term แล้ว refine AND ใน memory เบาๆ
-      let searchQuery = baseQuery.where(
-        "searchKeywords",
-        "array-contains-any",
-        searchTermsForQuery
-      )
-      const candidateLimit = Math.max(query.pageSize * SEARCH_CANDIDATE_MULTIPLIER, 20)
-      let workingCursor = pagingCursor
-      const collected: Item[] = []
-      let hasNextBatch = true
-
-      const listQueryStartedAt = Date.now()
-      while (hasNextBatch) {
-        let batchQuery = searchQuery.limit(candidateLimit)
-        if (workingCursor) batchQuery = batchQuery.startAfter(workingCursor)
-
-        const batchSnap = await batchQuery.get()
-        if (batchSnap.empty) {
-          hasNextBatch = false
-          break
+      
+      // Log สำหรับ debug ใน production
+      if (page.length === 0 && process.env.NODE_ENV === "production") {
+        console.warn(`[Items API] No items found. Query filters: status=${query.status || "all"}, categories=${query.categories?.join(",") || "none"}, postedBy=${query.postedBy || "none"}, snapshot.size=${snapshot.size}, parsed items=${items.length}`)
+        // ตรวจสอบว่า collection มีข้อมูลจริงหรือไม่ (debug only)
+        try {
+          const testSnapshot = await itemsCollection().limit(1).get()
+          console.warn(`[Items API] Collection test: found ${testSnapshot.size} document(s) without filters`)
+        } catch (testError) {
+          console.error("[Items API] Collection test failed:", testError)
         }
+      }
+    } else {
+      // Search: พยายามใช้ full-text index (searchKeywords) ก่อน
+      const candidateLimit = Math.max(query.pageSize * SEARCH_CANDIDATE_MULTIPLIER, 20)
 
-        hasNextBatch = batchSnap.size === candidateLimit
-        workingCursor = batchSnap.docs[batchSnap.docs.length - 1] ?? null
+      try {
+        let searchQuery = baseQuery.where(
+          "searchKeywords",
+          "array-contains-any",
+          searchTermsForQuery
+        )
+        let workingCursor = pagingCursor
+        const collected: Item[] = []
+        let hasNextBatch = true
 
-        const batchItems = batchSnap.docs
+        const listQueryStartedAt = Date.now()
+        while (hasNextBatch) {
+          let batchQuery = searchQuery.limit(candidateLimit)
+          if (workingCursor) batchQuery = batchQuery.startAfter(workingCursor)
+
+          const batchSnap = await batchQuery.get()
+          if (batchSnap.empty) {
+            hasNextBatch = false
+            break
+          }
+
+          hasNextBatch = batchSnap.size === candidateLimit
+          workingCursor = batchSnap.docs[batchSnap.docs.length - 1] ?? null
+
+          const batchItems = batchSnap.docs
+            .map((d) => parseItemFromFirestore(d.id, d.data()))
+            .filter((x): x is Item => x !== null)
+          collected.push(...batchItems)
+
+          const filteredSoFar = refineItemsBySearchTerms(collected, searchTerms)
+          if (filteredSoFar.length >= query.pageSize) break
+        }
+        listQueryMs = Date.now() - listQueryStartedAt
+
+        const filterStartedAt = Date.now()
+        const filteredItems = refineItemsBySearchTerms(collected, searchTerms)
+        filterMs = Date.now() - filterStartedAt
+        hasMore = filteredItems.length > query.pageSize || hasNextBatch
+        page = filteredItems.slice(0, query.pageSize)
+      } catch (searchError) {
+        // กรณี Firestore แจ้งว่าต้องสร้าง index หรือ error อื่น ๆ จาก array-contains-any
+        console.warn("[Items API] Search index query failed, falling back to in-memory search:", searchError)
+
+        const fallbackListStartedAt = Date.now()
+        let fallbackQuery = baseQuery.limit(candidateLimit)
+        if (pagingCursor) fallbackQuery = fallbackQuery.startAfter(pagingCursor)
+        const fallbackSnap = await fallbackQuery.get()
+        listQueryMs = Date.now() - fallbackListStartedAt
+
+        const fallbackItems = fallbackSnap.docs
           .map((d) => parseItemFromFirestore(d.id, d.data()))
           .filter((x): x is Item => x !== null)
-        collected.push(...batchItems)
 
-        const filteredSoFar = refineItemsBySearchTerms(collected, searchTerms)
-        if (filteredSoFar.length >= query.pageSize) break
+        const filterStartedAt = Date.now()
+        const filteredItems = refineItemsBySearchTerms(fallbackItems, searchTerms)
+        filterMs = Date.now() - filterStartedAt
+        hasMore = filteredItems.length > query.pageSize
+        page = filteredItems.slice(0, query.pageSize)
       }
-      listQueryMs = Date.now() - listQueryStartedAt
-
-      const filterStartedAt = Date.now()
-      const filteredItems = refineItemsBySearchTerms(collected, searchTerms)
-      filterMs = Date.now() - filterStartedAt
-      hasMore = filteredItems.length > query.pageSize || hasNextBatch
-      page = filteredItems.slice(0, query.pageSize)
     }
 
     // แสดงชื่อปัจจุบันจากโปรไฟล์ (ถ้า user เปลี่ยนชื่อแล้ว จะได้ชื่อล่าสุด)
@@ -395,14 +465,29 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const isDev = process.env.NODE_ENV === "development"
-    console.error("[Items API] GET Error:", error)
+    const isProd = process.env.NODE_ENV === "production"
+    
+    // Log รายละเอียดเพิ่มเติมใน production เพื่อ debug
+    if (isProd) {
+      console.error("[Items API] GET Error:", {
+        message,
+        name: error instanceof Error ? error.name : "Unknown",
+        stack: error instanceof Error ? error.stack : undefined,
+        code: error instanceof Error ? (error as { code?: string }).code : undefined,
+      })
+    } else {
+      console.error("[Items API] GET Error:", error)
+    }
+    
     const response = NextResponse.json(
       {
         success: false,
         error: "Internal server error",
         ...(isDev && { detail: message, code: error instanceof Error ? (error as { code?: string }).code : undefined }),
+        // ใน production ให้ return empty array แทน error เพื่อไม่ให้ Dashboard crash
+        ...(isProd && { items: [], totalCount: 0, hasMore: false }),
       },
-      { status: 500 }
+      { status: isProd ? 200 : 500 }
     )
     const totalMs = Date.now() - startedAt
     return withServerTiming(response, [
