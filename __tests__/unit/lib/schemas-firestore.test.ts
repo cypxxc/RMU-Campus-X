@@ -27,15 +27,17 @@ describe("parseItemFromFirestore", () => {
     expect(parsed?.title).toBe("Sample title")
   })
 
-  it("returns null for malformed timestamp-like data instead of throwing", () => {
+  it("returns fallback dates for malformed timestamp-like data instead of throwing", () => {
     const data = {
       ...buildBaseItemData(),
       postedAt: { toDate: () => new Date("invalid-date") },
       updatedAt: { toDate: () => new Date("invalid-date") },
     }
 
-    expect(() => parseItemFromFirestore("item_2", data)).not.toThrow()
-    expect(parseItemFromFirestore("item_2", data)).toBeNull()
+    const result = parseItemFromFirestore("item_2", data)
+    expect(result).not.toBeNull()
+    expect(result?.postedAt).toBeInstanceOf(Date)
+    expect(result?.updatedAt).toBeInstanceOf(Date)
   })
 })
 

@@ -116,9 +116,9 @@ export function parseItemFromFirestore(id: string, data: unknown): Item | null {
       (typeof raw.status === "string" ? (raw.status as ItemStatus) : "available")
 
     const fallbackPostedAt =
-      ((raw.postedAt as Item["postedAt"] | undefined) ?? new Date()) as Item["postedAt"]
+      (toValidDate(raw.postedAt) ?? new Date()) as unknown as Item["postedAt"]
     const fallbackUpdatedAt =
-      (raw.updatedAt as Item["updatedAt"] | undefined) ?? fallbackPostedAt
+      (toValidDate(raw.updatedAt) ?? fallbackPostedAt) as unknown as Item["updatedAt"]
 
     return {
       id,
