@@ -45,8 +45,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  CLIENT (Browser / PWA)                                          │
-│  Next.js 16 App Router │ React 19 │ TailwindCSS 4                 │
+│  CLIENT (Browser / PWA)                                         │
+│  Next.js 16 App Router │ React 19 │ TailwindCSS 4               │
 │  • Server Components (RSC) สำหรับ Landing, เอกสาร                │
 │  • Client Components สำหรับ Dashboard, แชท, โปรไฟล์, Admin       │
 └───────────────────────────┬─────────────────────────────────────┘
@@ -80,179 +80,296 @@
 
 ## 3. รายละเอียดแต่ละหน้า (หน้าต่าง)
 
+> แนวคิดของส่วนนี้คือ **มองแต่ละหน้าแบบคนใช้งานจริง** ก่อน (ผู้ใช้เห็นอะไร / ทำอะไรได้บ้าง)  
+> แล้วค่อยบอกว่า **เบื้องหลังระบบทำอะไร** (เรียก API ไหน เก็บข้อมูลตรงไหน) เพื่อใช้ตอบคำถามกรรมการได้ครบ
+
+---
+
 ### 3.1 หน้า Landing (/) — หน้าแรกก่อนล็อกอิน
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | หน้าแนะนำแพลตฟอร์ม สำหรับผู้ใช้ที่ยังไม่ได้ล็อกอิน |
-| **ทำงานยังไง** | เป็น **Server Component** โหลดข้อความจาก `getServerTranslator()` (i18n) แสดง Hero, ฟีเจอร์, ขั้นตอนการใช้งาน, ปุ่มไป Dashboard / Register |
-| **ใช้งานยังไง** | ผู้ใช้คลิก "เริ่มต้นใช้งาน" ไป `/dashboard` หรือ "สมัครสมาชิก" ไป `/register` |
-| **ส่ง/ดึงข้อมูล** | ไม่เรียก API ข้อมูล; ข้อความมาจาก `lib/i18n/messages` (server-side) |
-| **แสดงผล** | ใช้ `LandingHero3D`, `LandingStats`, `ScrollReveal`, `Card`, `Badge`, `Button`; รองรับ TH/EN ผ่าน Language Switcher |
+- **มุมมองผู้ใช้**
+  - เห็นหน้าต้อนรับที่อธิบายว่า RMU‑Campus X คืออะไร, ใช้ทำอะไร, มีขั้นตอนใช้งานกี่ขั้น
+  - มีปุ่มให้กดไปเริ่มใช้งาน เช่น **“เริ่มใช้งานเลย”** (ไปหน้า Dashboard ถ้าล็อกอินแล้ว) หรือ **“สมัครสมาชิก”** (ไปหน้า Register)
+  - เปลี่ยนภาษาได้ (ไทย/อังกฤษ) จากสวิตช์ภาษาด้านบน
+
+- **เบื้องหลังระบบ**
+  - ใช้ **Server Component** แสดงผล เน้นโหลดเร็วและ SEO ดี
+  - ข้อความทุกอย่างมาจากระบบ i18n (`getServerTranslator()` + ไฟล์ `lib/i18n/messages`) จึงรองรับหลายภาษา
+  - หน้านี้ **ไม่เรียก API ธุรกิจ** (ไม่มีการดึง Firestore) ทำให้เบาและปลอดภัย
+  - ใช้คอมโพเนนต์เช่น `LandingHero3D`, `LandingStats`, `ScrollReveal`, `Card`, `Badge`, `Button` ทำหน้าให้ดูทันสมัย
 
 ---
 
 ### 3.2 หน้า Dashboard (/dashboard) — หน้าหลักหลังล็อกอิน
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | หน้ารายการสิ่งของทั้งหมด พร้อมค้นหา กรองหมวดหมู่/สถานะ และแบ่งหน้า |
-| **ทำงานยังไง** | Client Component ใช้ `useItems()` (hook ที่เรียก `getItems()` จาก `lib/firestore` → `/api/items`) ส่งพารามิเตอร์ categories, status, searchQuery, pageSize, lastId; ค้นหาจะ **debounce 500ms** ก่อนส่งไป API |
-| **ใช้งานยังไง** | เลือกหมวดหมู่/สถานะใน FilterSidebar พิมพ์ค้นหา กดดูรายละเอียดใน Dialog หรือไป `/item/[id]`; กด "โพสต์สิ่งของ" เปิด PostItemModal |
-| **ส่งข้อมูล** | GET `/api/items?categories=...&status=...&search=...&pageSize=12&lastId=...` ผ่าน `authFetchJson` (มี Bearer token) |
-| **ดึงข้อมูล** | API อ่าน Firestore collection `items` ด้วย filter (category, status, postedBy) + pagination แบบ cursor (lastId) + ถ้ามี search ใช้ `searchKeywords` array-contains-any แล้ว refine ใน memory; คืน items พร้อม totalCount, hasMore, lastId |
-| **เก็บข้อมูล** | ไม่ได้เขียนจากหน้านี้โดยตรง; การโพสต์ทำใน Modal → POST `/api/items` |
-| **แสดงผล** | `ItemCard` แต่ละรายการ, `ItemCardSkeletonGrid` ตอนโหลด, `FilterSidebar`, `ItemDetailView` ใน Dialog (Radix Dialog), Pagination ปุ่มก่อนหน้า/ถัดไป; ใช้ TanStack Query (useQuery) cache 2 นาที, placeholderData ระหว่างเปลี่ยนหน้า |
+- **มุมมองผู้ใช้**
+  - เห็น **รายการสิ่งของทั้งหมด** เป็นรูปแบบการ์ด (รูป + ชื่อ + หมวดหมู่ + สถานะ)
+  - มีแถบค้นหา, ตัวกรองหมวดหมู่, ตัวกรองสถานะ (เช่น ว่าง/กำลังแลกเปลี่ยน/ปิดแล้ว) และปุ่มเลื่อนหน้าถัดไป–ก่อนหน้า
+  - คลิกที่การ์ดแต่ละใบเพื่อดูรายละเอียดเพิ่มเติม หรือเข้าไปดูหน้า `/item/[id]`
+  - มีปุ่ม **“โพสต์สิ่งของ”** เพื่อเปิดหน้าต่าง/ป็อปอัปสำหรับลงของชิ้นใหม่
+
+- **เบื้องหลังระบบ**
+  - เป็น **Client Component** ใช้ hook `useItems()` เรียกฟังก์ชัน `getItems()` (จาก `lib/firestore`)  
+    ซึ่งภายในไปเรียก API `GET /api/items` พร้อมพารามิเตอร์:
+    - `categories` (หมวดหมู่ที่เลือก), `status`, `search` (คำค้น), `pageSize`, `lastId` (ใช้แบ่งหน้า)
+  - การค้นหาจะมี **ดีเลย์ประมาณ 500 ms (debounce)** เพื่อไม่ยิง API ทุกตัวอักษรที่ผู้ใช้พิมพ์
+  - API ฝั่งเซิร์ฟเวอร์อ่านข้อมูลจาก Firestore collection `items` โดย
+    - กรองตาม `category`, `status`, `postedBy` ตามตัวกรองบนหน้า
+    - ถ้ามีคำค้นจะใช้ field `searchKeywords` + `array-contains-any` ดึงรายการที่เกี่ยวข้อง แล้วคัดกรองต่อในหน่วยความจำ เพื่อให้ผลลัพธ์ตรงทุกคำค้น
+    - ใช้การแบ่งหน้าแบบ cursor ด้วย `lastId` เพื่อเลื่อนไปหน้าถัดไป
+  - หน้านี้ **ไม่ได้บันทึกข้อมูลโดยตรง** (การโพสต์ของใหม่ใช้ Modal → `POST /api/items`)
+  - ด้าน UI ใช้ `ItemCard`, `ItemCardSkeletonGrid`, `FilterSidebar`, `ItemDetailView` (แบบ Dialog) และ TanStack Query ช่วย cache ข้อมูล ลดการยิง API ซ้ำ
 
 ---
 
 ### 3.3 หน้ารายละเอียดสิ่งของ (/item/[id])
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | หน้าแสดงรายละเอียดสิ่งของหนึ่งรายการ (รูป, ชื่อ, คำอธิบาย, หมวด, สถานะ, เจ้าของ, ปุ่มขอรับ/รายการโปรด) |
-| **ทำงานยังไง** | Client Component ใช้ `getItemById(id)` จาก `lib/firestore` → GET `/api/items/[id]` โหลดครั้งเดียวเมื่อเข้าหน้า (มี cancelled check ป้องกัน setState หลัง unmount) |
-| **ใช้งานยังไง** | ดูรายละเอียด กด "ขอรับสิ่งของ" เปิดฟอร์มส่งคำขอ กดหัวใจเพื่อเพิ่ม/ลบรายการโปรด คลิกชื่อเจ้าของไปโปรไฟล์สาธารณะ |
-| **ส่งข้อมูล** | GET `/api/items/[id]`; การขอรับ → POST `/api/exchanges`; รายการโปรด → POST/DELETE `/api/favorites` |
-| **ดึงข้อมูล** | API อ่าน Firestore `items/[id]` แปลงด้วย `parseItemFromFirestore` ส่งกลับ; ถ้าไม่พบคืน 404 |
-| **แสดงผล** | `ItemDetailView` (รูปจาก Cloudinary `resolveImageUrl`), Badge สถานะ, ปุ่มจาก Radix/Shadcn |
+- **มุมมองผู้ใช้**
+  - เห็นรูปสิ่งของ ชื่อ รายละเอียด หมวดหมู่ สถานะ และข้อมูลเจ้าของอย่างชัดเจน
+  - มีปุ่ม **“ขอรับสิ่งของ”** เพื่อขอแลกเปลี่ยน และปุ่มรูปหัวใจเพื่อเพิ่ม/ลบจาก **รายการโปรด**
+  - คลิกชื่อเจ้าของเพื่อไปดูโปรไฟล์สาธารณะของเขา
+
+- **เบื้องหลังระบบ**
+  - เมื่อเข้าหน้า ระบบเรียก `getItemById(id)` (จาก `lib/firestore`) → API `GET /api/items/[id]`
+  - API อ่าน document จาก Firestore `items/[id]` แล้วแปลงด้วย `parseItemFromFirestore` เพื่อเช็กโครงสร้างข้อมูลให้ถูกต้องก่อนส่งกลับ
+  - ถ้าไม่พบ item จะตอบกลับเป็น 404 เพื่อให้หน้าแสดง “ไม่พบรายการ”
+  - ปุ่มต่าง ๆ ทำงานดังนี้
+    - ขอรับสิ่งของ → `POST /api/exchanges`
+    - เพิ่ม/ลบรายการโปรด → `POST` หรือ `DELETE /api/favorites`
+  - รูปสิ่งของแสดงผ่าน `ItemDetailView` โดยดึง URL จาก Cloudinary ด้วย `resolveImageUrl(public_id)`
 
 ---
 
 ### 3.4 หน้าโปรไฟล์ของฉัน (/profile) และโปรไฟล์สาธารณะ (/profile/[uid])
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | /profile = ดู/แก้ไขโปรไฟล์ตัวเอง; /profile/[uid] = ดูโพสและรีวิวของ user อื่น (สาธารณะ) |
-| **ทำงานยังไง** | โปรไฟล์ตัวเอง: เรียก GET `/api/users/me` (และ PATCH แก้ไข, POST accept-terms); โปรไฟล์สาธารณะ: GET `/api/users/[id]` ไม่ต้อง auth; รายการโพสใช้ `getItems({ postedBy: uid })` → GET `/api/items?postedBy=...`; รีวิวใช้ GET `/api/reviews?targetUserId=...` |
-| **ใช้งานยังไง** | แก้ชื่อ/รูป/สาย LINE; ดูโพสและรีวิวของตัวเองหรือของคนอื่น |
-| **ส่ง/ดึงข้อมูล** | ดูหัวข้อ API ด้านบน; รูปโปรไฟล์อัปโหลดผ่าน `/api/upload/sign` แล้วส่ง public_id ไป PATCH `/api/users/me` |
-| **เก็บข้อมูล** | users collection; รูปใน Cloudinary |
+- **มุมมองผู้ใช้**
+  - `/profile`:
+    - แก้ไขข้อมูลส่วนตัว เช่น ชื่อ, รูปโปรไฟล์, ช่องทางติดต่อ (เช่น LINE)
+    - ดูสรุปการใช้งานของตัวเอง เช่น ของที่โพสต์, คะแนนรีวิว
+  - `/profile/[uid]`:
+    - ดูโปรไฟล์ของคนอื่นแบบสาธารณะ รวมถึงรายการสิ่งของที่เขาโพสต์ และรีวิวจากผู้ใช้คนอื่น
+
+- **เบื้องหลังระบบ**
+  - โปรไฟล์ของตัวเอง:
+    - ใช้ API `GET /api/users/me` เพื่อดึงข้อมูล และ `PATCH /api/users/me` เมื่อแก้ไข
+    - เมื่อผู้ใช้ยอมรับข้อกำหนด จะเรียก `POST /api/users/me/accept-terms`
+  - โปรไฟล์สาธารณะ:
+    - ใช้ API `GET /api/users/[id]` (ไม่ต้องล็อกอินก็อ่านได้ ถ้าอนุญาต)
+    - ของที่โพสต์โดย user นั้น เรียก `getItems({ postedBy: uid })` → `GET /api/items?postedBy=...`
+    - รีวิวดึงจาก `GET /api/reviews?targetUserId=...`
+  - รูปโปรไฟล์อัปโหลดโดย
+    - เรียก `POST /api/upload/sign` เพื่อขอลายเซ็น/โทเคนสำหรับอัปโหลด Cloudinary
+    - อัปโหลดรูปขึ้น Cloudinary แล้วได้ `public_id`
+    - ส่ง `public_id` กลับมาที่ `PATCH /api/users/me`
+  - ข้อมูลหลักเก็บใน collection `users` และรูปเก็บที่ Cloudinary
 
 ---
 
 ### 3.5 หน้ารายการโปรด (/favorites)
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | แสดงสิ่งของที่ผู้ใช้เพิ่มเป็นรายการโปรด |
-| **ทำงานยังไง** | เรียก GET `/api/favorites` ได้รายการ item ids แล้วโหลดรายละเอียด item (หรือ API คืน items พร้อม isFavorite); ลบรายการโปรด = DELETE `/api/favorites/[itemId]` |
-| **ส่ง/ดึงข้อมูล** | GET `/api/favorites`; API อ่าน subcollection หรือ collection ที่เก็บ favorite ของ user แล้วดึง items ที่ตรงกับ ids |
-| **เก็บข้อมูล** | เก็บความสัมพันธ์ user–item (เช่น favorites หรือ favorites subcollection ภายใต้ users) ใน Firestore |
+- **มุมมองผู้ใช้**
+  - เห็นรายการสิ่งของที่เคยกดหัวใจเก็บไว้เป็น **รายการโปรด** เพื่อกลับมาดูภายหลังได้ง่าย
+  - สามารถกดลบออกจากรายการโปรดได้จากหน้านี้
+
+- **เบื้องหลังระบบ**
+  - เมื่อเปิดหน้า ระบบเรียก `GET /api/favorites` เพื่อดึงรายการ item ที่ถูกกดเป็น favorite ของ user คนนี้
+  - โครงสร้างข้อมูลอาจมี 2 แบบ (แล้วแต่ implementation)
+    - ดึงมาเป็น **เฉพาะ item id** แล้วไปโหลดรายละเอียดสิ่งของต่อ
+    - หรือ API คืนข้อมูลสิ่งของมาให้เลยพร้อม flag `isFavorite`
+  - การลบออกจากรายการโปรดใช้ `DELETE /api/favorites/[itemId]`
+  - ฝั่ง Firestore เก็บความสัมพันธ์ระหว่างผู้ใช้กับสิ่งของ (เช่น collection `favorites` หรือ subcollection ใต้ `users`)
 
 ---
 
 ### 3.6 หน้าคำขอแลกเปลี่ยนของฉัน (/my-exchanges)
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | รายการคำขอแลกเปลี่ยนที่ผู้ใช้เป็นเจ้าของหรือเป็นผู้ขอ |
-| **ทำงานยังไง** | เรียก GET `/api/exchanges` ได้รายการ exchange; แต่ละรายการมีสถานะ (pending, in_progress, completed, cancelled, rejected) ตาม State Machine ใน `lib/exchange-state-machine.ts`; ยืนยัน/ปฏิเสธ ผ่าน POST `/api/exchanges/respond`; อัปเดตสถานะ (ยืนยันส่งมอบ/รับของ) ผ่าน PATCH `/api/exchanges/[id]`; ซ่อนจากรายการ = POST `/api/exchanges/[id]/hide` |
-| **ใช้งานยังไง** | ดูสถานะ กดไปแชท กดยืนยัน/ปฏิเสธ หรือยืนยันส่งมอบ/รับของ |
-| **ส่ง/ดึงข้อมูล** | GET `/api/exchanges`; POST respond; PATCH/POST hide; API อ่าน/เขียน collection `exchanges` ตรวจสอบสิทธิ์และ state transition |
-| **เก็บข้อมูล** | Firestore `exchanges`; สถานะเปลี่ยนตาม `VALID_TRANSITIONS` (pending → in_progress/rejected/cancelled; in_progress → completed/cancelled) |
+- **มุมมองผู้ใช้**
+  - เห็นรายการ **คำขอแลกเปลี่ยนทั้งหมด** ที่เกี่ยวข้องกับตัวเอง
+    - ทั้งที่เราเป็นเจ้าของสิ่งของ และที่เราเป็นคนขอรับ
+  - แต่ละรายการจะบอกสถานะ เช่น รออนุมัติ (pending), กำลังดำเนินการ (in progress), สำเร็จ (completed), ยกเลิก (cancelled), ถูกปฏิเสธ (rejected)
+  - สามารถ
+    - กดเข้าไปดูรายละเอียดการแลกเปลี่ยน
+    - เข้าไปหน้าแชทของคู่แลกเปลี่ยน
+    - กดยืนยัน/ปฏิเสธคำขอ
+    - กดยืนยันการส่งมอบหรือรับของ เพื่อปิดดีล
+
+- **เบื้องหลังระบบ**
+  - หน้าใช้ API หลัก ๆ ดังนี้
+    - `GET /api/exchanges` ดึงรายการการแลกเปลี่ยนทั้งหมดของผู้ใช้
+    - `POST /api/exchanges/respond` ใช้สำหรับเจ้าของของเพื่อ **ตอบรับ/ปฏิเสธ** คำขอ
+    - `PATCH /api/exchanges/[id]` ใช้เปลี่ยนสถานะ เช่น ยืนยันส่งของแล้ว หรือยืนยันรับของแล้ว
+    - `POST /api/exchanges/[id]/hide` ใช้ซ่อนรายการนี้ออกจากหน้าจอของผู้ใช้ (แต่ข้อมูลยังอยู่ในระบบ)
+  - ข้อมูลเก็บใน Firestore collection `exchanges` และมี **State Machine** (`lib/exchange-state-machine.ts`) กำหนดว่าจากสถานะไหนไปสถานะไหนได้บ้าง เช่น
+    - `pending → in_progress / rejected / cancelled`
+    - `in_progress → completed / cancelled`
 
 ---
 
 ### 3.7 หน้าแชท (/chat/[exchangeId])
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | หน้าสนทนาระหว่างเจ้าของสิ่งของกับผู้ขอรับ ภายในหนึ่งการแลกเปลี่ยน |
-| **ทำงานยังไง** | โหลด exchange และข้อความจาก GET `/api/exchanges/[id]` และ messages ของ exchange; ส่งข้อความ POST ไป API messages; มี Real-time ได้จาก Firestore listener ใน `lib/services/client-firestore.ts` (ถ้าใช้) หรือโพลจาก API |
-| **ใช้งานยังไง** | พิมพ์ข้อความส่ง; แนบรูป (อัปโหลด Cloudinary แล้วส่ง URL ในข้อความ); กดชื่ออีกฝ่ายไปโปรไฟล์สาธารณะ |
-| **ส่ง/ดึงข้อมูล** | ข้อความเก็บใน subcollection `exchanges/[exchangeId]/chatMessages`; API อ่าน/เขียนผ่าน route ที่เกี่ยวกับ exchanges และ messages |
-| **เก็บข้อมูล** | Firestore `exchanges` + subcollection `chatMessages` (senderId, message, createdAt, imageUrl ถ้ามี) |
+- **มุมมองผู้ใช้**
+  - เป็นห้องแชทระหว่าง **เจ้าของสิ่งของ** กับ **ผู้ขอรับสิ่งของ** สำหรับดีลหนึ่งรายการ
+  - ผู้ใช้สามารถพิมพ์ข้อความ ส่งรูป และเลื่อนย้อนดูประวัติการสนทนาได้
+  - สามารถกดชื่ออีกฝ่ายเพื่อไปดูโปรไฟล์สาธารณะ
+
+- **เบื้องหลังระบบ**
+  - ตอนเข้าแชท ระบบจะโหลด
+    - ข้อมูลการแลกเปลี่ยนจาก `GET /api/exchanges/[id]`
+    - ข้อความเก่า ๆ จาก subcollection `exchanges/[exchangeId]/chatMessages`
+  - การส่งข้อความใหม่อาจใช้ `POST` ไปยัง API แชท (เช่น `/api/chat/[exchangeId]/messages` หรือ route ภายใต้ exchanges)
+  - ระบบรองรับการอัปเดตแบบเกือบเรียลไทม์
+    - ใช้ Firestore listener (`onSnapshot` ใน `lib/services/client-firestore.ts`) เพื่อดึงข้อความใหม่อัตโนมัติ
+    - หรือใช้การโพล API ตามช่วงเวลา ถ้าไม่ได้เปิดโหมด realtime
+  - ข้อความแต่ละอันเก็บใน `chatMessages` พร้อม `senderId`, `message`, `createdAt` และ `imageUrl` ถ้ามีรูปแนบ
 
 ---
 
 ### 3.8 หน้าแจ้งเตือน (/notifications)
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | รายการแจ้งเตือนในแอป (การแลกเปลี่ยน, แชท, ซัพพอร์ต, รายงาน, คำเตือน, ระบบ) |
-| **ทำงานยังไง** | เรียก GET `/api/notifications` แบบแบ่งหน้า (pagination); PATCH `/api/notifications/[id]` = อ่านแล้ว; POST `/api/notifications/read-all` = อ่านทั้งหมด; DELETE ลบรายการ |
-| **ใช้งานยังไง** | เลือกแท็บทั้งหมด/ยังไม่อ่าน/แยกตามประเภท; กดเข้าลิงก์ที่แนบมา; อ่านทั้งหมด / ลบ |
-| **ส่ง/ดึงข้อมูล** | GET with pageSize, lastId, types, unreadOnly; API อ่าน collection `notifications` กรองตาม userId และพารามิเตอร์ |
-| **เก็บข้อมูล** | Firestore `notifications` (userId, type, readAt, payload ลิงก์/ข้อความ) |
+- **มุมมองผู้ใช้**
+  - เห็นรายการแจ้งเตือนทุกประเภท เช่น การแลกเปลี่ยน, แชท, ซัพพอร์ต, รายงาน, คำเตือนจากระบบ
+  - เลือกดูเฉพาะ **ยังไม่อ่าน**, หรือกรองตามประเภทได้
+  - กดแต่ละรายการเพื่อไปยังหน้าที่เกี่ยวข้อง (เช่น ไปหน้าแชท หรือไปหน้าการแลกเปลี่ยน)
+  - มีปุ่ม "อ่านทั้งหมด" และสามารถลบแจ้งเตือนทีละอันได้
+
+- **เบื้องหลังระบบ**
+  - ใช้ API
+    - `GET /api/notifications` (รองรับพารามิเตอร์ `pageSize`, `lastId`, `types`, `unreadOnly`)
+    - `PATCH /api/notifications/[id]` เพื่อทำเครื่องหมายว่าอ่านแล้ว
+    - `POST /api/notifications/read-all` เพื่อทำเครื่องหมายว่าอ่านทั้งหมด
+    - `DELETE /api/notifications/[id]` เพื่อลบแจ้งเตือนรายตัว
+  - API อ่านจาก Firestore collection `notifications` โดยกรองตาม `userId` ของผู้ใช้ที่ล็อกอินอยู่
+  - แต่ละรายการเก็บ `type`, `readAt`, และ `payload` สำหรับลิงก์ไปหน้าที่เกี่ยวข้อง
 
 ---
 
 ### 3.9 หน้า Support (/support)
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | หน้ารายการคำร้องขอความช่วยเหลือของฉัน และช่องตอบกลับกับแอดมิน |
-| **ทำงานยังไง** | GET `/api/support` = รายการ ticket; POST `/api/support` = สร้าง ticket (หัวข้อ + รายละเอียด); GET/POST `/api/support/[ticketId]/messages` = อ่าน/ส่งข้อความใน ticket |
-| **ใช้งานยังไง** | เปิด SupportTicketModal ส่งคำร้อง; เลือก ticket เพื่อดูข้อความและตอบกลับ |
-| **ส่ง/ดึงข้อมูล** | ดู API ด้านบน; เก็บใน `support_tickets` และ subcollection `messages` |
-| **เก็บข้อมูล** | Firestore `support_tickets` + `support_tickets/[id]/messages` |
+- **มุมมองผู้ใช้**
+  - ใช้เมื่อต้องการ **ติดต่อทีมดูแลระบบ** เช่น มีปัญหาใช้งาน, ถูกละเมิดสิทธิ์, หรืออยากเสนอแนะ
+  - ผู้ใช้สามารถ
+    - กดสร้าง ticket ใหม่ ใส่หัวข้อและรายละเอียด
+    - ดูรายการ ticket ที่เคยส่งไว้
+    - กดเข้าไปดูและตอบโต้ข้อความกับแอดมินได้เหมือนห้องสนทนาย่อย ๆ
+
+- **เบื้องหลังระบบ**
+  - ใช้ API หลักคือ
+    - `GET /api/support` เพื่อดึงรายการ ticket ของผู้ใช้
+    - `POST /api/support` เพื่อสร้าง ticket ใหม่
+    - `GET /api/support/[ticketId]/messages` และ `POST /api/support/[ticketId]/messages` สำหรับอ่าน/ส่งข้อความภายใน ticket
+  - ข้อมูลเก็บใน Firestore
+    - collection `support_tickets` สำหรับหัวข้อหลักของแต่ละ ticket
+    - subcollection `support_tickets/[id]/messages` สำหรับข้อความโต้ตอบระหว่างผู้ใช้กับแอดมิน
 
 ---
 
 ### 3.10 หน้ารายงานปัญหา (/report)
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | ฟอร์มส่งรายงานปัญหา (รายงานสิ่งของ/การแลกเปลี่ยน/ผู้ใช้) |
-| **ทำงานยังไง** | เลือกประเภทและเหตุผล กรอกรายละเอียด (และแนบรูปถ้ามี); POST `/api/reports` ผ่าน `report-service` ฝั่ง server; ต้อง termsAccepted |
-| **ส่ง/ดึงข้อมูล** | POST only; API ตรวจ terms + สร้าง document ใน `reports` และอาจสร้างแจ้งเตือนให้แอดมิน |
-| **เก็บข้อมูล** | Firestore `reports` (reportType, reasonCode, description, reporterId, targetId, evidenceUrls ฯลฯ) |
+- **มุมมองผู้ใช้**
+  - ใช้เมื่อต้องการ **รายงานสิ่งที่ผิดปกติ** เช่น
+    - รายการสิ่งของที่ไม่เหมาะสม
+    - การแลกเปลี่ยนที่มีปัญหา
+    - ผู้ใช้ที่มีพฤติกรรมไม่เหมาะสม
+  - ฟอร์มจะให้เลือกประเภทเรื่อง, เลือกเหตุผลแบบรายการ, เขียนอธิบายรายละเอียดเพิ่มเติม และแนบรูปหลักฐานได้
+
+- **เบื้องหลังระบบ**
+  - เมื่อส่งฟอร์ม จะเรียก `POST /api/reports` ผ่าน service ฝั่งเซิร์ฟเวอร์ (`report-service`)
+  - API จะตรวจว่า user **ยอมรับข้อกำหนด (termsAccepted)** แล้วหรือยัง ก่อนให้ส่งรายงาน
+  - ถ้าผ่าน ระบบจะสร้าง document ใหม่ใน collection `reports` เก็บข้อมูลเช่น
+    - `reportType`, `reasonCode`, `description`, `reporterId`, `targetId`, `evidenceUrls`, เวลาแจ้ง ฯลฯ
+  - อาจมีการสร้างแจ้งเตือนไปยังผู้ดูแลหรือระบบ Admin เพิ่มเติม
 
 ---
 
 ### 3.11 หน้าประกาศ (/announcements)
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | ประวัติประกาศย้อนหลัง (แบนเนอร์ที่แสดงใต้ Navbar มาจาก API อื่น) |
-| **ทำงานยังไง** | GET `/api/announcements/history` ไม่ต้อง auth; แสดงรายการประกาศที่เคย/กำลังแสดง |
-| **ดึงข้อมูล** | API อ่าน `announcements` กรองตามเวลา/สถานะ คืนรายการที่เหมาะสม |
+- **มุมมองผู้ใช้**
+  - เป็นหน้าที่แสดง **ประวัติประกาศทั้งหมด** ของระบบ เช่น ข่าวสาร, เงื่อนไขใหม่, ข้อควรรู้
+  - ผู้ใช้สามารถเลื่อนอ่านประกาศเก่า ๆ ย้อนหลังได้
+
+- **เบื้องหลังระบบ**
+  - ใช้ API `GET /api/announcements/history` (ไม่ต้องล็อกอินก็อ่านได้ ถ้าระบบอนุญาต)
+  - API อ่านข้อมูลจาก collection `announcements` และกรองตามเวลา/สถานะ เช่น
+    - เฉพาะประกาศที่เคยออนไลน์, กำลังออนไลน์, หรือครบเงื่อนไขที่กำหนด
 
 ---
 
 ### 3.12 แถบประกาศ (Announcement Banner) — Component ใต้ Navbar
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | แถบประกาศแบบเรียลไทม์ แสดงใต้ Navbar (ความกว้างจำกัด max-w-4xl จัดกลาง) |
-| **ทำงานยังไง** | Client เรียก GET `/api/announcements` (ไม่ต้อง auth) ได้รายการประกาศ + `nextCheckInMs`; เมื่อถึงเวลาโหลดซ้ำอัตโนมัติ; ปิดประกาศได้ เก็บ id ที่ปิดใน localStorage (`announcements_dismissed`) |
-| **ใช้งานยังไง** | อ่านประกาศ กดปิดได้; Breadcrumb ปรับตำแหน่ง (top) ตามว่ามีประกาศหรือไม่ ผ่าน `AnnouncementContext` |
-| **ดึงข้อมูล** | GET `/api/announcements`; API คืน announcements ที่ isActive และอยู่ในช่วง startAt–endAt |
-| **เก็บข้อมูล** | Firestore `announcements`; สถานะปิดแค่ฝั่ง client (localStorage) |
+- **มุมมองผู้ใช้**
+  - เป็นแถบแคบ ๆ ใต้ Navbar ที่แสดง **ประกาศสำคัญล่าสุด** ขณะใช้งานหน้าอื่น
+  - ผู้ใช้สามารถกดอ่านรายละเอียด หรือกดปิดแถบนี้ได้
+
+- **เบื้องหลังระบบ**
+  - ฝั่ง Client เรียก `GET /api/announcements` (ไม่ต้องใช้ token) เพื่อดึงประกาศที่กำลังใช้งานอยู่
+  - API จะคืนข้อมูลประกาศพร้อมตัวเลข `nextCheckInMs` บอกว่าควรเรียกซ้ำอีกเมื่อไหร่
+  - ถ้าผู้ใช้กดปิดประกาศ id นั้นจะถูกเก็บใน `localStorage` ภายใต้ key `announcements_dismissed` เพื่อไม่ให้แสดงซ้ำในเบราว์เซอร์เครื่องเดิม
+  - Context `AnnouncementContext` ช่วยบอกส่วนอื่นของ UI (เช่น Breadcrumb) ว่าขณะนี้มีแถบประกาศหรือไม่ เพื่อจัดตำแหน่ง layout ให้สวยงาม
+  - ข้อมูลประกาศเก็บใน Firestore collection `announcements` และสถานะการปิด/เปิดเก็บเฉพาะฝั่ง client
 
 ---
 
 ### 3.13 หน้าเข้าสู่ระบบ (/login), ลงทะเบียน (/register), ยืนยันอีเมล (/verify-email), ยอมรับข้อกำหนด (/consent), ลืมรหัส (/forgot-password)
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | หน้าสำหรับ Authentication และ Consent |
-| **ทำงานยังไง** | ใช้ Firebase Auth (อีเมล/รหัสผ่าน); ลงทะเบียนตรวจอีเมล @rmu.ac.th; หลังล็อกอินถ้ายังไม่ยอมรับข้อกำหนด ConsentGuard ส่งไป `/consent`; ยอมรับแล้วเรียก POST `/api/users/me/accept-terms` |
-| **ส่ง/ดึงข้อมูล** | Firebase Auth บน client; ฝั่ง API ใช้ Firebase Admin `verifyIdToken`; ข้อมูล user เก็บใน Firestore `users` (สร้าง/อัปเดตเมื่อ GET `/api/users/me`) |
-| **เก็บข้อมูล** | Firebase Auth (accounts); Firestore `users` (displayName, termsAccepted, termsAcceptedAt, status, LINE ฯลฯ) |
+- **มุมมองผู้ใช้**
+  - `/login`:
+    - กรอกอีเมลมหาวิทยาลัยและรหัสผ่านเพื่อเข้าสู่ระบบ
+    - มีตัวเลือก “จดจำฉัน” เพื่อให้อยู่ในระบบได้นานขึ้น
+  - `/register`:
+    - กรอกข้อมูลสมัครสมาชิกใหม่ ระบบจะตรวจว่าใช้อีเมล `@rmu.ac.th` ตามเงื่อนไข
+  - `/verify-email`:
+    - ใช้เมื่อผู้ใช้กดลิงก์ยืนยันจากอีเมลที่ส่งไป เพื่อยืนยันตัวตน
+  - `/consent`:
+    - แสดงเนื้อหาเงื่อนไขการใช้งาน ให้ผู้ใช้ติ๊กยอมรับก่อนใช้ระบบเต็มรูปแบบ
+  - `/forgot-password`:
+    - ใส่อีเมลที่สมัครไว้ เพื่อให้ระบบส่งลิงก์รีเซ็ตรหัสผ่าน
+
+- **เบื้องหลังระบบ**
+  - ใช้ **Firebase Auth ฝั่ง Client** สำหรับ
+    - สมัครสมาชิก, ล็อกอิน, ส่งอีเมลยืนยัน, ส่งอีเมลลืมรหัส, รีเซ็ตรหัสผ่าน
+  - ฝั่ง API ใช้ **Firebase Admin SDK** (`verifyIdToken`) ตรวจสอบ token ที่มาจาก client ทุกครั้งก่อนเข้าถึงข้อมูลสำคัญ
+  - เมื่อผู้ใช้ล็อกอินแล้ว ระบบจะ
+    - สร้างหรืออัปเดตข้อมูลใน Firestore collection `users` ผ่าน API `GET /api/users/me`
+    - เก็บข้อมูลสำคัญ เช่น `displayName`, `termsAccepted`, `termsAcceptedAt`, `status`, ช่องทางติดต่อ ฯลฯ
+  - เมื่อผู้ใช้กดยอมรับข้อกำหนดที่หน้า `/consent` จะเรียก `POST /api/users/me/accept-terms` เพื่อบันทึกสถานะใน Firestore
 
 ---
 
-### 3.14 หน้า Admin (/admin, /admin/items, /admin/users, /admin/reports, /admin/support, /admin/announcements, /admin/exchanges, /admin/logs)
+### 3.14 หน้า Admin (ชุด /admin ทั้งหมด)
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | แดชบอร์ดและหน้าจัดการสำหรับผู้ดูแลระบบ |
-| **ทำงานยังไง** | ใช้ `useAdminGuard()` ตรวจสิทธิ์ (เรียก `/api/admin/verify`); โหลดข้อมูลผ่าน `/api/admin/stats`, `/api/admin/items`, `/api/admin/users`, `/api/admin/reports`, `/api/admin/support` ฯลฯ แบบแบ่งหน้า; จัดการผู้ใช้ (suspend/unsuspend, คำเตือน, ลบ), จัดการสิ่งของ/รายงาน/support/ประกาศ/การแลกเปลี่ยน; ดู Activity Logs |
-| **ใช้งานยังไง** | เลือกเมนูไปแต่ละส่วน; กรอง/แบ่งหน้า; กดดำเนินการ (อนุมัติ, ปฏิเสธ, ตอบ ticket ฯลฯ) |
-| **ส่ง/ดึงข้อมูล** | ทุกอย่างผ่าน Admin API; API ตรวจ isAdmin จาก Firestore แล้วอ่าน/เขียน collections ที่เกี่ยวข้อง |
-| **เก็บข้อมูล** | ใช้ collections เดียวกับฝั่ง user บวก `adminLogs`, `userWarnings`, `cases` ฯลฯ ตามที่ออกแบบ |
+เช่น `/admin`, `/admin/items`, `/admin/users`, `/admin/reports`, `/admin/support`, `/admin/announcements`, `/admin/exchanges`, `/admin/logs`
+
+- **มุมมองผู้ใช้ (แอดมิน)**
+  - เห็นแดชบอร์ดสรุปสถิติระบบ เช่น จำนวนผู้ใช้, ของที่โพสต์, การแลกเปลี่ยน, รายงานที่ค้างอยู่
+  - มีเมนูย่อยแต่ละส่วนสำหรับ
+    - จัดการสิ่งของ (ปิด/ลบ/แก้ไข)
+    - จัดการผู้ใช้ (ระงับ / ปลดระงับ / ส่งคำเตือน)
+    - ตรวจสอบรายงานปัญหาและตอบกลับ
+    - ดูและตอบ ticket ซัพพอร์ต
+    - ตั้งค่าและจัดการประกาศ
+    - ดูประวัติการแลกเปลี่ยน และ log การทำงานของแอดมิน
+
+- **เบื้องหลังระบบ**
+  - ทุกรายการในหน้า Admin จะผ่าน **Admin Guard** ก่อน คือ hook `useAdminGuard()`  
+    ที่ฝั่ง client จะเรียก API `/api/admin/verify` เพื่อตรวจสอบว่า user คนนี้เป็นแอดมินจริงหรือไม่
+  - ข้อมูลต่าง ๆ ถูกโหลดผ่าน Admin API หลายตัว เช่น
+    - `/api/admin/stats`, `/api/admin/items`, `/api/admin/users`, `/api/admin/reports`, `/api/admin/support`, `/api/admin/announcements`, `/api/admin/exchanges`, `/api/admin/logs` ฯลฯ
+  - การกระทำของแอดมิน (เช่น ยกเลิกโพสต์, ระงับผู้ใช้, ปิดรายงาน) จะถูกบันทึกลงใน collections ที่เกี่ยวข้อง เช่น
+    - ใช้ collection เดียวกับฝั่งผู้ใช้ (`items`, `users`, `reports`, `support_tickets`, `exchanges`) แต่ให้สิทธิ์มากกว่า
+    - มี collection เพิ่มพิเศษ เช่น `adminLogs`, `userWarnings`, `cases` สำหรับเก็บประวัติการจัดการ
 
 ---
 
 ### 3.15 หน้าเอกสาร (Guide, Terms, Privacy, Guidelines) — /guide, /terms, /privacy, /guidelines
 
-| รายการ | รายละเอียด |
-|--------|-------------|
-| **คืออะไร** | หน้าเนื้อหาเอกสาร นโยบาย และแนวทางใช้งาน |
-| **ทำงานยังไง** | Server/Client โหลดข้อความจาก i18n (TH/EN); ไม่เรียก API ข้อมูลธุรกิจ |
-| **แสดงผล** | Markdown หรือข้อความจาก `lib/i18n/messages` |
+- **มุมมองผู้ใช้**
+  - เป็นหน้าเนื้อหาแบบอ่านอย่างเดียว เช่น คู่มือการใช้งาน, ข้อตกลงการใช้บริการ, นโยบายความเป็นส่วนตัว, แนวทางการใช้งานที่เหมาะสม
+  - ผู้ใช้สามารถเลื่อนอ่านได้ทั้งภาษาไทยและภาษาอังกฤษ (ถ้าระบบเปิดสองภาษา)
+
+- **เบื้องหลังระบบ**
+  - ส่วนใหญ่เป็น **Server Component** หรือ Client ที่โหลดข้อความจากระบบ i18n (`lib/i18n/messages`)
+  - ใช้รูปแบบ Markdown หรือข้อความธรรมดา ไม่มีการเรียก API ธุรกิจ / ไม่แตะ Firestore
+  - ทำให้หน้าเหล่านี้ปลอดภัย โหลดไว และแก้ไขข้อความได้ง่ายจากไฟล์ภาษา
 
 ---
 
@@ -314,8 +431,10 @@ Collection ต่างๆ ใช้ **typed converter** จาก `lib/db/colle
 
 ### 5.3 ข้อมูลที่เก็บฝั่ง Client
 
-- **localStorage:** ภาษาที่เลือก (`rmu_locale`), รายการ id ประกาศที่ปิดแล้ว (`announcements_dismissed`), cooldown โพสต์ (ถ้ามี)
-- **Cookie:** ใช้ร่วมกับ locale (ตามที่กำหนดใน i18n)
+- **localStorage:** ภาษาที่เลือก (`rmu_locale`), ธีม (`theme`), สถานะปิดประกาศ (`announcements_dismissed`), สถานะยอมรับแถบคุกกี้ (`rmu-cookie-consent`), สถานะ “จดจำฉัน” หน้าเข้าสู่ระบบ (`REMEMBER_KEY`), ตัวนับ/สถานะคำเตือนบางอย่างของบัญชี, และค่า **cooldown การกดปุ่มบางอย่าง** (`cooldown_*`) เพื่อกันกดรัว ๆ
+- **sessionStorage:** สถานะยอมรับข้อกำหนดการใช้งานใน session ปัจจุบัน (`TERMS_ACCEPTED_KEY`) — ปิดเบราว์เซอร์แล้วค่ารีเซ็ต เพื่อให้ต้องตรวจใหม่เมื่อเข้าสู่ระบบวนรอบใหม่
+- **การจำการเข้าสู่ระบบ (Remember me):** Firebase Auth ใช้ localStorage + IndexedDB สำหรับเก็บ session แบบอยู่ข้ามการปิดเบราว์เซอร์; ถ้าผู้ใช้ **ไม่ติ๊ก “จดจำฉัน”** ระบบจะล้างค่าใน localStorage/IndexedDB เหลือแค่ sessionStorage ทำให้ **ปิดแท็บแล้วออกจากระบบจริง** แต่ถ้าติ๊ก ระบบจะเก็บสถานะไว้ทำให้ยังค้างล็อกอินได้ในครั้งถัดไป
+- **Cookie:** ใช้เป็น **locale cookie** เพื่อให้ทั้งฝั่ง server และ client รู้ภาษาที่เลือก (ตามที่กำหนดใน i18n); ไม่ได้ใช้เก็บข้อมูลฟอร์มหรือข้อมูลส่วนตัวอื่น ๆ
 
 ---
 

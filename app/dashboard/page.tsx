@@ -26,7 +26,8 @@ const PAGE_SIZE = 12
 
 export default function DashboardPage() {
   const [categories, setCategories] = useState<ItemCategory[]>([])
-  const [status, setStatus] = useState<ItemStatus | "all">("available")
+  // เริ่มต้นแสดงทุกสถานะ เพื่อรองรับข้อมูลเก่าที่อาจไม่ได้ใช้ status = "available"
+  const [status, setStatus] = useState<ItemStatus | "all">("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
@@ -60,6 +61,7 @@ export default function DashboardPage() {
 
   const showItemsLoading = (authLoading && !user) || isLoading
   const isSearching = searchQuery !== debouncedSearchQuery
+  const effectiveTotalCount = totalCount || items.length
 
   useEffect(() => {
     if (isError && error) {
@@ -123,9 +125,9 @@ export default function DashboardPage() {
                 ) : (
                   <>
                     {debouncedSearchQuery
-                      ? tt(`พบ ${totalCount} รายการจากคำค้นหา`, `${totalCount} results found`)
-                      : tt(`ทั้งหมด ${totalCount} รายการ`, `${totalCount} total items`)}
-                    {totalCount > 0 && (
+                      ? tt(`พบ ${effectiveTotalCount} รายการจากคำค้นหา`, `${effectiveTotalCount} results found`)
+                      : tt(`ทั้งหมด ${effectiveTotalCount} รายการ`, `${effectiveTotalCount} total items`)}
+                    {effectiveTotalCount > 0 && (
                       <span className="hidden sm:inline">
                         • {tt(`หน้า ${currentPage}/${totalPages}`, `Page ${currentPage}/${totalPages}`)}
                       </span>
