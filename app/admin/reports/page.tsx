@@ -329,7 +329,7 @@ export default function AdminReportsPage() {
               <div className="text-2xl font-bold text-foreground">
                 {reports.filter(r => ['new', 'under_review', 'waiting_user'].includes(r.status)).length}
               </div>
-              <p className="text-xs text-muted-foreground">{tt("รอตรวจสอบ (ยังไม่จบ)", "Pending review (not completed)")}</p>
+              <p className="text-xs text-muted-foreground">{tt("รอตรวจสอบ", "Pending review (not completed)")}</p>
             </div>
           </CardContent>
         </Card>
@@ -342,7 +342,7 @@ export default function AdminReportsPage() {
               <div className="text-2xl font-bold text-foreground">
                 {reports.filter(r => ['resolved', 'action_taken', 'rejected', 'closed'].includes(r.status)).length}
               </div>
-              <p className="text-xs text-muted-foreground">{tt("จบแล้ว (แจ้งเจ้าของ/ปิดเคส/ปฏิเสธ)", "Completed (notified/closed/rejected)")}</p>
+              <p className="text-xs text-muted-foreground">{tt("แก้ไขแล้ว", "Completed (notified/closed/rejected)")}</p>
             </div>
           </CardContent>
         </Card>
@@ -656,7 +656,7 @@ function ReportsTable({
               <TableHead>{tt("วันที่แจ้ง", "Reported at")}</TableHead>
               <TableHead>{tt("ประเภท", "Type")}</TableHead>
               <TableHead>{tt("เป้าหมาย", "Target")}</TableHead>
-              <TableHead>{tt("ข้อหา", "Reason")}</TableHead>
+               <TableHead>{tt("เรื่องที่ถูกรายงาน", "Reason")}</TableHead>
               <TableHead>{tt("ผู้แจ้ง", "Reporter")}</TableHead>
               <TableHead>{tt("สถานะ", "Status")}</TableHead>
               <TableHead className="text-right">{tt("จัดการ", "Actions")}</TableHead>

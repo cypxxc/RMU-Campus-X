@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, MessageSquare, Send, Pencil, CheckCircle2, Clock, Inbox, Search, Check, UserCircle } from "lucide-react"
+import { Loader2, MessageSquare, Send, Pencil, CheckCircle2, Clock, Inbox, Search, Check, UserCircle, ChevronLeft, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import { resolveImageUrl } from "@/lib/cloudinary-url"
 import { useI18n } from "@/components/language-provider"
@@ -82,12 +82,24 @@ const getStatusBadge = (status: string, tt: (th: string, en: string) => string) 
   )
 }
 
+const SUPPORT_PAGE_SIZE = 10
+
 interface PaginationState {
-  data: SupportTicket[]
-  lastDoc: string | null
-  hasMore: boolean
+  currentPage: number
+  cursors: Record<number, string | null>
+  pagesData: Record<number, SupportTicket[]>
   totalCount: number
   loading: boolean
+}
+
+function emptyPaginationState(): PaginationState {
+  return {
+    currentPage: 1,
+    cursors: { 1: null },
+    pagesData: {},
+    totalCount: 0,
+    loading: false,
+  }
 }
 
 export default function AdminSupportPage() {
@@ -99,9 +111,8 @@ export default function AdminSupportPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
-  // Separate state for each tab to preserve data when switching
-  const [pendingState, setPendingState] = useState<PaginationState>({ data: [], lastDoc: null, hasMore: true, totalCount: 0, loading: false })
-  const [historyState, setHistoryState] = useState<PaginationState>({ data: [], lastDoc: null, hasMore: true, totalCount: 0, loading: false })
+  const [pendingState, setPendingState] = useState<PaginationState>(emptyPaginationState)
+  const [historyState, setHistoryState] = useState<PaginationState>(emptyPaginationState)
   const pendingStateRef = useRef(pendingState)
   const historyStateRef = useRef(historyState)
 
@@ -117,33 +128,44 @@ export default function AdminSupportPage() {
   const { locale, tt } = useI18n()
   const { toast } = useToast()
 
-  const loadTickets = useCallback(async (tab: 'pending' | 'history', reset = false) => {
+  const loadTickets = useCallback(async (tab: 'pending' | 'history', page: number, reset = false) => {
     const currentState = tab === 'pending' ? pendingStateRef.current : historyStateRef.current
     const setState = tab === 'pending' ? setPendingState : setHistoryState
-    
-    if (currentState.loading) return
 
+    if (currentState.loading) return
+    if (page < 1) return
+
+    if (reset) {
+      setState(emptyPaginationState())
+      if (page !== 1) return
+    }
+
+    const cursor = page === 1 ? null : (currentState.cursors[page] ?? null)
     setState(prev => ({ ...prev, loading: true }))
 
     try {
-      const statusFilters: SupportTicketStatus[] = tab === 'pending' 
-        ? ['new', 'in_progress'] 
+      const statusFilters: SupportTicketStatus[] = tab === 'pending'
+        ? ['new', 'in_progress']
         : ['resolved', 'closed']
 
       const { tickets, lastDoc, hasMore, totalCount } = await getSupportTickets(
-        statusFilters, 
-        10, 
-        reset ? null : currentState.lastDoc
+        statusFilters,
+        SUPPORT_PAGE_SIZE,
+        cursor
       )
 
-      setState(prev => ({
-        data: reset ? tickets : [...prev.data, ...tickets],
-        lastDoc,
-        hasMore,
-        totalCount,
-        loading: false
-      }))
+      const nextCursor = typeof lastDoc === 'string' ? lastDoc : null
 
+      setState(prev => ({
+        currentPage: page,
+        cursors: {
+          ...prev.cursors,
+          [page + 1]: hasMore ? nextCursor : null,
+        },
+        pagesData: { ...prev.pagesData, [page]: tickets },
+        totalCount: totalCount > 0 ? totalCount : prev.totalCount,
+        loading: false,
+      }))
     } catch (error) {
       console.error(`[AdminSupport] Error loading ${tab} tickets:`, error)
       setState(prev => ({ ...prev, loading: false }))
@@ -153,8 +175,8 @@ export default function AdminSupportPage() {
 
   useEffect(() => {
     if (!isAdmin || isDataLoaded) return
-    loadTickets('pending', true)
-    loadTickets('history', true)
+    loadTickets('pending', 1, true)
+    loadTickets('history', 1, true)
     setIsDataLoaded(true)
   }, [isAdmin, isDataLoaded, loadTickets])
 
@@ -175,8 +197,8 @@ export default function AdminSupportPage() {
   }
   
   const refreshAll = useCallback(() => {
-    loadTickets("pending", true)
-    loadTickets("history", true)
+    loadTickets("pending", 1, true)
+    loadTickets("history", 1, true)
   }, [loadTickets])
 
   useRefreshOnFocus(refreshAll, { enabled: isAdmin, minIntervalMs: 10_000 })
@@ -241,7 +263,7 @@ export default function AdminSupportPage() {
               <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
             </div>
             <div className="min-w-0">
-              <p className="text-2xl font-bold tabular-nums">{pendingState.data.filter(t => t.status === "in_progress").length}</p>
+              <p className="text-2xl font-bold tabular-nums">{Object.values(pendingState.pagesData).flat().filter(t => t.status === "in_progress").length}</p>
               <p className="text-xs text-muted-foreground">{tt("กำลังดำเนินการ", "In progress")}</p>
             </div>
           </CardContent>
@@ -294,11 +316,21 @@ export default function AdminSupportPage() {
             </div>
 
             <TabsContent value="pending" className="m-0">
-               <TicketsList 
-                 data={getFilteredData(pendingState.data)} 
+               <TicketsList
+                 data={getFilteredData(pendingState.pagesData[pendingState.currentPage] ?? [])}
                  loading={pendingState.loading}
-                 hasMore={pendingState.hasMore}
-                 onLoadMore={() => loadTickets('pending')}
+                 currentPage={pendingState.currentPage}
+                 totalPages={Math.max(1, Math.ceil(pendingState.totalCount / SUPPORT_PAGE_SIZE))}
+                 totalCount={pendingState.totalCount}
+                 onPrev={() => {
+                   const p = pendingState.currentPage
+                   if (p > 1) loadTickets('pending', p - 1)
+                 }}
+                 onNext={() => {
+                   const p = pendingState.currentPage
+                   const totalP = Math.ceil(pendingState.totalCount / SUPPORT_PAGE_SIZE)
+                   if (p < totalP) loadTickets('pending', p + 1)
+                 }}
                  onView={async (ticket) => {
                     setSelectedTicket(ticket)
                     try {
@@ -307,17 +339,27 @@ export default function AdminSupportPage() {
                     } catch {
                       setTicketUser(null)
                     }
-                 }} 
+                 }}
                  emptyMessage={tt("ไม่มีคำร้องรอดำเนินการ", "No pending tickets")}
                />
             </TabsContent>
-            
+
             <TabsContent value="history" className="m-0">
-               <TicketsList 
-                 data={getFilteredData(historyState.data)} 
+               <TicketsList
+                 data={getFilteredData(historyState.pagesData[historyState.currentPage] ?? [])}
                  loading={historyState.loading}
-                 hasMore={historyState.hasMore}
-                 onLoadMore={() => loadTickets('history')}
+                 currentPage={historyState.currentPage}
+                 totalPages={Math.max(1, Math.ceil(historyState.totalCount / SUPPORT_PAGE_SIZE))}
+                 totalCount={historyState.totalCount}
+                 onPrev={() => {
+                   const p = historyState.currentPage
+                   if (p > 1) loadTickets('history', p - 1)
+                 }}
+                 onNext={() => {
+                   const p = historyState.currentPage
+                   const totalP = Math.ceil(historyState.totalCount / SUPPORT_PAGE_SIZE)
+                   if (p < totalP) loadTickets('history', p + 1)
+                 }}
                  onView={async (ticket) => {
                     setSelectedTicket(ticket)
                     try {
@@ -326,7 +368,7 @@ export default function AdminSupportPage() {
                     } catch {
                       setTicketUser(null)
                     }
-                 }} 
+                 }}
                  emptyMessage={tt("ไม่มีประวัติคำร้อง", "No ticket history")}
                />
             </TabsContent>
@@ -507,88 +549,123 @@ export default function AdminSupportPage() {
   )
 }
 
-function TicketsList({ 
-  data, 
+function TicketsList({
+  data,
   loading,
-  hasMore,
-  onLoadMore,
-  onView, 
+  currentPage,
+  totalPages,
+  totalCount,
+  onPrev,
+  onNext,
+  onView,
   emptyMessage,
-}: { 
-  data: SupportTicket[], 
-  loading: boolean,
-  hasMore: boolean,
-  onLoadMore: () => void,
-  onView: (ticket: SupportTicket) => void, 
-  emptyMessage: string,
+}: {
+  data: SupportTicket[]
+  loading: boolean
+  currentPage: number
+  totalPages: number
+  totalCount: number
+  onPrev: () => void
+  onNext: () => void
+  onView: (ticket: SupportTicket) => void
+  emptyMessage: string
 }) {
   const { locale, tt } = useI18n()
 
   return (
-     <div>
-       <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted hover:bg-muted">
-                <TableHead className="font-semibold">{tt("หัวข้อ", "Subject")}</TableHead>
-                <TableHead className="font-semibold">{tt("สถานะ", "Status")}</TableHead>
-                <TableHead className="font-semibold">{tt("วันที่", "Date")}</TableHead>
-                <TableHead className="text-right font-semibold">{tt("จัดการ", "Actions")}</TableHead>
+    <div>
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted hover:bg-muted">
+              <TableHead className="font-semibold">{tt("หัวข้อ", "Subject")}</TableHead>
+              <TableHead className="font-semibold">{tt("สถานะ", "Status")}</TableHead>
+              <TableHead className="font-semibold">{tt("วันที่", "Date")}</TableHead>
+              <TableHead className="text-right font-semibold">{tt("จัดการ", "Actions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.length === 0 && !loading ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-16 px-4">
+                  <div className="p-4 rounded-full bg-muted w-fit mx-auto mb-4">
+                    <MessageSquare className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-1">
+                    {emptyMessage}
+                  </h3>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-16 px-4">
-                    <div className="p-4 rounded-full bg-muted w-fit mx-auto mb-4">
-                      <MessageSquare className="h-12 w-12 text-muted-foreground" />
+            ) : loading ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                </TableCell>
+              </TableRow>
+            ) : (
+              data.map((ticket) => (
+                <TableRow key={ticket.id} className="hover:bg-muted/50 border-b last:border-0 bg-card">
+                  <TableCell>
+                    <div>
+                      <p className="font-medium text-foreground">{ticket.subject}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+                        {ticket.userEmail}
+                      </p>
                     </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-1">
-                      {emptyMessage}
-                    </h3>
+                  </TableCell>
+                  <TableCell>{getStatusBadge(ticket.status, tt)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {toSafeDate(ticket.createdAt).toLocaleString(locale === "th" ? "th-TH" : "en-US", { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
+                      onClick={() => onView(ticket)}
+                      title={tt("ดูรายละเอียด", "View details")}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
-              ) : (
-                data.map((ticket) => (
-                  <TableRow key={ticket.id} className="hover:bg-muted/50 border-b last:border-0 bg-card">
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-foreground">{ticket.subject}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />
-                          {ticket.userEmail}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(ticket.status, tt)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {toSafeDate(ticket.createdAt).toLocaleString(locale === "th" ? "th-TH" : "en-US", { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
-                        onClick={() => onView(ticket)}
-                        title={tt("ดูรายละเอียด", "View details")}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-       </div>
-       
-       {hasMore && (
-           <div className="flex justify-center p-4">
-               <Button variant="outline" size="sm" onClick={onLoadMore} disabled={loading}>
-                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : tt("โหลดเพิ่มเติม", "Load more")}
-               </Button>
-           </div>
-       )}
-     </div>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {totalCount > 0 && totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t bg-muted/20">
+          <p className="text-sm text-muted-foreground order-2 sm:order-1">
+            {tt("หน้า", "Page")} {currentPage} {tt("จาก", "of")} {totalPages}
+            <span className="hidden sm:inline"> • {totalCount} {tt("รายการ", "items")}</span>
+          </p>
+          <div className="flex items-center gap-2 order-1 sm:order-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onPrev}
+              disabled={currentPage <= 1 || loading}
+              className="gap-1 min-w-[100px]"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              {tt("ก่อนหน้า", "Previous")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onNext}
+              disabled={currentPage >= totalPages || loading}
+              className="gap-1 min-w-[100px]"
+            >
+              {tt("ถัดไป", "Next")}
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
