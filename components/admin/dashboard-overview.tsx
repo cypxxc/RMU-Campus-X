@@ -1,6 +1,6 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+
 import { Package, Users, MessageSquare } from "lucide-react"
 import { useI18n } from "@/components/language-provider"
 import { StatsCard } from "@/components/admin/stats-card"
@@ -41,7 +41,7 @@ export function DashboardOverview({
   newItemsCount,
   newTicketsCount,
 }: DashboardOverviewProps) {
-  const { locale, tt } = useI18n()
+  const { tt } = useI18n()
   const totalItems = items.length
 
   // Calculate dynamic change percentages based on 7-day comparison
@@ -123,33 +123,7 @@ export function DashboardOverview({
         <CategoryDistributionChart items={items} />
       </div>
 
-      {/* Recent items */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{tt("รายการโพส", "Recent items")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {items.slice(0, 10).map((item) => (
-              <div key={item.id} className="flex items-start gap-3 pb-3 border-b last:border-0">
-                <div className="h-2 w-2 rounded-full bg-primary mt-2 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{item.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {item.category} • {item.status}
-                  </p>
-                </div>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {toSafeDate(item.postedAt).toLocaleDateString(locale === "th" ? "th-TH" : "en-US")}
-                </span>
-              </div>
-            ))}
-            {items.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">{tt("ยังไม่มีโพสในระบบ", "No items yet")}</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   )
 }

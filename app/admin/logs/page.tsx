@@ -32,6 +32,13 @@ import {
 } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
 const ACTION_TYPE_LABELS: Record<AdminActionType, { label: { th: string; en: string }; color: string; icon: any }> = {
@@ -60,7 +67,7 @@ export default function AdminLogsPage() {
   const { isAdmin } = useAdminGuard()
   const [logs, setLogs] = useState<AdminLog[]>([])
   const [loading, setLoading] = useState(true)
-  const [filterAction] = useState<string>("all")
+  const [filterAction, setFilterAction] = useState<string>("all")
   const [filterTarget] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("") // New state
   const [currentPage, setCurrentPage] = useState(1)
@@ -73,10 +80,6 @@ export default function AdminLogsPage() {
     setLoading(true)
     try {
       const options: any = { limitCount: 100 }
-      
-      if (filterAction !== "all") {
-        options.actionType = filterAction as AdminActionType
-      }
       
       if (filterTarget !== "all") {
         options.targetType = filterTarget
@@ -94,7 +97,7 @@ export default function AdminLogsPage() {
     } finally {
       setLoading(false)
     }
-  }, [filterAction, filterTarget, toast, tt])
+  }, [filterTarget, toast, tt])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -112,7 +115,13 @@ export default function AdminLogsPage() {
   }
 
   const filteredLogs = logs.filter(log => {
+    // Filter by action type
+    if (filterAction !== "all" && log.actionType !== filterAction) {
+      return false
+    }
+
     const q = searchQuery.toLowerCase()
+    if (!q) return true
     
     // Check main fields
     if ((log.description || "").toLowerCase().includes(q) ||
@@ -157,14 +166,29 @@ export default function AdminLogsPage() {
                   {tt(`${filteredLogs.length} รายการ`, `${filteredLogs.length} records`)}
                 </Badge>
               </CardTitle>
-              <div className="relative w-full md:w-auto">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={tt("ค้นหาประวัติการทำงาน...", "Search activity logs...")}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-background w-full md:w-[300px] h-9"
-                />
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                <Select value={filterAction} onValueChange={(v) => { setFilterAction(v); setCurrentPage(1) }}>
+                  <SelectTrigger className="w-full sm:w-[200px] h-9">
+                    <SelectValue placeholder={tt("กรองการกระทำ", "Filter action")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{tt("ทุกการกระทำ", "All actions")}</SelectItem>
+                    {Object.entries(ACTION_TYPE_LABELS).map(([key, config]) => (
+                      <SelectItem key={key} value={key}>
+                        {locale === "th" ? config.label.th : config.label.en}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="relative w-full sm:w-auto">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={tt("ค้นหาประวัติการทำงาน...", "Search activity logs...")}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-background w-full sm:w-[300px] h-9"
+                  />
+                </div>
               </div>
             </div>
           </CardHeader>

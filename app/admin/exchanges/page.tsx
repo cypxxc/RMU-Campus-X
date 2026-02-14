@@ -22,6 +22,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import {
   Loader2,
@@ -30,6 +37,7 @@ import {
   User,
   Clock,
   Mail,
+  Filter,
 } from "lucide-react"
 import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus"
 
@@ -86,6 +94,7 @@ export default function AdminExchangesPage() {
   const [selectedExchange, setSelectedExchange] = useState<ExchangeRow | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [lastId, setLastId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string>("all")
 
   const { user } = useAuth()
   const { locale, tt } = useI18n()
@@ -160,6 +169,10 @@ export default function AdminExchangesPage() {
     )
   }
 
+  const filteredExchanges = statusFilter === "all"
+    ? exchanges
+    : exchanges.filter((ex) => ex.status === statusFilter)
+
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -190,9 +203,25 @@ export default function AdminExchangesPage() {
                 <Package className="h-5 w-5 text-primary" />
                 {tt("ประวัติการแลกเปลี่ยน", "Exchange history")}
                 <Badge variant="secondary" className="ml-2 px-3 py-1">
-                  {tt(`${exchanges.length} รายการ`, `${exchanges.length} records`)}
+                  {tt(`${filteredExchanges.length} รายการ`, `${filteredExchanges.length} records`)}
                 </Badge>
               </CardTitle>
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder={tt("กรองสถานะ", "Filter status")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{tt("ทั้งหมด", "All")}</SelectItem>
+                    <SelectItem value="pending">{tt("รอเจ้าของตอบรับ", "Pending")}</SelectItem>
+                    <SelectItem value="in_progress">{tt("กำลังดำเนินการ", "In progress")}</SelectItem>
+                    <SelectItem value="completed">{tt("เสร็จสิ้น", "Completed")}</SelectItem>
+                    <SelectItem value="cancelled">{tt("ยกเลิกแล้ว", "Cancelled")}</SelectItem>
+                    <SelectItem value="rejected">{tt("ปฏิเสธแล้ว", "Rejected")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -200,9 +229,11 @@ export default function AdminExchangesPage() {
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : exchanges.length === 0 ? (
+            ) : filteredExchanges.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground">
-                {tt("ไม่มีรายการการแลกเปลี่ยน", "No exchanges found")}
+                {statusFilter !== "all"
+                  ? tt("ไม่มีรายการในสถานะนี้", "No exchanges found with this status")
+                  : tt("ไม่มีรายการการแลกเปลี่ยน", "No exchanges found")}
               </div>
             ) : (
               <Table>
@@ -217,7 +248,7 @@ export default function AdminExchangesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {exchanges.map((ex) => (
+                  {filteredExchanges.map((ex) => (
                     <TableRow key={ex.id}>
                       <TableCell className="font-medium max-w-[180px] truncate">
                         {ex.itemTitle ?? tt("—", "-")}
