@@ -72,7 +72,7 @@ const SECTIONS: TermsSection[] = [
     points: [
       { th: "ผู้ใช้ต้องปฏิบัติตามข้อกำหนดการใช้งานและแนวทางชุมชน", en: "Users must comply with these Terms and the Community Guidelines." },
       { th: "รายละเอียดพฤติกรรมที่คาดหวังระบุไว้ในหน้าแนวทางชุมชน (/guidelines)", en: "Expected behavior details are described in the Community Guidelines (/guidelines)." },
-      { th: "ทีมงานมีสิทธิ์ตรวจสอบและดำเนินการตามบทลงโทษใน §6 เมื่อพบการละเมิด", en: "The admin team may investigate and enforce penalties per §6 upon violations." },
+      { th: "ทีมงานมีสิทธิ์ตรวจสอบและดำเนินการตามบทลงโทษใน ข้อ 6 เมื่อพบการละเมิด", en: "The admin team may investigate and enforce penalties per Section 6 upon violations." },
     ],
   },
   {
