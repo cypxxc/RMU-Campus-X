@@ -1,0 +1,238 @@
+﻿================================================================================
+                    RMU-Campus X - Test Execution Report
+================================================================================
+Generated: February 15, 2026
+Project: RMU-Campus X
+Testing Framework: Vitest + Firebase Emulator
+
+================================================================================
+                           TEST EXECUTION SUMMARY
+================================================================================
+
+Test File: __tests__/rules/firestore.rules.test.ts
+Total Tests: 57
+Passed: 52
+Failed: 5
+Duration: 7.34s (transform 92ms, setup 114ms, import 285ms, environment 660ms)
+
+================================================================================
+                           PASSED TESTS (52)
+================================================================================
+
+Users Collection - Read Access:
+  [PASS] allows public read of user profiles (675ms)
+  [PASS] allows authenticated read of any user profile (79ms)
+
+Users Collection - Create Access:
+  [PASS] allows eligible student to create own profile (93ms)
+  [PASS] denies creating profile for another user (59ms)
+  [PASS] denies non-RMU email user from creating profile (72ms)
+  [PASS] denies setting isAdmin to true (74ms)
+  [PASS] denies setting status to BANNED (67ms)
+
+Users Collection - Update Access:
+  [PASS] allows owner to update safe fields (110ms)
+  [PASS] denies owner from changing email (100ms)
+  [PASS] denies other user from updating profile (73ms)
+
+Users Collection - Admin Access:
+  [PASS] allows admin to update any user (112ms)
+  [PASS] allows admin to delete user (102ms)
+
+Items Collection - Read Access:
+  [PASS] allows public read of items (84ms)
+
+Items Collection - Create Access:
+  [PASS] denies unverified user from creating item (114ms)
+  [PASS] denies setting postedBy to another user (70ms)
+  [PASS] denies invalid category (89ms)
+
+Items Collection - Update/Delete Access:
+  [PASS] allows owner to update item (85ms)
+  [PASS] denies non-owner from updating item (91ms)
+  [PASS] allows owner to delete item (78ms)
+  [PASS] denies non-owner from deleting item (91ms)
+
+Exchanges Collection - Create Access:
+  [PASS] denies creating exchange for another user (87ms)
+
+Exchanges Collection - Read Access:
+  [PASS] allows participants to read exchange (160ms)
+  [PASS] denies non-participant from reading exchange (109ms)
+
+Chat Messages Collection - Create Access:
+  [PASS] denies impersonation in senderId (77ms)
+
+Chat Messages Collection - Read Access:
+  [PASS] allows exchange participants to read messages (103ms)
+  [PASS] denies non-participant from reading messages (109ms)
+
+Chat Messages Collection - Update Access:
+  [PASS] denies message editing (immutable) (83ms)
+
+Reports Collection - Create Access:
+  [PASS] denies creating report for another user (96ms)
+
+Reports Collection - Read Access:
+  [PASS] allows reporter to read own report (122ms)
+  [PASS] allows admin to read any report (108ms)
+  [PASS] denies other users from reading report (108ms)
+
+Reports Collection - Update Access:
+  [PASS] denies reporter from updating report (86ms)
+  [PASS] allows admin to update report (91ms)
+
+Notifications Collection - Read Access:
+  [PASS] allows owner to read own notifications (89ms)
+  [PASS] denies reading other user's notifications (79ms)
+
+Notifications Collection - Update Access:
+  [PASS] allows owner to mark as read (66ms)
+  [PASS] denies owner from changing other fields (80ms)
+
+Notifications Collection - Delete Access:
+  [PASS] allows owner to delete own notification (75ms)
+
+Admin Access Tests:
+  [PASS] admin can update any user's status (84ms)
+  [PASS] admin can delete any item (80ms)
+  [PASS] admin can read all reports (96ms)
+  [PASS] admin can access cases collection (135ms)
+
+Non-Eligible User Denial - Unverified Email:
+  [PASS] denies creating items (43ms)
+
+Non-Eligible User Denial - Non-RMU Email:
+  [PASS] denies creating user profile (41ms)
+  [PASS] denies creating items (52ms)
+  [PASS] denies creating reports (58ms)
+
+Non-Eligible User Denial - Banned User:
+  [PASS] denies creating items (48ms)
+  [PASS] denies creating exchanges (42ms)
+
+Admin Collection Tests:
+  [PASS] allows user to read own admin status (64ms)
+  [PASS] allows admin to read other admin docs (95ms)
+  [PASS] denies writing to admins collection (86ms)
+  [PASS] denies non-admin from reading other admin docs (102ms)
+
+================================================================================
+                           FAILED TESTS (5)
+================================================================================
+
+1. Users Collection > Update Access > denies owner from changing status
+   Error: Expected request to fail, but it succeeded.
+   File: __tests__/rules/firestore.rules.test.ts:256:7
+   Description: Test expected that users cannot update their own status field,
+                but the Firestore rule allowed the update.
+
+2. Items Collection > Create Access > allows eligible student to create item
+   Error: FirebaseError: 7 PERMISSION_DENIED
+   Details: false for 'create' @ L148, false for 'create' @ L417
+   File: __tests__/rules/firestore.rules.test.ts
+   Description: Test expected eligible students to be able to create items,
+                but permission was denied by Firestore rules.
+
+3. Exchanges Collection > Create Access > allows eligible student to create exchange request
+   Error: FirebaseError: 7 PERMISSION_DENIED
+   Details: false for 'create' @ L199, false for 'create' @ L417
+   File: __tests__/rules/firestore.rules.test.ts
+   Description: Test expected eligible students to be able to create exchanges,
+                but permission was denied by Firestore rules.
+
+4. Chat Messages Collection > Create Access > allows exchange participant to send message
+   Error: FirebaseError: 7 PERMISSION_DENIED
+   Details: false for 'create' @ L244, false for 'create' @ L417
+   File: __tests__/rules/firestore.rules.test.ts
+   Description: Test expected exchange participants to be able to send messages,
+                but permission was denied by Firestore rules.
+
+5. Reports Collection > Create Access > allows eligible student to create report
+   Error: FirebaseError: 7 PERMISSION_DENIED
+   Details: false for 'create' @ L269, false for 'create' @ L417
+   File: __tests__/rules/firestore.rules.test.ts
+   Description: Test expected eligible students to be able to create reports,
+                but permission was denied by Firestore rules.
+
+================================================================================
+                           TEST EXECUTION LOG
+================================================================================
+
+[2026-02-02T08:08:55.064Z] @firebase/firestore: Firestore (12.5.0):
+  GrpcConnection RPC 'Write' stream error. Code: 7
+  Message: 7 PERMISSION_DENIED: false for 'create' @ L99,
+  evaluation error at L122:23 for 'create' @ L122,
+  false for 'create' @ L417
+
+[2026-02-02T08:08:55.136Z] @firebase/firestore: Firestore (12.5.0):
+  GrpcConnection RPC 'Write' stream error. Code: 7
+  Message: 7 PERMISSION_DENIED: false for 'create' @ L99,
+  evaluation error at L122:23 for 'create' @ L122,
+  false for 'create' @ L417
+
+[2026-02-02T08:08:55.211Z] @firebase/firestore: Firestore (12.5.0):
+  GrpcConnection RPC 'Write' stream error. Code: 7
+  Message: 7 PERMISSION_DENIED: false for 'create' @ L99,
+  evaluation error at L122:23 for 'create' @ L122,
+  false for 'create' @ L417
+
+[2026-02-02T08:08:55.277Z] @firebase/firestore: Firestore (12.5.0):
+  GrpcConnection RPC 'Write' stream error. Code: 7
+  Message: 7 PERMISSION_DENIED: false for 'create' @ L99,
+  evaluation error at L122:23 for 'create' @ L122,
+  false for 'create' @ L417
+
+[2026-02-02T08:08:55.487Z] @firebase/firestore: Firestore (12.5.0):
+  GrpcConnection RPC 'Write' stream error. Code: 7
+  Message: 7 PERMISSION_DENIED: evaluation error at L116:24 for
+  'update' @ L116, evaluation error at L122:23 for 'update' @ L122,
+  false for 'update' @ L417
+
+================================================================================
+                           RECOMMENDATIONS
+================================================================================
+
+1. FIX: Users Collection - Update Access - Status Field
+   - Update Firestore rules to explicitly deny users from updating
+     their own status field (even if setting to same value)
+
+2. FIX: Items Collection - Create Access
+   - Review Firestore rules at L148 and L417
+   - Ensure eligible students can create items when all conditions are met
+   - Check if there's a missing condition in the rules
+
+3. FIX: Exchanges Collection - Create Access
+   - Review Firestore rules at L199 and L417
+   - Verify the create rule for exchanges collection
+
+4. FIX: Chat Messages Collection - Create Access
+   - Review Firestore rules at L244 and L417
+   - Ensure exchange participants can create messages
+
+5. FIX: Reports Collection - Create Access
+   - Review Firestore rules at L269 and L417
+   - Verify the create rule for reports collection
+
+================================================================================
+                           EMULATOR STATUS
+================================================================================
+
+[i] emulators: Starting emulators: firestore
+[i] firestore: Firestore Emulator logging to firestore-debug.log
+[+] firestore: Firestore Emulator UI websocket is running on 9150.
+[i] Running script: vitest run __tests__/rules/
+[i] emulators: Shutting down emulators.
+[i] firestore: Stopping Firestore Emulator
+[!] Firestore Emulator has exited upon receiving signal: SIGINT
+[i] hub: Stopping emulator hub
+[i] logging: Stopping Logging Emulator
+
+================================================================================
+                           EXIT CODE
+================================================================================
+
+Script "vitest run __tests__/rules/" exited with code 1
+Test execution completed with failures.
+
+================================================================================

@@ -46,8 +46,7 @@ service cloud.firestore {
     function isEligibleStudent() {
       return isAuthenticated()
         && isVerifiedEmail()
-        && hasRMUEmail()
-        && isActiveUser();
+        && hasRMUEmail();
     }
 
     function canUseApp() {
@@ -83,9 +82,8 @@ service cloud.firestore {
       // ✅ Student-only system: allow only eligible students/admin to read
       // - get: any eligible student/admin; OR own doc for RMU+verified (so new users can check profile exists before create)
       // - list: admin only (prevent directory scrape)
-      allow get: if canUseApp()
-        || (isOwner(userId) && hasRMUEmail() && isVerifiedEmail());
-      allow list: if isAdmin();
+      allow get: if true;
+      allow list: if isAdmin() || canUseApp();
 
       allow create: if isOwner(userId)
         && hasRMUEmail()
@@ -97,6 +95,7 @@ service cloud.firestore {
         && isValidUserData(request.resource.data);
 
       allow update: if (isOwner(userId) && canUseApp()
+        && isActiveUser()
         && notUpdating([
           'email', 'uid', 'isAdmin', 'status', 'warningCount',
           'createdAt', 'bannedReason', 'suspendedUntil'
@@ -126,11 +125,11 @@ service cloud.firestore {
             && (imagePublicIds == null || (imagePublicIds is list && imagePublicIds.size() <= 5));
       }
 
-      // ✅ student-only browsing
-      allow get, list: if canUseApp();
+      allow get: if true;
+      allow list: if canUseApp();
 
-      // postedAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
+        && isActiveUser()
         && request.resource.data.postedBy == request.auth.uid
         && request.resource.data.postedByEmail == request.auth.token.email
         && request.resource.data.status == 'available'
@@ -141,6 +140,7 @@ service cloud.firestore {
       allow update: if (
           // owner edits (cannot change poster fields)
           (canUseApp()
+            && isActiveUser()
             && resource.data.postedBy == request.auth.uid
             && notUpdating(['postedBy', 'postedByEmail', 'postedAt'])
             && isValidItemData(request.resource.data)
@@ -148,7 +148,7 @@ service cloud.firestore {
           || isAdmin()
         );
 
-      allow delete: if (canUseApp() && resource.data.postedBy == request.auth.uid)
+      allow delete: if (canUseApp() && isActiveUser() && resource.data.postedBy == request.auth.uid)
         || isAdmin();
     }
 
@@ -175,6 +175,7 @@ service cloud.firestore {
 
       // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
+        && isActiveUser()
         && request.resource.data.requesterId == request.auth.uid
         && request.resource.data.requesterEmail == request.auth.token.email
         && request.resource.data.status == 'pending'
@@ -182,6 +183,7 @@ service cloud.firestore {
 
       allow update: if (
           (canUseApp()
+            && isActiveUser()
             && isParticipantExistingDoc()
             && notUpdating([
               'requesterId', 'requesterEmail',
@@ -228,13 +230,14 @@ service cloud.firestore {
       allow get, list: if canUseApp() && (isMessageParticipant() || isAdmin());
 
       allow create: if canUseApp()
+        && isActiveUser()
         && request.resource.data.senderId == request.auth.uid
         && request.resource.data.senderEmail == request.auth.token.email
         && request.resource.data.keys().hasAll(['createdAt'])
         && canSendMessage();
 
-      allow update: if canUseApp() && isMessageParticipant() && allowedMessageUpdateKeys();
-      allow delete: if isAdmin() || (canUseApp() && resource.data.senderId == request.auth.uid);
+      allow update: if canUseApp() && isActiveUser() && isMessageParticipant() && allowedMessageUpdateKeys();
+      allow delete: if isAdmin() || (canUseApp() && isActiveUser() && resource.data.senderId == request.auth.uid);
     }
 
     // กำลังพิมพ์ (typing indicator) ต่อ exchange
@@ -256,6 +259,7 @@ service cloud.firestore {
 
       // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
+        && isActiveUser()
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.reporterEmail == request.auth.token.email
         && request.resource.data.status == 'new'

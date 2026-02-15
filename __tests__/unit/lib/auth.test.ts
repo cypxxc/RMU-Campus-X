@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { validateRMUEmail } from '@/lib/auth'
+import { registrationSchema } from '@/lib/schemas'
 
 describe('Authentication', () => {
   describe('validateRMUEmail', () => {
@@ -32,9 +33,61 @@ describe('Authentication', () => {
 })
 
 describe('Registration Schema', () => {
-  // These tests would require importing the schema
-  // For now, placeholder tests that verify the shape
-  it.todo('should validate password length >= 6')
-  it.todo('should require matching password confirmation')
-  it.todo('should require valid email format')
+  it('should validate password length >= 6', () => {
+    const invalidData = {
+      email: 'test@rmu.ac.th',
+      password: '12345',
+      confirmPassword: '12345'
+    }
+    const result = registrationSchema.safeParse(invalidData)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.errors[0].message).toContain('อย่างน้อย 6 ตัวอักษร')
+    }
+
+    const validData = {
+      email: 'test@rmu.ac.th',
+      password: '123456',
+      confirmPassword: '123456'
+    }
+    expect(registrationSchema.safeParse(validData).success).toBe(true)
+  })
+
+  it('should require matching password confirmation', () => {
+    const invalidData = {
+      email: 'test@rmu.ac.th',
+      password: 'password123',
+      confirmPassword: 'different123'
+    }
+    const result = registrationSchema.safeParse(invalidData)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.errors[0].message).toBe('รหัสผ่านไม่ตรงกัน')
+    }
+  })
+
+  it('should require valid email format', () => {
+    const invalidEmails = [
+      'not-an-email',
+      'user@gmail.com',
+      '@rmu.ac.th',
+      'user@rmu.ac.th.com'
+    ]
+
+    invalidEmails.forEach(email => {
+      const result = registrationSchema.safeParse({
+        email,
+        password: 'password123',
+        confirmPassword: 'password123'
+      })
+      expect(result.success).toBe(false)
+    })
+
+    const validData = {
+      email: 'student65@rmu.ac.th',
+      password: 'password123',
+      confirmPassword: 'password123'
+    }
+    expect(registrationSchema.safeParse(validData).success).toBe(true)
+  })
 })
