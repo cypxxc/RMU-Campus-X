@@ -11,7 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/constants"
+import { SUPPORT_MAILTO } from "@/lib/constants"
 import { useI18n } from "@/components/language-provider"
 
 type LocalizedText = { th: string; en: string }
