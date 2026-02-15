@@ -211,23 +211,34 @@ export async function GET(request: NextRequest) {
     // สำคัญ: ถ้า client ส่ง postedBy มา ต้องใช้เสมอ — อย่าทิ้งเมื่อ parse ล้มเหลว (ไม่งั้นจะได้รายการของทุกคน)
     if (rawPostedBy && !query.postedBy) (query as { postedBy?: string }).postedBy = rawPostedBy
 
-    let baseQuery = itemsCollection().orderBy("postedAt", "desc")
-
-    if (query.postedBy) {
-      baseQuery = baseQuery.where("postedBy", "==", query.postedBy)
-    }
-    if (query.categories && query.categories.length > 0) {
-      baseQuery = baseQuery.where("category", "in", query.categories.slice(0, 10))
-    }
-    if (query.status) {
-      baseQuery = baseQuery.where("status", "==", query.status)
-    }
-
     const searchTerms: string[] = []
     if (query.search) {
       searchTerms.push(...query.search.toLowerCase().split(/\s+/).filter((t) => t.length > 0))
     }
     const searchTermsForQuery = searchTerms.slice(0, SEARCH_TERMS_MAX)
+
+    let queryBuilder = itemsCollection() as FirebaseFirestore.Query
+    if (query.postedBy) {
+      queryBuilder = queryBuilder.where("postedBy", "==", query.postedBy)
+    }
+    if (query.categories && query.categories.length > 0) {
+      queryBuilder = queryBuilder.where("category", "in", query.categories.slice(0, 10))
+    }
+    if (query.status) {
+      queryBuilder = queryBuilder.where("status", "==", query.status)
+    }
+
+    let totalCount = 0
+    if (searchTerms.length === 0) {
+      try {
+        const countSnap = await queryBuilder.count().get()
+        totalCount = countSnap.data().count
+      } catch (countError) {
+        console.error("[Items API] Count query failed", countError)
+      }
+    }
+
+    let baseQuery = queryBuilder.orderBy("postedAt", "desc")
 
     let pagingCursor: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot | null = null
     if (query.lastId) {
@@ -440,8 +451,7 @@ export async function GET(request: NextRequest) {
       isFavorite: favoriteItemIds.has(it.id),
     }))
 
-    let totalCount = 0
-    if (!query.lastId && page.length < query.pageSize) {
+    if (totalCount === 0 && !query.lastId && page.length < query.pageSize) {
       totalCount = page.length
     }
 

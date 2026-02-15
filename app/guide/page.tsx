@@ -93,10 +93,11 @@ const SECTIONS: GuideSection[] = [
       en: "Meetup and confirmation",
     },
     steps: [
-      { th: "นัดรับในจุดสาธารณะที่ปลอดภัยภายในมหาวิทยาลัย", en: "Meet at a safe public location on campus." },
-      { th: "ตรวจสอบสิ่งของก่อนส่งมอบ/รับ", en: "Inspect the item before handoff." },
-      { th: "ผู้ให้และผู้รับกดยืนยันคนละฝั่ง", en: "Both owner and requester confirm from their side." },
-      { th: "เมื่อยืนยันครบ สถานะจะเป็นเสร็จสิ้น", en: "Once both confirm, status changes to completed." },
+      { th: "ตกลงเวลาและสถานที่นัดรับผ่านแชทในระบบ", en: "Agree on time and location via in-app chat." },
+      { th: "ผู้ให้กดปุ่มยืนยันการส่งมอบจากหน้าการแลกเปลี่ยน", en: "The owner clicks confirm handoff from the exchange page." },
+      { th: "ผู้รับกดปุ่มยืนยันการรับของจากหน้าการแลกเปลี่ยน", en: "The requester clicks confirm receipt from the exchange page." },
+      { th: "เมื่อทั้งสองฝ่ายยืนยันครบ สถานะจะเปลี่ยนเป็นเสร็จสิ้นอัตโนมัติ", en: "Once both confirm, the status changes to completed automatically." },
+      { th: "ดูคำแนะนำด้านความปลอดภัยในการนัดรับได้ที่หน้าแนวทางชุมชน (/guidelines#safety)", en: "See meetup safety tips in Community Guidelines (/guidelines#safety)." },
     ],
   },
   {
@@ -120,8 +121,9 @@ const SECTIONS: GuideSection[] = [
       en: "Report and support",
     },
     steps: [
-      { th: "ใช้ปุ่มรายงานเมื่อพบเนื้อหาหรือพฤติกรรมไม่เหมาะสม", en: "Use Report when you find inappropriate content or behavior." },
-      { th: "ใช้เมนูช่วยเหลือเพื่อส่งคำร้องถึงทีมงาน", en: "Use Support menu to submit a ticket to the team." },
+      { th: "กดปุ่มรายงาน (ไอคอนธง) ที่รายการสิ่งของหรือโปรไฟล์ผู้ใช้ที่ต้องการรายงาน", en: "Click the report button (flag icon) on the item listing or user profile." },
+      { th: "เลือกเหตุผลการรายงานและกรอกรายละเอียดเพิ่มเติม", en: "Select a report reason and provide additional details." },
+      { th: "หากต้องการความช่วยเหลือทั่วไป ใช้เมนูช่วยเหลือเพื่อส่งคำร้องถึงทีมงาน", en: "For general help, use the Support menu to submit a ticket." },
       { th: "ติดตามคำตอบได้จากหน้าคำร้องของฉัน", en: "Track replies from your ticket history." },
     ],
   },

@@ -109,7 +109,7 @@ function FilterContent({ categories, status, onCategoriesChange, onStatusChange 
 export function FilterSidebar({ categories, status, onCategoriesChange, onStatusChange }: FilterSidebarProps) {
   const [open, setOpen] = useState(false)
   const { tt } = useI18n()
-  const activeFilters = (categories.length > 0 ? 1 : 0) + (status !== "all" ? 1 : 0)
+  const activeFilters = (categories.length > 0 ? 1 : 0) + (status !== "available" ? 1 : 0)
 
   return (
     <>
@@ -162,7 +162,7 @@ export function FilterSidebar({ categories, status, onCategoriesChange, onStatus
                 className="w-full"
                 onClick={() => {
                   onCategoriesChange([])
-                  onStatusChange("all")
+                  onStatusChange("available")
                 }}
               >
                 {tt("ล้างตัวกรอง", "Clear filters")}

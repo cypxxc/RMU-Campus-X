@@ -26,8 +26,8 @@ const PAGE_SIZE = 12
 
 export default function DashboardPage() {
   const [categories, setCategories] = useState<ItemCategory[]>([])
-  // เริ่มต้นแสดงทุกสถานะ เพื่อรองรับข้อมูลเก่าที่อาจไม่ได้ใช้ status = "available"
-  const [status, setStatus] = useState<ItemStatus | "all">("all")
+  // เริ่มต้นแสดงสถานะ "พร้อมให้" (available) เป็นค่าเริ่มต้น
+  const [status, setStatus] = useState<ItemStatus | "all">("available")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
@@ -188,12 +188,12 @@ export default function DashboardPage() {
                 </EmptyHeader>
                 <EmptyContent>
                   <div className="flex flex-col sm:flex-row gap-2 items-center">
-                    {(categories.length > 0 || status !== "all" || debouncedSearchQuery) && (
+                    {(categories.length > 0 || status !== "available" || debouncedSearchQuery) && (
                       <Button
                         variant="outline"
                         onClick={() => {
                           setCategories([])
-                          setStatus("all")
+                          setStatus("available")
                           setSearchQuery("")
                         }}
                       >
