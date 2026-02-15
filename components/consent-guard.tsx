@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth-provider"
 import { Loader2 } from "lucide-react"
 
 const CONSENT_ALLOWED_PATHS = [
+  "/",
   "/consent",
   "/terms",
   "/privacy",

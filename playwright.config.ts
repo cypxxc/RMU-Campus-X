@@ -29,6 +29,11 @@ export default defineConfig({
     
     // Take screenshot on failure
     screenshot: 'only-on-failure',
+
+    // Essential for stable E2E tests: disable animations and smooth scroll
+    contextOptions: {
+      reducedMotion: 'reduce',
+    },
   },
 
   // Configure projects for different browsers

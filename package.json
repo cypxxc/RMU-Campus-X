@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run __tests__/rules/\"",
+    "test:rules:json": "firebase emulators:exec --only firestore \"vitest run __tests__/rules/ --reporter=json --outputFile rules_results.json\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "type-check": "tsc --noEmit",
