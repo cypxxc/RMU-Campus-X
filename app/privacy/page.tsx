@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/constants"
 import { useI18n } from "@/components/language-provider"
 
 type LocalizedText = { th: string; en: string }
@@ -100,8 +101,8 @@ const SECTIONS: PrivacySection[] = [
     },
     points: [
       { th: "คุณสามารถลบบัญชีจากหน้าการตั้งค่าโปรไฟล์ได้ด้วยตนเอง", en: "You can delete your account from profile settings." },
-      { th: "หลังลบบัญชี ระบบจะลบ/ตัดการเชื่อมโยงข้อมูลตามนโยบายที่กำหนด", en: "After deletion, linked data is removed or anonymized based on policy." },
-      { th: "หากต้องการความช่วยเหลือเพิ่มเติม สามารถติดต่อทีมสนับสนุนได้", en: "If you need assistance, contact the support team." },
+      { th: "หลังลบบัญชี ข้อมูลบัญชี (อีเมล ชื่อ รูปโปรไฟล์) จะถูกลบ ส่วนโพสต์และแชทจะถูกตัดการเชื่อมโยงกับบัญชีเดิม", en: "After deletion, account data (email, name, photo) is removed; posts and chats are disassociated from the former account." },
+      { th: "หากต้องการความช่วยเหลือเพิ่มเติม สามารถติดต่อทีมสนับสนุน", en: "If you need assistance, contact support." },
     ],
   },
 ]
@@ -166,9 +167,25 @@ export default function PrivacyPage() {
                 {pickText(section.title, locale)}
               </h2>
               <ul className="list-disc list-outside ml-4 space-y-2 text-muted-foreground leading-relaxed">
-                {section.points.map((point, index) => (
-                  <li key={index}>{pickText(point, locale)}</li>
-                ))}
+                {section.points.map((point, index) => {
+                  if (section.id === "deletion" && index === section.points.length - 1) {
+                    return (
+                      <li key={index}>
+                        {pickText(
+                          {
+                            th: "หากต้องการความช่วยเหลือเพิ่มเติม สามารถติดต่อ",
+                            en: "If you need assistance, contact ",
+                          },
+                          locale
+                        )}
+                        <a href={SUPPORT_MAILTO} className="text-primary hover:underline">
+                          {tt(": Support", "support")}
+                        </a>
+                      </li>
+                    )
+                  }
+                  return <li key={index}>{pickText(point, locale)}</li>
+                })}
               </ul>
             </section>
           )

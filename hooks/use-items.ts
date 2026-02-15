@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useMemo } from "react"
-import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import { getItems, type GetItemsResult } from "@/lib/firestore"
 import type { ItemCategory, ItemStatus } from "@/types"
 
@@ -45,10 +45,25 @@ export function useItems(options: UseItemsOptions) {
     lastIdsRef.current = new Map([[1, null]])
   }, [categoriesKey, status, normalizedSearchQuery, postedBy, includeFavoriteStatus])
 
+  const queryClient = useQueryClient()
+
   const query = useQuery({
     queryKey: ["items", categoriesKey, status, normalizedSearchQuery, postedBy, includeFavoriteStatus, currentPage] as const,
     queryFn: async (): Promise<GetItemsResult & { page: number }> => {
-      const lastId = currentPage === 1 ? null : lastIdsRef.current.get(currentPage) ?? undefined
+      let lastId = currentPage === 1 ? null : lastIdsRef.current.get(currentPage) ?? undefined
+
+      // Fallback: หากไม่พบ cursor ใน Ref (อาจเกิดจาก race condition) ให้ลองดึงจาก cache ของหน้าก่อนหน้า
+      if (lastId === undefined && currentPage > 1) {
+        const prevPage = currentPage - 1
+        const prevKey = ["items", categoriesKey, status, normalizedSearchQuery, postedBy, includeFavoriteStatus, prevPage] as const
+        const prevData = queryClient.getQueryData<GetItemsResult & { page: number }>(prevKey)
+        
+        if (prevData?.lastId) {
+          lastId = prevData.lastId
+          lastIdsRef.current.set(currentPage, lastId)
+        }
+      }
+
       const result = await getItems({
         pageSize,
         lastId: lastId ?? undefined,
@@ -75,10 +90,10 @@ export function useItems(options: UseItemsOptions) {
   const totalCount = data?.totalCount ?? 0
 
   useEffect(() => {
-    if (data?.lastId != null && data?.hasMore) {
-      lastIdsRef.current.set(currentPage + 1, data.lastId)
+    if (data?.lastId != null && data?.hasMore && typeof data.page === "number") {
+      lastIdsRef.current.set(data.page + 1, data.lastId)
     }
-  }, [data?.lastId, data?.hasMore, currentPage])
+  }, [data?.lastId, data?.hasMore, data?.page])
 
   const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : (hasMore ? currentPage + 1 : currentPage)
 

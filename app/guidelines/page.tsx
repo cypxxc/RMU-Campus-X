@@ -38,8 +38,8 @@ const SECTIONS: GuidelineSection[] = [
         en: "RMU-Campus X is a campus community for sharing and exchanging items.",
       },
       {
-        th: "ทุกคนมีส่วนช่วยให้ชุมชนปลอดภัยและเป็นมิตรผ่านพฤติกรรมที่รับผิดชอบ",
-        en: "Everyone helps keep the community safe and respectful through responsible behavior.",
+        th: "ทุกคนมีส่วนช่วยให้ชุมชนปลอดภัยและเป็นมิตร โดยปฏิบัติตามแนวทางด้านล่าง",
+        en: "Everyone helps keep the community safe and respectful by following the guidelines below.",
       },
     ],
   },
@@ -59,8 +59,7 @@ const SECTIONS: GuidelineSection[] = [
     icon: AlertTriangle,
     title: { th: "สิ่งที่ไม่ควรทำ", en: "What you must avoid" },
     points: [
-      { th: "ห้ามโพสต์สิ่งของผิดกฎหมาย อันตราย หรือเนื้อหาไม่เหมาะสม", en: "Do not post illegal/dangerous items or inappropriate content." },
-      { th: "ห้ามสแปม โพสต์ซ้ำ หรือจงใจให้ข้อมูลเท็จ", en: "Do not spam, duplicate-post, or provide misleading information." },
+      { th: "รายการสิ่งของและเนื้อหาต้องห้ามทั้งหมดระบุไว้ในข้อกำหนดการใช้งาน §3 (/terms#prohibited)", en: "All prohibited items and content are listed in Terms of Service §3 (/terms#prohibited)." },
       { th: "ห้ามคุกคาม ดูหมิ่น หรือกดดันผู้ใช้รายอื่น", en: "Do not harass, insult, or intimidate other users." },
       { th: "ห้ามนัดรับในจุดเสี่ยงหรือไม่ปลอดภัย", en: "Do not arrange pickup in unsafe locations." },
     ],
@@ -72,18 +71,17 @@ const SECTIONS: GuidelineSection[] = [
     points: [
       { th: "นัดในพื้นที่สาธารณะภายในมหาวิทยาลัยที่มีผู้คน", en: "Meet in public, populated campus areas." },
       { th: "หากไม่มั่นใจ ให้พาเพื่อนไปด้วยหรือแจ้งคนใกล้ชิด", en: "If unsure, bring a friend or inform someone you trust." },
-      { th: "ตรวจสอบรายการก่อนส่งมอบและบันทึกหลักฐานที่จำเป็น", en: "Inspect items before handoff and keep necessary proof." },
+      { th: "ตรวจสอบรายการก่อนส่งมอบและบันทึกหลักฐาน เช่น ภาพถ่าย", en: "Inspect items before handoff and keep proof such as photos." },
       { th: "หากรู้สึกไม่ปลอดภัย ให้ยกเลิกนัดทันที", en: "If you feel unsafe, cancel the meetup immediately." },
     ],
   },
   {
     id: "reporting",
     icon: MessageCircle,
-    title: { th: "การรายงานและบทลงโทษ", en: "Reporting and enforcement" },
+    title: { th: "การรายงาน", en: "Reporting" },
     points: [
-      { th: "ใช้ปุ่มรายงานเมื่อพบพฤติกรรมหรือเนื้อหาที่ผิดกติกา", en: "Use the report feature when you find rule violations." },
-      { th: "ทีมงานจะตรวจสอบและดำเนินการตามความเหมาะสม", en: "The admin team will review and take appropriate action." },
-      { th: "อาจมีการเตือน ระงับ หรือแบน ตามระดับความรุนแรงของการละเมิด", en: "Actions may include warnings, suspension, or ban depending on severity." },
+      { th: "เมื่อพบพฤติกรรมหรือเนื้อหาที่ผิดกติกา ให้กดปุ่มรายงานที่รายการหรือโปรไฟล์ผู้ใช้", en: "When you find rule violations, use the report button on the item or user profile." },
+      { th: "ทีมงานจะตรวจสอบและดำเนินการตามบทลงโทษที่ระบุในข้อกำหนดการใช้งาน §6 (/terms#suspension)", en: "The admin team will review and enforce penalties as specified in Terms §6 (/terms#suspension)." },
     ],
   },
 ]

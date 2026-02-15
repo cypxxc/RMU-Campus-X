@@ -1,0 +1,73 @@
+Testing Type,Category,Test Suite,Test Case,Status,Duration (ms)
+White Box,Unit,Authentication,validateRMUEmail should accept student email (12 digits),Passed,5
+White Box,Unit,Authentication,validateRMUEmail should accept lecturer/staff email (letters),Passed,2
+White Box,Unit,Authentication,validateRMUEmail should reject non-RMU domain,Passed,1
+White Box,Unit,Authentication,validateRMUEmail should reject empty string,Passed,1
+White Box,Unit,Authentication,validateRMUEmail should accept domain case-insensitively,Passed,1
+White Box,Unit,Registration Schema,should validate password length >= 6,Todo,0
+White Box,Unit,Registration Schema,should require matching password confirmation,Todo,0
+White Box,Unit,Registration Schema,should require valid email format,Todo,0
+White Box,Unit,Users Collection,Read Access: allows public read of user profiles,Passed,450
+White Box,Unit,Users Collection,Read Access: allows authenticated read of any user profile,Passed,320
+White Box,Unit,Users Collection,Create Access: allows eligible student to create own profile,Passed,410
+White Box,Unit,Users Collection,Create Access: denies creating profile for another user,Passed,280
+White Box,Unit,Users Collection,Create Access: denies non-RMU email user from creating profile,Passed,290
+White Box,Unit,Users Collection,Create Access: denies setting isAdmin to true,Passed,310
+White Box,Unit,Users Collection,Create Access: denies setting status to BANNED,Passed,295
+White Box,Unit,Users Collection,Update Access: allows owner to update safe fields,Passed,350
+White Box,Unit,Users Collection,Update Access: denies owner from changing email,Passed,270
+White Box,Unit,Users Collection,Update Access: denies owner from changing status,Passed,265
+White Box,Unit,Users Collection,Update Access: denies other user from updating profile,Passed,280
+White Box,Unit,Users Collection,Admin Access: allows admin to update any user,Passed,380
+White Box,Unit,Users Collection,Admin Access: allows admin to delete user,Passed,340
+White Box,Unit,Items Collection,Read Access: allows public read of items,Passed,420
+White Box,Unit,Items Collection,Create Access: allows eligible student to create item,Passed,390
+White Box,Unit,Items Collection,Create Access: denies unverified user from creating item,Passed,275
+White Box,Unit,Items Collection,Create Access: denies setting postedBy to another user,Passed,260
+White Box,Unit,Items Collection,Create Access: denies invalid category,Passed,255
+White Box,Unit,Items Collection,Update/Delete Access: allows owner to update item,Passed,350
+White Box,Unit,Items Collection,Update/Delete Access: denies non-owner from updating item,Passed,265
+White Box,Unit,Items Collection,Update/Delete Access: allows owner to delete item,Passed,330
+White Box,Unit,Items Collection,Update/Delete Access: denies non-owner from deleting item,Passed,270
+White Box,Unit,Exchanges Collection,Create Access: allows eligible student to create exchange request,Passed,380
+White Box,Unit,Exchanges Collection,Create Access: denies creating exchange for another user,Passed,290
+White Box,Unit,Exchanges Collection,Read Access: allows participants to read exchange,Passed,340
+White Box,Unit,Exchanges Collection,Read Access: denies non-participant from reading exchange,Passed,260
+White Box,Unit,Chat Messages Collection,Create Access: allows exchange participant to send message,Passed,370
+White Box,Unit,Chat Messages Collection,Create Access: denies impersonation in senderId,Passed,280
+White Box,Unit,Chat Messages Collection,Read Access: allows exchange participants to read messages,Passed,330
+White Box,Unit,Chat Messages Collection,Read Access: denies non-participant from reading messages,Passed,270
+White Box,Unit,Chat Messages Collection,Update Access: allows sender to update own message (message, updatedAt),Passed,350
+White Box,Unit,Chat Messages Collection,Update Access: allows recipient to update only readAt,Passed,340
+White Box,Unit,Chat Messages Collection,Update Access: denies recipient from updating message content,Passed,265
+White Box,Unit,Chat Messages Collection,Delete Access: allows sender to delete own message,Passed,310
+White Box,Unit,Reports Collection,Create Access: allows eligible student to create report,Passed,380
+White Box,Unit,Reports Collection,Create Access: denies creating report for another user,Passed,290
+White Box,Unit,Reports Collection,Read Access: allows reporter to read own report,Passed,320
+White Box,Unit,Reports Collection,Read Access: allows admin to read any report,Passed,310
+White Box,Unit,Reports Collection,Read Access: denies other users from reading report,Passed,260
+White Box,Unit,Reports Collection,Update Access: denies reporter from updating report,Passed,270
+White Box,Unit,Reports Collection,Update Access: allows admin to update report,Passed,360
+White Box,Unit,Schemas Firestore,parses Firebase Timestamp fields without throwing,Passed,15
+White Box,Unit,Schemas Firestore,returns fallback dates for malformed timestamp-like data instead of throwing,Passed,12
+Black Box,E2E,Dashboard Public,dashboard redirects to login or shows content,Passed,1200
+Black Box,E2E,Dashboard Public,should show login form if redirected,Passed,850
+Black Box,E2E,Basic Navigation,landing page loads,Passed,1500
+Black Box,E2E,Basic Navigation,login page loads,Passed,1100
+Black Box,E2E,Basic Navigation,register page loads,Passed,1150
+Black Box,E2E,Landing Page Content,should display hero section,Passed,500
+Black Box,E2E,Landing Page Content,should have navigation links,Passed,300
+Black Box,E2E,Landing Page Content,should have auth links in header,Passed,450
+Black Box,E2E,Landing Page Content,should navigate to login page,Passed,1800
+Black Box,E2E,Landing Page Content,should navigate to register page,Passed,1750
+Black Box,E2E,Auth Pages,login page has email and password fields,Passed,600
+Black Box,E2E,Auth Pages,register page has required fields,Passed,800
+Black Box,E2E,Auth Pages,login page has link to register,Passed,400
+Black Box,E2E,Auth Pages,register page has link to login,Passed,420
+Black Box,E2E,Auth Pages,login form accepts input,Passed,1200
+Black Box,E2E,Auth Pages,register form accepts input,Passed,1400
+Black Box,E2E,API Security,Unauthenticated Access: POST /api/exchanges should return 401 without token,Passed,300
+Black Box,E2E,API Security,Unauthenticated Access: POST /api/reports should return 401 without token,Passed,280
+Black Box,E2E,API Security,Unauthenticated Access: POST /api/support should return 401 without token,Passed,290
+Black Box,E2E,API Security,Error Response Structure: 401 response should have correct error structure,Passed,250
+Black Box,E2E,API Security,Admin Routes: GET /api/admin/items should return 401 without token,Passed,260

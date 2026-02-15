@@ -70,9 +70,9 @@ const SECTIONS: TermsSection[] = [
     icon: MessageSquareWarning,
     title: { th: "4) การปฏิบัติตนในชุมชน", en: "4) Community conduct" },
     points: [
-      { th: "สื่อสารด้วยความสุภาพและให้เกียรติผู้อื่น", en: "Communicate respectfully with other users." },
-      { th: "ปฏิบัติตามกติกาและคำแนะนำความปลอดภัยของระบบ", en: "Follow platform rules and safety guidance." },
-      { th: "ทีมงานมีสิทธิ์ตรวจสอบและดำเนินการเมื่อพบการละเมิด", en: "The admin team may investigate and act on violations." },
+      { th: "ผู้ใช้ต้องปฏิบัติตามข้อกำหนดการใช้งานและแนวทางชุมชน", en: "Users must comply with these Terms and the Community Guidelines." },
+      { th: "รายละเอียดพฤติกรรมที่คาดหวังระบุไว้ในหน้าแนวทางชุมชน (/guidelines)", en: "Expected behavior details are described in the Community Guidelines (/guidelines)." },
+      { th: "ทีมงานมีสิทธิ์ตรวจสอบและดำเนินการตามบทลงโทษใน §6 เมื่อพบการละเมิด", en: "The admin team may investigate and enforce penalties per §6 upon violations." },
     ],
   },
   {
@@ -93,8 +93,8 @@ const SECTIONS: TermsSection[] = [
       { th: "เมื่อได้รับคำเตือนครบ 3 ครั้ง ระบบจะระงับการใช้งาน 7 วัน", en: "After 3 warnings, the account is suspended for 7 days." },
       { th: "หากถูกระงับครบ 2 ครั้ง ระบบอาจแบนถาวรโดยอัตโนมัติ", en: "After 2 suspensions, the account may be permanently banned." },
       {
-        th: `หากต้องการอุทธรณ์หรือสอบถาม ติดต่อทีมสนับสนุนที่ ${SUPPORT_EMAIL}`,
-        en: `For appeals or questions, contact support at ${SUPPORT_EMAIL}.`,
+        th: "หากต้องการอุทธรณ์หรือสอบถาม ติดต่อทีมสนับสนุน",
+        en: "For appeals or questions, contact support.",
       },
     ],
   },
@@ -159,13 +159,13 @@ export default function TermsPage() {
                       <li key={index}>
                         {pickText(
                           {
-                            th: "หากต้องการอุทธรณ์หรือสอบถาม ติดต่อทีมสนับสนุนที่ ",
-                            en: "For appeals or questions, contact support at ",
+                            th: "หากต้องการอุทธรณ์หรือสอบถาม ติดต่อ",
+                            en: "For appeals or questions, contact ",
                           },
                           locale
                         )}
                         <a href={SUPPORT_MAILTO} className="text-primary hover:underline">
-                          {SUPPORT_EMAIL}
+                          {tt("ทีมสนับสนุน", "support")}
                         </a>
                       </li>
                     )
