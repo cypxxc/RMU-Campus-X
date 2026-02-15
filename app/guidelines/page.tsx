@@ -59,7 +59,7 @@ const SECTIONS: GuidelineSection[] = [
     icon: AlertTriangle,
     title: { th: "สิ่งที่ไม่ควรทำ", en: "What you must avoid" },
     points: [
-      { th: "รายการสิ่งของและเนื้อหาต้องห้ามทั้งหมดระบุไว้ในข้อกำหนดการใช้งาน §3 (/terms#prohibited)", en: "All prohibited items and content are listed in Terms of Service §3 (/terms#prohibited)." },
+      { th: "รายการสิ่งของและเนื้อหาต้องห้ามทั้งหมดระบุไว้ในข้อกำหนดการใช้งาน ข้อ 3 (/terms#prohibited)", en: "All prohibited items and content are listed in Terms of Service Section 3 (/terms#prohibited)." },
       { th: "ห้ามคุกคาม ดูหมิ่น หรือกดดันผู้ใช้รายอื่น", en: "Do not harass, insult, or intimidate other users." },
       { th: "ห้ามนัดรับในจุดเสี่ยงหรือไม่ปลอดภัย", en: "Do not arrange pickup in unsafe locations." },
     ],
@@ -81,7 +81,7 @@ const SECTIONS: GuidelineSection[] = [
     title: { th: "การรายงาน", en: "Reporting" },
     points: [
       { th: "เมื่อพบพฤติกรรมหรือเนื้อหาที่ผิดกติกา ให้กดปุ่มรายงานที่รายการหรือโปรไฟล์ผู้ใช้", en: "When you find rule violations, use the report button on the item or user profile." },
-      { th: "ทีมงานจะตรวจสอบและดำเนินการตามบทลงโทษที่ระบุในข้อกำหนดการใช้งาน §6 (/terms#suspension)", en: "The admin team will review and enforce penalties as specified in Terms §6 (/terms#suspension)." },
+      { th: "ทีมงานจะตรวจสอบและดำเนินการตามบทลงโทษที่ระบุในข้อกำหนดการใช้งาน ข้อ 6 (/terms#suspension)", en: "The admin team will review and enforce penalties as specified in Terms Section 6 (/terms#suspension)." },
     ],
   },
 ]
