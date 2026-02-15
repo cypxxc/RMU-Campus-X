@@ -42,7 +42,7 @@ describe('Registration Schema', () => {
     const result = registrationSchema.safeParse(invalidData)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.errors[0].message).toContain('อย่างน้อย 6 ตัวอักษร')
+      expect(result.error.errors[0]?.message).toContain('อย่างน้อย 6 ตัวอักษร')
     }
 
     const validData = {
@@ -62,7 +62,7 @@ describe('Registration Schema', () => {
     const result = registrationSchema.safeParse(invalidData)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.errors[0].message).toBe('รหัสผ่านไม่ตรงกัน')
+      expect(result.error.errors[0]?.message).toBe('รหัสผ่านไม่ตรงกัน')
     }
   })
 
