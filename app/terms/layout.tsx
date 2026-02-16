@@ -11,6 +11,7 @@ function TermsLayoutInner({ children }: { children: React.ReactNode }) {
   const { tt } = useI18n()
   const standalone = searchParams.get("standalone") === "1"
   const fromLanding = searchParams.get("from") === "landing"
+  const docQuery = standalone ? "?standalone=1" : fromLanding ? "?from=landing" : ""
 
   const backHref = standalone ? "/consent" : fromLanding ? "/" : "/dashboard"
   const backLabel = standalone
@@ -25,16 +26,16 @@ function TermsLayoutInner({ children }: { children: React.ReactNode }) {
             {backLabel}
           </Link>
           <nav className="flex items-center gap-2 text-sm" aria-label={tt("เมนูเอกสาร", "Document menu")}>
-            <Link href="/guide" className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+            <Link href={`/guide${docQuery}`} className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
               {tt("คู่มือการใช้งาน", "Guide")}
             </Link>
-            <Link href="/terms" className="px-3 py-1.5 rounded-md bg-primary/10 text-primary font-medium">
+            <Link href={`/terms${docQuery}`} className="px-3 py-1.5 rounded-md bg-primary/10 text-primary font-medium">
               {tt("ข้อกำหนด", "Terms")}
             </Link>
-            <Link href="/privacy" className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+            <Link href={`/privacy${docQuery}`} className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
               {tt("ความเป็นส่วนตัว", "Privacy")}
             </Link>
-            <Link href="/guidelines" className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+            <Link href={`/guidelines${docQuery}`} className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
               {tt("แนวทางชุมชน", "Guidelines")}
             </Link>
           </nav>
