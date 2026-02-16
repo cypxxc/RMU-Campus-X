@@ -9,27 +9,32 @@ import { useI18n } from "@/components/language-provider"
 function GuideLayoutInner({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams()
   const { tt } = useI18n()
+  const standalone = searchParams.get("standalone") === "1"
   const fromLanding = searchParams.get("from") === "landing"
-  const backHref = fromLanding ? "/" : "/dashboard"
+  const docQuery = standalone ? "?standalone=1" : fromLanding ? "?from=landing" : ""
+  const backHref = standalone ? "/consent" : fromLanding ? "/" : "/dashboard"
+  const backLabel = standalone
+    ? tt("Back to consent", "Back to consent")
+    : tt("Back to home", "Back to home")
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link href={backHref} className="text-sm text-muted-foreground hover:text-foreground">
-            {tt("← กลับหน้าหลัก", "← Back to home")}
+            {backLabel}
           </Link>
           <nav className="flex items-center gap-2 text-sm" aria-label={tt("เมนูเอกสาร", "Document menu")}>
-            <Link href="/guide" className="px-3 py-1.5 rounded-md bg-primary/10 text-primary font-medium">
+            <Link href={`/guide${docQuery}`} className="px-3 py-1.5 rounded-md bg-primary/10 text-primary font-medium">
               {tt("คู่มือการใช้งาน", "Guide")}
             </Link>
-            <Link href="/terms" className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+            <Link href={`/terms${docQuery}`} className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
               {tt("ข้อกำหนด", "Terms")}
             </Link>
-            <Link href="/privacy" className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+            <Link href={`/privacy${docQuery}`} className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
               {tt("ความเป็นส่วนตัว", "Privacy")}
             </Link>
-            <Link href="/guidelines" className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+            <Link href={`/guidelines${docQuery}`} className="px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
               {tt("แนวทางชุมชน", "Guidelines")}
             </Link>
           </nav>

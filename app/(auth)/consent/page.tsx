@@ -123,7 +123,6 @@ export default function ConsentPage() {
                     {tt("ข้าพเจ้ายอมรับ ", "I accept the ")}
                     <Link
                       href="/terms?standalone=1"
-                      target="_blank"
                       className="font-medium text-primary hover:underline"
                     >
                       {tt("ข้อกำหนดและเงื่อนไขการใช้งาน", "terms of use")}
@@ -142,7 +141,6 @@ export default function ConsentPage() {
                     {tt("ข้าพเจ้ายอมรับ ", "I accept the ")}
                     <Link
                       href="/privacy?standalone=1"
-                      target="_blank"
                       className="font-medium text-primary hover:underline"
                     >
                       {tt("นโยบายความเป็นส่วนตัว", "privacy policy")}
@@ -156,11 +154,11 @@ export default function ConsentPage() {
                 <FileText className="h-4 w-4 shrink-0" />
                 <span>
                   {tt("อ่านฉบับเต็มได้ที่หน้า ", "Read full documents at ")}
-                  <Link href="/terms?standalone=1" target="_blank" className="text-primary hover:underline">
+                  <Link href="/terms?standalone=1" className="text-primary hover:underline">
                     {tt("ข้อกำหนดการใช้งาน", "Terms")}
                   </Link>{" "}
                   {tt("และ", "and")}{" "}
-                  <Link href="/privacy?standalone=1" target="_blank" className="text-primary hover:underline">
+                  <Link href="/privacy?standalone=1" className="text-primary hover:underline">
                     {tt("นโยบายความเป็นส่วนตัว", "Privacy")}
                   </Link>
                 </span>
