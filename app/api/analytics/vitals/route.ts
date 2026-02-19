@@ -5,7 +5,6 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb } from "@/lib/firebase-admin"
-import { getNotificationDeliveryStats } from "@/lib/server/notification-delivery"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 300 // Cache for 5 minutes
@@ -27,16 +26,6 @@ interface VitalsData {
     completed: number
     pending: number
     thisMonth: number
-  }
-  notifications: {
-    pendingQueue: number
-    stalePending: number
-    deadLetter: number
-    processedLastHour: number
-    deliveredLastHour: number
-    queuedLastHour: number
-    retriedLastHour: number
-    deadLetterLastHour: number
   }
   system: {
     uptime: number
@@ -74,7 +63,6 @@ export async function GET(_request: NextRequest) {
       pendingExchanges,
       exchangesThisMonth,
       categoryEntries,
-      notificationStats,
     ] = await Promise.all([
       db.collection("users").count().get().then((snapshot) => snapshot.data().count),
       db.collection("users").where("lastLoginAt", ">", thirtyDaysAgo).count().get().then((snapshot) => snapshot.data().count),
@@ -86,7 +74,6 @@ export async function GET(_request: NextRequest) {
       db.collection("exchanges").where("status", "in", ["pending", "in_progress"]).count().get().then((snapshot) => snapshot.data().count),
       db.collection("exchanges").where("createdAt", ">=", startOfMonth).count().get().then((snapshot) => snapshot.data().count),
       Promise.all(categoryCountPromises),
-      getNotificationDeliveryStats(db),
     ])
 
     const categoryStats: Record<string, number> = {}
@@ -116,16 +103,6 @@ export async function GET(_request: NextRequest) {
         completed: completedExchanges,
         pending: pendingExchanges,
         thisMonth: exchangesThisMonth,
-      },
-      notifications: {
-        pendingQueue: notificationStats.pendingQueue,
-        stalePending: notificationStats.stalePending,
-        deadLetter: notificationStats.deadLetter,
-        processedLastHour: notificationStats.processedLastHour,
-        deliveredLastHour: notificationStats.deliveredLastHour,
-        queuedLastHour: notificationStats.queuedLastHour,
-        retriedLastHour: notificationStats.retriedLastHour,
-        deadLetterLastHour: notificationStats.deadLetterLastHour,
       },
       system: {
         uptime,
