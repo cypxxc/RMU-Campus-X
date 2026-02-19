@@ -29,6 +29,8 @@ coverage
 .jest
 test-results
 playwright-report
+e2e/.auth/
+e2e/.runtime/
 
 # OS
 .DS_Store
@@ -52,10 +54,6 @@ backups/
 # Cursor AI Editor
 .cursor/
 
-# Firebase DataConnect Generated (regenerated on build)
-src/dataconnect-generated/
-dataconnect-generated/
-
 # Bun Cache
 *.db
 bun.lockb.bak
@@ -65,3 +63,12 @@ errors.txt
 test_output.txt
 test_exchanges.txt
 test_rules_output.txt
+test_output_utf8.txt
+test_rules_full_log*.txt
+rules_results.json
+playwright_results*.json
+vitest_results*.json
+chromium_e2e_results.json
+webkit_results*.json
+webkit_nav_fail.json
+webkit_test_output.txt
