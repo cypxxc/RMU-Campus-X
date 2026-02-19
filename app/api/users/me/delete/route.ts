@@ -172,8 +172,8 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: "Account deleted permanently" })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[SelfDelete] Fatal Error:", error)
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }

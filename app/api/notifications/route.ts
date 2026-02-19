@@ -13,10 +13,12 @@ import {
   getAuthToken,
 } from "@/lib/api-response"
 import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
 import type { DocumentData, QueryDocumentSnapshot } from "firebase-admin/firestore"
 import type { NotificationType } from "@/types"
 import { log } from "@/lib/logger"
+import { isAdmin } from "@/lib/admin-auth"
+import { checkRateLimitScalable, getClientIP } from "@/lib/upstash-rate-limiter"
+import { deliverInAppNotification } from "@/lib/server/notification-delivery"
 
 const ALLOWED_NOTIFICATION_TYPES: NotificationType[] = [
   "exchange",
@@ -26,6 +28,11 @@ const ALLOWED_NOTIFICATION_TYPES: NotificationType[] = [
   "warning",
   "support",
 ]
+
+const NOTIFICATION_POST_LIMIT = 30
+const NOTIFICATION_POST_WINDOW_MS = 60_000
+const MAX_TITLE_LENGTH = 150
+const MAX_MESSAGE_LENGTH = 2000
 
 interface NotificationBody {
   userId: string
@@ -42,6 +49,13 @@ interface FilteredFallbackOptions {
   isReadFilter?: boolean
   pageSize: number
   lastId?: string
+}
+
+function normalizeText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.length <= maxLength ? trimmed : trimmed.slice(0, maxLength)
 }
 
 function parseBooleanParam(value: string | null, paramName: string): boolean | undefined {
@@ -248,6 +262,12 @@ export async function GET(request: NextRequest) {
         throw queryError
       }
 
+      log.warn("Notifications query used fallback scan (missing composite index)", {
+        userId: decoded.uid,
+        hasTypeFilter: notificationTypes.length > 0,
+        hasReadFilter: isReadFilter !== undefined,
+      })
+
       docs = await fetchFilteredNotificationsWithoutCompositeIndexes({
         userId: decoded.uid,
         notificationTypes,
@@ -274,6 +294,11 @@ export async function GET(request: NextRequest) {
         const countMessage = countError instanceof Error ? countError.message : String(countError)
         const hasExtraFilters = notificationTypes.length > 0 || isReadFilter !== undefined
         if (hasExtraFilters && isIndexError(countMessage)) {
+          log.warn("Notifications count used fallback scan (missing composite index)", {
+            userId: decoded.uid,
+            hasTypeFilter: notificationTypes.length > 0,
+            hasReadFilter: isReadFilter !== undefined,
+          })
           totalCount = await countFilteredNotificationsWithoutCompositeIndexes(
             decoded.uid,
             notificationTypes,
@@ -315,6 +340,22 @@ export async function POST(request: NextRequest) {
       return ApiErrors.unauthorized("Invalid or expired session")
     }
 
+    const clientIp = getClientIP(request)
+    const rateKey = `notifications:post:${decodedToken.uid}:${clientIp}`
+    const rate = await checkRateLimitScalable(
+      rateKey,
+      NOTIFICATION_POST_LIMIT,
+      NOTIFICATION_POST_WINDOW_MS
+    )
+    if (!rate.allowed) {
+      log.security("notifications_post_rate_limited", {
+        userId: decodedToken.uid,
+        ip: clientIp,
+        resetTime: rate.resetTime,
+      })
+      return ApiErrors.rateLimited("Too many notification requests. Please try again shortly.")
+    }
+
     const body = await parseRequestBody<NotificationBody>(request)
     if (!body) {
       return ApiErrors.badRequest("Invalid request body")
@@ -329,20 +370,79 @@ export async function POST(request: NextRequest) {
       return ApiErrors.badRequest(`Invalid notification type: ${body.type}`)
     }
 
+    const targetUserId = normalizeText(body.userId, 128)
+    if (!targetUserId) {
+      return ApiErrors.badRequest("Invalid userId")
+    }
+
+    const title = normalizeText(body.title, MAX_TITLE_LENGTH)
+    if (!title) {
+      return ApiErrors.badRequest("Invalid title")
+    }
+
+    const message = normalizeText(body.message, MAX_MESSAGE_LENGTH)
+    if (!message) {
+      return ApiErrors.badRequest("Invalid message")
+    }
+
+    const requesterUserId = decodedToken.uid
+    const requestedSenderId = normalizeText(body.senderId ?? null, 128)
+    const isCrossUserNotification = targetUserId !== requesterUserId
+    const adminOverride =
+      isCrossUserNotification && decodedToken.email ? await isAdmin(decodedToken.email) : false
+
+    if (isCrossUserNotification && !adminOverride) {
+      log.security("notifications_cross_user_blocked", {
+        requesterUserId,
+        targetUserId,
+        type: body.type,
+      })
+      return ApiErrors.forbidden("Creating notifications for other users is not allowed")
+    }
+
+    if (requestedSenderId && requestedSenderId !== requesterUserId && !adminOverride) {
+      log.security("notifications_sender_spoof_blocked", {
+        requesterUserId,
+        requestedSenderId,
+        targetUserId,
+      })
+      return ApiErrors.forbidden("Invalid senderId")
+    }
+
+    const effectiveSenderId = adminOverride
+      ? requestedSenderId ?? requesterUserId
+      : requesterUserId
+
     const db = getAdminDb()
+    const delivery = await deliverInAppNotification(
+      {
+        userId: targetUserId,
+        title,
+        message,
+        type: body.type,
+        relatedId: normalizeText(body.relatedId ?? null, 128),
+        senderId: effectiveSenderId,
+      },
+      {
+        db,
+        source: "api.notifications.post",
+      }
+    )
 
-    const notificationRef = await db.collection("notifications").add({
-      userId: body.userId,
-      title: body.title,
-      message: body.message,
-      type: body.type,
-      relatedId: body.relatedId || null,
-      senderId: body.senderId || null,
-      isRead: false,
-      createdAt: FieldValue.serverTimestamp(),
-    })
+    if (!delivery.delivered && !delivery.queued) {
+      return ApiErrors.internalError(delivery.error ?? "Unable to deliver notification")
+    }
 
-    return successResponse({ success: true, notificationId: notificationRef.id })
+    return successResponse(
+      {
+        success: true,
+        notificationId: delivery.notificationId ?? null,
+        queueId: delivery.queueId ?? null,
+        queued: delivery.queued,
+        attempts: delivery.attempts,
+      },
+      delivery.delivered ? 200 : 202
+    )
   } catch (error: unknown) {
     log.apiError("POST", "/api/notifications", error, { operation: "create-notification" })
     const message = error instanceof Error ? error.message : "Internal server error"

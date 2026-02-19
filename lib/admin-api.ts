@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { SystemLogger } from './services/logger'
+import { checkRateLimitScalable, getClientIP } from './upstash-rate-limiter'
+import { log } from './logger'
 // import { isAdmin } from './admin-auth' // Removed, using server-side check
 
 /**
@@ -36,7 +38,11 @@ export enum AdminErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   CONFLICT = 'CONFLICT',
+  RATE_LIMITED = 'RATE_LIMITED',
 }
+
+const DEFAULT_ADMIN_MUTATION_LIMIT = 30
+const DEFAULT_ADMIN_MUTATION_WINDOW_MS = 60_000
 
 /**
  * Create success response
@@ -164,6 +170,47 @@ export async function verifyAdminAccess(request: NextRequest): Promise<{
         500
       ),
     }
+  }
+}
+
+/**
+ * Rate limit mutating admin operations by admin user + client IP.
+ * Returns a ready-to-send response when throttled, otherwise null.
+ */
+export async function enforceAdminMutationRateLimit(
+  request: NextRequest,
+  adminUid: string,
+  action: string,
+  limit: number = DEFAULT_ADMIN_MUTATION_LIMIT,
+  windowMs: number = DEFAULT_ADMIN_MUTATION_WINDOW_MS
+): Promise<NextResponse | null> {
+  try {
+    const clientIp = getClientIP(request)
+    const rateKey = `admin:mutation:${action}:${adminUid}:${clientIp}`
+    const rate = await checkRateLimitScalable(rateKey, limit, windowMs)
+
+    if (rate.allowed) return null
+
+    log.security('admin_mutation_rate_limited', {
+      action,
+      adminUid,
+      ip: clientIp,
+      resetTime: rate.resetTime,
+    })
+
+    return errorResponse(
+      AdminErrorCode.RATE_LIMITED,
+      'Too many admin mutation requests. Please try again shortly.',
+      429
+    )
+  } catch (error) {
+    // Fail open to avoid blocking legitimate admin actions if limiter is unavailable.
+    log.warn('Admin mutation rate limiter unavailable', {
+      action,
+      adminUid,
+      error: error instanceof Error ? error.message : String(error),
+    }, 'AdminAPI')
+    return null
   }
 }
 

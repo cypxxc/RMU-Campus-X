@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb } from "@/lib/firebase-admin"
+import { enforceAdminMutationRateLimit, verifyAdminAccess } from "@/lib/admin-api"
 
 export const dynamic = "force-dynamic"
 
@@ -19,7 +20,30 @@ interface CleanupResult {
   details?: Record<string, unknown>
 }
 
+const FIRESTORE_BATCH_LIMIT = 400
+
+async function deleteRefsInBatches(
+  db: FirebaseFirestore.Firestore,
+  refs: FirebaseFirestore.DocumentReference[]
+) {
+  for (let i = 0; i < refs.length; i += FIRESTORE_BATCH_LIMIT) {
+    const chunk = refs.slice(i, i + FIRESTORE_BATCH_LIMIT)
+    const batch = db.batch()
+    chunk.forEach((ref) => batch.delete(ref))
+    await batch.commit()
+  }
+}
+
 export async function POST(request: NextRequest) {
+  const { authorized, user, error } = await verifyAdminAccess(request)
+  if (!authorized) return error!
+  if (!user?.uid) {
+    return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
+  }
+
+  const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "cleanup", 10, 60_000)
+  if (rateLimited) return rateLimited
+
   try {
     const startTime = Date.now()
     const body: CleanupRequest = await request.json()
@@ -76,28 +100,39 @@ export async function POST(request: NextRequest) {
 async function cleanupOrphanedFiles(db: FirebaseFirestore.Firestore): Promise<CleanupResult> {
   // Find items that reference non-existent users
   const itemsSnapshot = await db.collection("items").get()
-  const orphanedItems: string[] = []
+  const orphanedItemRefs: FirebaseFirestore.DocumentReference[] = []
+  const userExistsCache = new Map<string, Promise<boolean>>()
 
-  for (const itemDoc of itemsSnapshot.docs) {
-    const postedBy = itemDoc.data().postedBy
-    if (postedBy) {
-      const userDoc = await db.collection("users").doc(postedBy).get()
-      if (!userDoc.exists) {
-        orphanedItems.push(itemDoc.id)
-      }
+  const userExists = (userId: string) => {
+    if (!userExistsCache.has(userId)) {
+      userExistsCache.set(
+        userId,
+        db
+          .collection("users")
+          .doc(userId)
+          .get()
+          .then((doc) => doc.exists)
+      )
     }
+    return userExistsCache.get(userId)!
   }
 
-  // Delete orphaned items
-  for (const itemId of orphanedItems) {
-    await db.collection("items").doc(itemId).delete()
-  }
+  await Promise.all(
+    itemsSnapshot.docs.map(async (itemDoc) => {
+      const postedBy = itemDoc.data().postedBy
+      if (!postedBy || typeof postedBy !== "string") return
+      const exists = await userExists(postedBy)
+      if (!exists) orphanedItemRefs.push(itemDoc.ref)
+    })
+  )
+
+  await deleteRefsInBatches(db, orphanedItemRefs)
 
   return {
     operation: "orphaned-files",
-    deletedCount: orphanedItems.length,
+    deletedCount: orphanedItemRefs.length,
     duration: 0, // Will be set by caller
-    details: { orphanedItems: orphanedItems.length },
+    details: { orphanedItems: orphanedItemRefs.length },
   }
 }
 
@@ -110,15 +145,12 @@ async function cleanupExpiredSessions(db: FirebaseFirestore.Firestore): Promise<
     .where("createdAt", "<", thirtyDaysAgo)
     .get()
 
-  let deletedCount = 0
-  for (const sessionDoc of sessionsSnapshot.docs) {
-    await sessionDoc.ref.delete()
-    deletedCount++
-  }
+  const refs = sessionsSnapshot.docs.map((doc) => doc.ref)
+  await deleteRefsInBatches(db, refs)
 
   return {
     operation: "expired-sessions",
-    deletedCount,
+    deletedCount: refs.length,
     duration: 0, // Will be set by caller
     details: { cutoffDate: thirtyDaysAgo.toISOString() },
   }
@@ -133,15 +165,12 @@ async function cleanupOldNotifications(db: FirebaseFirestore.Firestore): Promise
     .where("createdAt", "<", ninetyDaysAgo)
     .get()
 
-  let deletedCount = 0
-  for (const notifDoc of notificationsSnapshot.docs) {
-    await notifDoc.ref.delete()
-    deletedCount++
-  }
+  const refs = notificationsSnapshot.docs.map((doc) => doc.ref)
+  await deleteRefsInBatches(db, refs)
 
   return {
     operation: "old-notifications",
-    deletedCount,
+    deletedCount: refs.length,
     duration: 0, // Will be set by caller
     details: { cutoffDate: ninetyDaysAgo.toISOString() },
   }
@@ -157,15 +186,12 @@ async function cleanupTempData(db: FirebaseFirestore.Firestore): Promise<Cleanup
     .where("createdAt", "<", twentyFourHoursAgo)
     .get()
 
-  let deletedCount = 0
-  for (const tempDoc of tempUploadsSnapshot.docs) {
-    await tempDoc.ref.delete()
-    deletedCount++
-  }
+  const refs = tempUploadsSnapshot.docs.map((doc) => doc.ref)
+  await deleteRefsInBatches(db, refs)
 
   return {
     operation: "temp-data",
-    deletedCount,
+    deletedCount: refs.length,
     duration: 0, // Will be set by caller
     details: { cutoffDate: twentyFourHoursAgo.toISOString() },
   }

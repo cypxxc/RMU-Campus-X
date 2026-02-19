@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { issueWarning } from "@/lib/services/admin/user-actions"
 import { issueWarningSchema } from "@/lib/schemas"
-import { verifyAdminAccess } from "@/lib/admin-api"
+import { enforceAdminMutationRateLimit, verifyAdminAccess } from "@/lib/admin-api"
 
 // Runtime configuration สำหรับ Vercel
 export const runtime = "nodejs"
@@ -12,11 +12,18 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const isDev = process.env.NODE_ENV === "development"
+
   try {
     const { authorized, user, error } = await verifyAdminAccess(req)
     if (!authorized) {
       return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if (!user?.uid) {
+      return NextResponse.json({ error: "Admin identity missing" }, { status: 403 })
+    }
+    const rateLimited = await enforceAdminMutationRateLimit(req, user.uid, "issue-warning", 30, 60_000)
+    if (rateLimited) return rateLimited
 
     // Await params (Next.js 15+ pattern)
     let userId: string
@@ -24,7 +31,9 @@ export async function POST(
       const resolvedParams = await params
       userId = resolvedParams.id
     } catch (paramsError) {
-      console.error("[API] Failed to resolve params:", paramsError)
+      if (isDev) {
+        console.error("[API] Failed to resolve params:", paramsError)
+      }
       return NextResponse.json(
         { error: "Invalid request parameters" },
         { status: 400 }
@@ -39,7 +48,6 @@ export async function POST(
     }
 
     if (!user?.uid || !user?.email) {
-      console.error("[API] Admin identity missing:", { uid: user?.uid, email: user?.email })
       return NextResponse.json(
         { error: "Admin identity missing" },
         { status: 403 }
@@ -50,7 +58,7 @@ export async function POST(
     let body: unknown
     try {
       body = await req.json()
-    } catch (jsonError) {
+    } catch {
       return NextResponse.json(
         { error: "Invalid JSON body" },
         { status: 400 }
@@ -84,17 +92,13 @@ export async function POST(
 
     return NextResponse.json(result, { status: 200 })
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorStack = error instanceof Error ? error.stack : undefined
-    
-    console.error("[API] Issue Warning Error:", {
-      message: errorMessage,
-      stack: errorStack,
-      timestamp: new Date().toISOString(),
-    })
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    if (isDev) {
+      console.error("[API] Issue Warning Error:", error)
+    } else {
+      console.error("[API] Issue Warning Error:", errorMessage)
+    }
 
-    // Return detailed error in development, generic in production
-    const isDev = process.env.NODE_ENV === "development"
     return NextResponse.json(
       {
         error: "Internal Server Error",

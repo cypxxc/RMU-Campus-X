@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb } from "@/lib/firebase-admin"
+import { enforceAdminMutationRateLimit, verifyAdminAccess } from "@/lib/admin-api"
 
 export const dynamic = "force-dynamic"
 
@@ -27,7 +28,76 @@ interface ConsistencyResult {
   }
 }
 
+const FIRESTORE_BATCH_LIMIT = 400
+const CHECK_CONCURRENCY = 100
+
+async function processInChunks<T>(
+  items: T[],
+  chunkSize: number,
+  task: (item: T) => Promise<void>
+) {
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize)
+    await Promise.all(chunk.map((item) => task(item)))
+  }
+}
+
+function createExistenceChecker(
+  db: FirebaseFirestore.Firestore,
+  collectionName: string
+) {
+  const cache = new Map<string, Promise<boolean>>()
+
+  return (id: string) => {
+    if (!cache.has(id)) {
+      cache.set(
+        id,
+        db
+          .collection(collectionName)
+          .doc(id)
+          .get()
+          .then((doc) => doc.exists)
+      )
+    }
+    return cache.get(id)!
+  }
+}
+
+async function deleteDocsByIdInBatches(
+  db: FirebaseFirestore.Firestore,
+  collectionName: string,
+  ids: string[]
+) {
+  for (let i = 0; i < ids.length; i += FIRESTORE_BATCH_LIMIT) {
+    const chunk = ids.slice(i, i + FIRESTORE_BATCH_LIMIT)
+    const batch = db.batch()
+    chunk.forEach((id) => batch.delete(db.collection(collectionName).doc(id)))
+    await batch.commit()
+  }
+}
+
+async function updateDocsInBatches(
+  db: FirebaseFirestore.Firestore,
+  updates: Array<{ ref: FirebaseFirestore.DocumentReference; data: Record<string, unknown> }>
+) {
+  for (let i = 0; i < updates.length; i += FIRESTORE_BATCH_LIMIT) {
+    const chunk = updates.slice(i, i + FIRESTORE_BATCH_LIMIT)
+    const batch = db.batch()
+    chunk.forEach(({ ref, data }) => batch.update(ref, data))
+    await batch.commit()
+  }
+}
+
 export async function POST(request: NextRequest) {
+  const { authorized, user, error } = await verifyAdminAccess(request)
+  if (!authorized) return error!
+  if (!user?.uid) {
+    return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
+  }
+
+  const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "consistency", 8, 60_000)
+  if (rateLimited) return rateLimited
+
   try {
     const startTime = Date.now()
     const body: ConsistencyRequest = await request.json()
@@ -141,10 +211,8 @@ async function fixOrphanedRecords(db: FirebaseFirestore.Firestore): Promise<Cons
 
   // Fix orphaned items
   const orphanedItems = await findOrphanedItems(db)
-  for (const itemId of orphanedItems) {
-    await db.collection("items").doc(itemId).delete()
-    totalFixed++
-  }
+  await deleteDocsByIdInBatches(db, "items", orphanedItems)
+  totalFixed += orphanedItems.length
   
   if (orphanedItems.length > 0) {
     issues.push({
@@ -157,10 +225,8 @@ async function fixOrphanedRecords(db: FirebaseFirestore.Firestore): Promise<Cons
 
   // Fix orphaned exchanges
   const orphanedExchanges = await findOrphanedExchanges(db)
-  for (const exchangeId of orphanedExchanges) {
-    await db.collection("exchanges").doc(exchangeId).delete()
-    totalFixed++
-  }
+  await deleteDocsByIdInBatches(db, "exchanges", orphanedExchanges)
+  totalFixed += orphanedExchanges.length
 
   if (orphanedExchanges.length > 0) {
     issues.push({
@@ -208,24 +274,31 @@ async function checkDuplicates(db: FirebaseFirestore.Firestore): Promise<Consist
 async function fixBrokenReferences(db: FirebaseFirestore.Firestore): Promise<ConsistencyResult> {
   const issues = []
   let totalFixed = 0
+  const updates: Array<{ ref: FirebaseFirestore.DocumentReference; data: Record<string, unknown> }> = []
+  const itemExists = createExistenceChecker(db, "items")
 
   // Fix exchanges with invalid item references
   const exchangesSnapshot = await db.collection("exchanges").get()
-  for (const exchangeDoc of exchangesSnapshot.docs) {
+  await processInChunks(exchangesSnapshot.docs, CHECK_CONCURRENCY, async (exchangeDoc) => {
     const data = exchangeDoc.data()
     const itemId = data.itemId
-    
-    if (itemId) {
-      const itemDoc = await db.collection("items").doc(itemId).get()
-      if (!itemDoc.exists) {
-        // Update exchange to remove invalid item reference
-        await exchangeDoc.ref.update({
+    if (!itemId || typeof itemId !== "string") return
+
+    const exists = await itemExists(itemId)
+    if (!exists) {
+      updates.push({
+        ref: exchangeDoc.ref,
+        data: {
           itemId: null,
           itemTitle: "Item deleted",
-        })
-        totalFixed++
-      }
+        },
+      })
     }
+  })
+
+  if (updates.length > 0) {
+    await updateDocsInBatches(db, updates)
+    totalFixed = updates.length
   }
 
   if (totalFixed > 0) {
@@ -252,16 +325,15 @@ async function fixBrokenReferences(db: FirebaseFirestore.Firestore): Promise<Con
 async function findOrphanedItems(db: FirebaseFirestore.Firestore): Promise<string[]> {
   const itemsSnapshot = await db.collection("items").get()
   const orphanedItems: string[] = []
+  const userExists = createExistenceChecker(db, "users")
 
-  for (const itemDoc of itemsSnapshot.docs) {
+  await processInChunks(itemsSnapshot.docs, CHECK_CONCURRENCY, async (itemDoc) => {
     const postedBy = itemDoc.data().postedBy
-    if (postedBy) {
-      const userDoc = await db.collection("users").doc(postedBy).get()
-      if (!userDoc.exists) {
-        orphanedItems.push(itemDoc.id)
-      }
-    }
-  }
+    if (!postedBy || typeof postedBy !== "string") return
+
+    const exists = await userExists(postedBy)
+    if (!exists) orphanedItems.push(itemDoc.id)
+  })
 
   return orphanedItems
 }
@@ -269,18 +341,23 @@ async function findOrphanedItems(db: FirebaseFirestore.Firestore): Promise<strin
 async function findOrphanedExchanges(db: FirebaseFirestore.Firestore): Promise<string[]> {
   const exchangesSnapshot = await db.collection("exchanges").get()
   const orphanedExchanges: string[] = []
+  const userExists = createExistenceChecker(db, "users")
+  const itemExists = createExistenceChecker(db, "items")
 
-  for (const exchangeDoc of exchangesSnapshot.docs) {
+  await processInChunks(exchangesSnapshot.docs, CHECK_CONCURRENCY, async (exchangeDoc) => {
     const data = exchangeDoc.data()
-    const hasIssues = 
-      (data.ownerId && !(await db.collection("users").doc(data.ownerId).get()).exists) ||
-      (data.requesterId && !(await db.collection("users").doc(data.requesterId).get()).exists) ||
-      (data.itemId && !(await db.collection("items").doc(data.itemId).get()).exists)
+    const ownerId = typeof data.ownerId === "string" ? data.ownerId : null
+    const requesterId = typeof data.requesterId === "string" ? data.requesterId : null
+    const itemId = typeof data.itemId === "string" ? data.itemId : null
 
-    if (hasIssues) {
+    const ownerExists = ownerId ? await userExists(ownerId) : true
+    const requesterExists = requesterId ? await userExists(requesterId) : true
+    const itemDocExists = itemId ? await itemExists(itemId) : true
+
+    if (!ownerExists || !requesterExists || !itemDocExists) {
       orphanedExchanges.push(exchangeDoc.id)
     }
-  }
+  })
 
   return orphanedExchanges
 }

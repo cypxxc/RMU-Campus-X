@@ -141,13 +141,13 @@ async function setupUser(
 
 describe("Users Collection", () => {
   describe("Read Access", () => {
-    it("✅ allows public read of user profiles", async () => {
+    it("❌ denies unauthenticated read of user profiles", async () => {
       // Setup
       await setupUser(ELIGIBLE_STUDENT.uid, { email: ELIGIBLE_STUDENT.email });
 
       // Test: Unauthenticated read
       const db = getUnauth().firestore();
-      await assertSucceeds(getDoc(doc(db, "users", ELIGIBLE_STUDENT.uid)));
+      await assertFails(getDoc(doc(db, "users", ELIGIBLE_STUDENT.uid)));
     });
 
     it("✅ allows authenticated read of any user profile", async () => {
@@ -242,6 +242,15 @@ describe("Users Collection", () => {
       );
     });
 
+    it("✅ allows owner to update blockedUserIds", async () => {
+      const db = getAuth(ELIGIBLE_STUDENT).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, "users", ELIGIBLE_STUDENT.uid), {
+          blockedUserIds: [OTHER_STUDENT.uid],
+        })
+      );
+    });
+
     it("❌ denies owner from changing email", async () => {
       const db = getAuth(ELIGIBLE_STUDENT).firestore();
       await assertFails(
@@ -255,7 +264,7 @@ describe("Users Collection", () => {
       const db = getAuth(ELIGIBLE_STUDENT).firestore();
       await assertFails(
         updateDoc(doc(db, "users", ELIGIBLE_STUDENT.uid), {
-          status: "ACTIVE", // Even same value is disallowed
+          status: "SUSPENDED", // Owner cannot change protected status field
         })
       );
     });
@@ -305,7 +314,7 @@ describe("Items Collection", () => {
   });
 
   describe("Read Access", () => {
-    it("✅ allows public read of items", async () => {
+    it("❌ denies unauthenticated read of items", async () => {
       // Setup item
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
@@ -321,7 +330,7 @@ describe("Items Collection", () => {
       });
 
       const db = getUnauth().firestore();
-      await assertSucceeds(getDoc(doc(db, "items", "item001")));
+      await assertFails(getDoc(doc(db, "items", "item001")));
     });
   });
 
@@ -554,6 +563,28 @@ describe("Chat Messages Collection", () => {
       );
     });
 
+    it("❌ denies sending when one participant has blocked the other", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(
+          doc(db, "users", OTHER_STUDENT.uid),
+          { blockedUserIds: [ELIGIBLE_STUDENT.uid] },
+          { merge: true }
+        );
+      });
+
+      const db = getAuth(ELIGIBLE_STUDENT).firestore();
+      await assertFails(
+        setDoc(doc(db, "chatMessages", "msgBlocked"), {
+          exchangeId: "exchange001",
+          senderId: ELIGIBLE_STUDENT.uid,
+          senderEmail: ELIGIBLE_STUDENT.email,
+          message: "Should be blocked",
+          createdAt: serverTimestamp(),
+        })
+      );
+    });
+
     it("❌ denies impersonation in senderId", async () => {
       const db = getAuth(ELIGIBLE_STUDENT).firestore();
       await assertFails(
@@ -572,7 +603,7 @@ describe("Chat Messages Collection", () => {
     beforeEach(async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        await setDoc(doc(db, "chatMessages", "msg001"), {
+        await setDoc(doc(db, "chatMessages", "msgRead"), {
           exchangeId: "exchange001",
           senderId: ELIGIBLE_STUDENT.uid,
           message: "Test message",
@@ -582,7 +613,7 @@ describe("Chat Messages Collection", () => {
 
     it("✅ allows exchange participants to read messages", async () => {
       const db = getAuth(OTHER_STUDENT).firestore();
-      await assertSucceeds(getDoc(doc(db, "chatMessages", "msg001")));
+      await assertSucceeds(getDoc(doc(db, "chatMessages", "msgRead")));
     });
 
     it("❌ denies non-participant from reading messages", async () => {
@@ -590,7 +621,21 @@ describe("Chat Messages Collection", () => {
       
       // Need to setup new exchange where NON_RMU_USER is not participant
       const db = getAuth(NON_RMU_USER).firestore();
-      await assertFails(getDoc(doc(db, "chatMessages", "msg001")));
+      await assertFails(getDoc(doc(db, "chatMessages", "msgRead")));
+    });
+
+    it("❌ denies reading when users have blocked each other", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(
+          doc(db, "users", OTHER_STUDENT.uid),
+          { blockedUserIds: [ELIGIBLE_STUDENT.uid] },
+          { merge: true }
+        );
+      });
+
+      const db = getAuth(ELIGIBLE_STUDENT).firestore();
+      await assertFails(getDoc(doc(db, "chatMessages", "msgRead")));
     });
   });
 
@@ -598,7 +643,7 @@ describe("Chat Messages Collection", () => {
     it("✅ allows sender to update own message (message, updatedAt)", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        await setDoc(doc(db, "chatMessages", "msg001"), {
+        await setDoc(doc(db, "chatMessages", "msg003"), {
           exchangeId: "exchange001",
           senderId: ELIGIBLE_STUDENT.uid,
           senderEmail: ELIGIBLE_STUDENT.email,
@@ -609,7 +654,7 @@ describe("Chat Messages Collection", () => {
 
       const db = getAuth(ELIGIBLE_STUDENT).firestore();
       await assertSucceeds(
-        updateDoc(doc(db, "chatMessages", "msg001"), {
+        updateDoc(doc(db, "chatMessages", "msg003"), {
           message: "Edited",
           updatedAt: serverTimestamp(),
         })
@@ -619,7 +664,7 @@ describe("Chat Messages Collection", () => {
     it("✅ allows recipient to update only readAt", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        await setDoc(doc(db, "chatMessages", "msg002"), {
+        await setDoc(doc(db, "chatMessages", "msg004"), {
           exchangeId: "exchange001",
           senderId: ELIGIBLE_STUDENT.uid,
           senderEmail: ELIGIBLE_STUDENT.email,
@@ -630,7 +675,7 @@ describe("Chat Messages Collection", () => {
 
       const db = getAuth(OTHER_STUDENT).firestore();
       await assertSucceeds(
-        updateDoc(doc(db, "chatMessages", "msg002"), {
+        updateDoc(doc(db, "chatMessages", "msg004"), {
           readAt: serverTimestamp(),
         })
       );
@@ -639,7 +684,7 @@ describe("Chat Messages Collection", () => {
     it("❌ denies recipient from updating message content", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        await setDoc(doc(db, "chatMessages", "msg003"), {
+        await setDoc(doc(db, "chatMessages", "msg005"), {
           exchangeId: "exchange001",
           senderId: ELIGIBLE_STUDENT.uid,
           senderEmail: ELIGIBLE_STUDENT.email,
@@ -650,8 +695,34 @@ describe("Chat Messages Collection", () => {
 
       const db = getAuth(OTHER_STUDENT).firestore();
       await assertFails(
-        updateDoc(doc(db, "chatMessages", "msg003"), {
+        updateDoc(doc(db, "chatMessages", "msg005"), {
           message: "Tampered",
+        })
+      );
+    });
+
+    it("❌ denies sender updates when users are blocked", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, "chatMessages", "msg006"), {
+          exchangeId: "exchange001",
+          senderId: ELIGIBLE_STUDENT.uid,
+          senderEmail: ELIGIBLE_STUDENT.email,
+          message: "Before blocked",
+          createdAt: serverTimestamp(),
+        });
+        await setDoc(
+          doc(db, "users", OTHER_STUDENT.uid),
+          { blockedUserIds: [ELIGIBLE_STUDENT.uid] },
+          { merge: true }
+        );
+      });
+
+      const db = getAuth(ELIGIBLE_STUDENT).firestore();
+      await assertFails(
+        updateDoc(doc(db, "chatMessages", "msg006"), {
+          message: "After blocked",
+          updatedAt: serverTimestamp(),
         })
       );
     });
@@ -661,7 +732,7 @@ describe("Chat Messages Collection", () => {
     it("✅ allows sender to delete own message", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        await setDoc(doc(db, "chatMessages", "msg004"), {
+        await setDoc(doc(db, "chatMessages", "msg007"), {
           exchangeId: "exchange001",
           senderId: ELIGIBLE_STUDENT.uid,
           senderEmail: ELIGIBLE_STUDENT.email,
@@ -671,7 +742,7 @@ describe("Chat Messages Collection", () => {
       });
 
       const db = getAuth(ELIGIBLE_STUDENT).firestore();
-      await assertSucceeds(deleteDoc(doc(db, "chatMessages", "msg004")));
+      await assertSucceeds(deleteDoc(doc(db, "chatMessages", "msg007")));
     });
   });
 });
