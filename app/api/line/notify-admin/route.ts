@@ -8,6 +8,7 @@ import { notifyAdminsNewReport, notifyAdminsNewSupportTicket, sendPushMessage } 
 import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { ApiErrors, getAuthToken, parseRequestBody, successResponse } from "@/lib/api-response"
 import { isAdmin } from "@/lib/admin-auth"
+import { checkRateLimitScalable, getClientIP } from "@/lib/upstash-rate-limiter"
 
 type NotifyType = "new_report" | "new_support_ticket" | "custom"
 
@@ -37,6 +38,27 @@ type AdminUserDoc = {
   email?: string
 }
 
+const IS_DEV = process.env.NODE_ENV === "development"
+const NOTIFY_ADMIN_LIMIT = 40
+const NOTIFY_ADMIN_WINDOW_MS = 60_000
+
+function debugLog(message: string, context?: unknown) {
+  if (!IS_DEV) return
+  if (context === undefined) {
+    console.log(message)
+    return
+  }
+  console.log(message, context)
+}
+
+function errorLog(message: string, error?: unknown) {
+  if (IS_DEV && error !== undefined) {
+    console.error(message, error)
+    return
+  }
+  console.error(message)
+}
+
 /**
  * Get all admin LINE User IDs using Admin SDK (no public REST API, no API keys).
  *
@@ -53,38 +75,41 @@ async function getAdminLineUserIds(): Promise<string[]> {
 
   const lineUserIds = new Set<string>()
 
-  for (const adminDoc of adminsSnapshot.docs) {
-    const adminData = adminDoc.data() as { email?: string }
-    const adminId = adminDoc.id
+  const resolvedIds = await Promise.all(
+    adminsSnapshot.docs.map(async (adminDoc) => {
+      const adminData = adminDoc.data() as { email?: string }
+      const adminId = adminDoc.id
 
-    // 1) Prefer direct lookup by id (admin doc id = user uid)
-    const userDocById = await db.collection("users").doc(adminId).get()
-    if (userDocById.exists) {
-      const user = userDocById.data() as AdminUserDoc
-      const enabled = user.lineNotifications?.enabled !== false
-      if (user.lineUserId && enabled) {
-        lineUserIds.add(user.lineUserId)
-        continue
+      // 1) Prefer direct lookup by id (admin doc id = user uid)
+      const userDocById = await db.collection("users").doc(adminId).get()
+      if (userDocById.exists) {
+        const user = userDocById.data() as AdminUserDoc
+        const enabled = user.lineNotifications?.enabled !== false
+        if (user.lineUserId && enabled) {
+          return user.lineUserId
+        }
       }
-    }
 
-    // 2) Fallback by email (admins collection usually has email, users keyed by uid)
-    if (adminData.email) {
+      // 2) Fallback by email (admins collection usually has email, users keyed by uid)
+      if (!adminData.email) return null
+
       const userSnap = await db
         .collection("users")
         .where("email", "==", adminData.email)
         .limit(1)
         .get()
 
-      if (!userSnap.empty) {
-        const user = userSnap.docs[0]!.data() as AdminUserDoc
-        const enabled = user.lineNotifications?.enabled !== false
-        if (user.lineUserId && enabled) {
-          lineUserIds.add(user.lineUserId)
-        }
-      }
-    }
-  }
+      if (userSnap.empty) return null
+
+      const user = userSnap.docs[0]!.data() as AdminUserDoc
+      const enabled = user.lineNotifications?.enabled !== false
+      return user.lineUserId && enabled ? user.lineUserId : null
+    })
+  )
+
+  resolvedIds.forEach((id) => {
+    if (id) lineUserIds.add(id)
+  })
 
   return Array.from(lineUserIds)
 }
@@ -97,6 +122,12 @@ export async function POST(request: NextRequest) {
 
     const decoded = await verifyIdToken(token, true)
     if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+    const clientIp = getClientIP(request)
+    const rateKey = `line:notify-admin:${decoded.uid}:${clientIp}`
+    const rate = await checkRateLimitScalable(rateKey, NOTIFY_ADMIN_LIMIT, NOTIFY_ADMIN_WINDOW_MS)
+    if (!rate.allowed) {
+      return ApiErrors.rateLimited("Too many admin notification requests. Please try again shortly.")
+    }
 
     // 2) Parse and validate body
     const body = await parseRequestBody<NotifyBody>(request)
@@ -104,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     const type = body.type as NotifyType
 
-    console.log(`[Admin Notify] Received notification request - Type: ${type}`)
+    debugLog(`[Admin Notify] Received notification request - Type: ${type}`)
 
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
@@ -115,11 +146,11 @@ export async function POST(request: NextRequest) {
     const adminLineIds = await getAdminLineUserIds()
     
     if (adminLineIds.length === 0) {
-      console.log("[Admin Notify] No admins with LINE linked, skipping notification")
+      debugLog("[Admin Notify] No admins with LINE linked, skipping notification")
       return successResponse({ success: true, message: "No admins to notify" })
     }
 
-    console.log(`[Admin Notify] Will notify ${adminLineIds.length} admin(s) for ${type}`)
+    debugLog(`[Admin Notify] Will notify ${adminLineIds.length} admin(s) for ${type}`)
 
     switch (type) {
       case "new_report":
@@ -133,7 +164,7 @@ export async function POST(request: NextRequest) {
           body.reporterEmail,
           baseUrl
         )
-        console.log("[Admin Notify] Report notification sent")
+        debugLog("[Admin Notify] Report notification sent")
         break
 
       case "new_support_ticket":
@@ -147,7 +178,7 @@ export async function POST(request: NextRequest) {
           body.userEmail,
           baseUrl
         )
-        console.log("[Admin Notify] Support ticket notification sent")
+        debugLog("[Admin Notify] Support ticket notification sent")
         break
 
       case "custom":
@@ -166,17 +197,17 @@ export async function POST(request: NextRequest) {
         await Promise.allSettled(
           adminLineIds.map((adminId) => sendPushMessage(adminId, [message]))
         )
-        console.log("[Admin Notify] Custom notification sent")
+        debugLog("[Admin Notify] Custom notification sent")
         break
 
       default:
-        console.log(`[Admin Notify] Unknown notification type: ${type}`)
+        debugLog(`[Admin Notify] Unknown notification type: ${type}`)
         return ApiErrors.badRequest("Unknown notification type")
     }
 
     return successResponse({ success: true, notifiedCount: adminLineIds.length })
   } catch (error) {
-    console.error("[Admin Notify] Error:", error)
-    return NextResponse.json({ success: false, error: String(error) }, { status: 500 })
+    errorLog("[Admin Notify] Error:", error)
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 })
   }
 }

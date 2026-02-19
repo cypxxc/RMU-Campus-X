@@ -1,10 +1,29 @@
 
 import { NextRequest, NextResponse } from "next/server"
-import { getAdminDb, verifyIdTokenDebug, extractBearerToken } from "@/lib/firebase-admin"
+import { getAdminDb } from "@/lib/firebase-admin"
+import { enforceAdminMutationRateLimit, verifyAdminAccess } from "@/lib/admin-api"
 import { FieldValue } from "firebase-admin/firestore"
 import { collectUserResources, executeCleanup, deleteUserAuth, recalculateUserRating } from "@/lib/services/admin/user-cleanup"
 
 export const runtime = 'nodejs'
+
+function maskEmail(email: unknown): string | null {
+  if (typeof email !== "string" || !email.includes("@")) return null
+  const [localPart, domain] = email.split("@")
+  if (!localPart || !domain) return null
+  return `${localPart.slice(0, 2)}***@${domain}`
+}
+
+function buildSafeUserSnapshot(raw: unknown) {
+  const data = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
+  return {
+    email: maskEmail(data.email),
+    displayName: typeof data.displayName === "string" ? data.displayName.slice(0, 120) : null,
+    status: typeof data.status === "string" ? data.status : null,
+    warningCount: Number.isFinite(Number(data.warningCount)) ? Number(data.warningCount) : 0,
+    isAdmin: data.isAdmin === true,
+  }
+}
 
 export async function DELETE(
   request: NextRequest,
@@ -18,31 +37,33 @@ export async function DELETE(
 
   try {
     // 1. Verify Admin Authentication
-    const token = extractBearerToken(request.headers.get("Authorization"))
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const { authorized, user, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+    if (!user?.uid || !user?.email) {
+      return NextResponse.json({ error: "Forbidden: Admin identity missing" }, { status: 403 })
     }
-    
-    // DEBUG: Use debug version to see error
-    const decodedToken = await verifyIdTokenDebug(token)
-    if (!decodedToken) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
+    const rateLimited = await enforceAdminMutationRateLimit(
+      request,
+      user.uid,
+      "hard-delete-user",
+      5,
+      10 * 60_000
+    )
+    if (rateLimited) return rateLimited
 
     const db = getAdminDb()
+    const isDev = process.env.NODE_ENV === "development"
 
-    // Check if requester is actually an admin
-    const adminDoc = await db.collection("admins").doc(decodedToken.uid).get()
-    if (!adminDoc.exists) {
-       return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 })
+    if (isDev) {
+      console.log("[HardDelete] Starting deletion")
     }
-
-    console.log(`[HardDelete] Starting deletion for user: ${userId}`)
 
     // 2. Collection Phase
     const { refsToDelete, cloudinaryPublicIds, userDoc, ratingRecalcUserIds } = await collectUserResources(userId)
 
-    console.log(`[HardDelete] Found ${refsToDelete.length} docs and ${cloudinaryPublicIds.length} images`)
+    if (isDev) {
+      console.log(`[HardDelete] Collected ${refsToDelete.length} docs and ${cloudinaryPublicIds.length} images`)
+    }
 
     // 3. Execution Phase
     await executeCleanup(refsToDelete, cloudinaryPublicIds)
@@ -62,15 +83,15 @@ export async function DELETE(
     try {
         const logEntry = {
             actionType: "hard_delete_user",
-            adminId: decodedToken.uid,
-            adminEmail: decodedToken.email || 'unknown',
+            adminId: user.uid,
+            adminEmail: user.email || 'unknown',
             targetType: "user",
             targetId: userId,
-            targetInfo: (userDoc.exists ? (userDoc.data() as any).email : userId),
+            targetInfo: userDoc.exists ? maskEmail((userDoc.data() as Record<string, unknown>)?.email) ?? userId : userId,
             description: "Hard delete of user and all associated data",
             status: 'success',
             reason: 'Admin requested hard delete',
-            beforeState: userDoc.exists ? userDoc.data() : { note: 'User not found in DB' },
+            beforeState: userDoc.exists ? buildSafeUserSnapshot(userDoc.data()) : { note: "User not found in DB" },
             afterState: null, // Deleted
             metadata: { 
                 deletedDocsCount: refsToDelete.length, 
@@ -87,8 +108,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, deletedDocs: refsToDelete.length, deletedImages: cloudinaryPublicIds.length })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[HardDelete] Fatal Error:", error)
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }

@@ -39,6 +39,33 @@ type FirestoreQueryResult = {
   data: FirebaseFirestore.DocumentData
 }
 
+const IS_DEV = process.env.NODE_ENV === "development"
+
+function debugLog(...args: unknown[]) {
+  if (IS_DEV) {
+    console.log(...args)
+  }
+}
+
+function warnLog(...args: unknown[]) {
+  if (IS_DEV) {
+    console.warn(...args)
+    return
+  }
+  if (args.length > 0 && typeof args[0] === "string") {
+    console.warn(args[0])
+  }
+}
+
+function errorLog(message: string, error?: unknown) {
+  if (IS_DEV && error !== undefined) {
+    console.error(message, error)
+    return
+  }
+  const detail = error instanceof Error ? error.message : undefined
+  console.error(detail ? `${message} ${detail}` : message)
+}
+
 async function firestoreQueryOne(
   collectionPath: string,
   field: string,
@@ -59,9 +86,9 @@ async function firestoreQueryOne(
 
 async function firestoreUpdate(documentPath: string, fields: Record<string, unknown>) {
   const db = getAdminDb()
-  console.log("[LINE Webhook] Updating:", documentPath, "with fields:", Object.keys(fields))
+  debugLog("[LINE Webhook] Updating:", documentPath, "with fields:", Object.keys(fields))
   await db.doc(documentPath).set(fields, { merge: true })
-  console.log("[LINE Webhook] Update success!")
+  debugLog("[LINE Webhook] Update success!")
 }
 
 // ============ LINE Chat Relay (แชทระหว่างผู้โพส-ผู้รับผ่านบอท) ============
@@ -476,54 +503,54 @@ async function confirmExchangeFromLine(
 }
 
 export async function POST(request: NextRequest) {
-  console.log("[LINE Webhook] Received request")
+  debugLog("[LINE Webhook] Received request")
   
   try {
     const body = await request.text()
     const signature = request.headers.get("x-line-signature")
 
-    console.log("[LINE Webhook] Signature present:", !!signature)
-    console.log("[LINE Webhook] Body length:", body.length)
+    debugLog("[LINE Webhook] Signature present:", !!signature)
+    debugLog("[LINE Webhook] Body length:", body.length)
 
     if (!signature) {
-      console.error("[LINE Webhook] Missing signature header")
+      errorLog("[LINE Webhook] Missing signature header")
       return NextResponse.json({ error: "Missing signature" }, { status: 401 })
     }
 
     const isValid = await verifySignature(body, signature)
-    console.log("[LINE Webhook] Signature verification result:", isValid)
+    debugLog("[LINE Webhook] Signature verification result:", isValid)
     
     if (!isValid) {
-      console.error("[LINE Webhook] Invalid signature - check LINE_CHANNEL_SECRET env var")
+      errorLog("[LINE Webhook] Invalid signature - check LINE_CHANNEL_SECRET env var")
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
 
     const data: LineWebhookBody = JSON.parse(body)
-    console.log("[LINE Webhook] Events count:", data.events.length)
+    debugLog("[LINE Webhook] Events count:", data.events.length)
 
     for (const event of data.events) {
-      console.log("[LINE Webhook] Processing event:", event.type, "from:", event.source?.userId?.substring(0, 10) + "...")
+      debugLog("[LINE Webhook] Processing event:", event.type, "from:", event.source?.userId?.substring(0, 10) + "...")
       
       if (event.type === "follow") {
-        console.log("[LINE Webhook] Handling follow event")
+        debugLog("[LINE Webhook] Handling follow event")
         const result = await sendReplyMessage(event.replyToken, [
           {
             type: "text",
             text: buildFollowWelcomeText(),
           },
         ])
-        console.log("[LINE Webhook] Follow reply result:", result)
+        debugLog("[LINE Webhook] Follow reply result:", result)
       } else if (event.type === "message" && event.message?.type === "text") {
-        console.log("[LINE Webhook] Handling text message:", event.message.text?.substring(0, 30))
+        debugLog("[LINE Webhook] Handling text message:", event.message.text?.substring(0, 30))
         await handleTextMessage(event)
       }
     }
 
-    console.log("[LINE Webhook] Completed successfully")
+    debugLog("[LINE Webhook] Completed successfully")
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[LINE Webhook] Error:", error)
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    errorLog("[LINE Webhook] Error:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -541,7 +568,7 @@ async function handleTextMessage(event: LineEvent) {
       (compact.length <= 20 && compact.includes("แชท") && !compact.includes("@"))
     if (wantChat) {
       try {
-        console.log("[LINE Webhook] Chat command from:", lineUserId?.slice(0, 8), "text length:", text.length)
+        debugLog("[LINE Webhook] Chat command from:", lineUserId?.slice(0, 8), "text length:", text.length)
         const userId = await getUserIdByLineUserId(lineUserId)
         if (!userId) {
           await sendReplyMessage(event.replyToken, [
@@ -573,15 +600,15 @@ async function handleTextMessage(event: LineEvent) {
             text: `💬 เลือกรายการที่ต้องการแชท\n\n${listText}\n\nพิมพ์เลข 1-${exchanges.length} เพื่อเริ่มแชท`,
           },
         ])
-        console.log("[LINE Webhook] Chat list sent, count:", exchanges.length)
+        debugLog("[LINE Webhook] Chat list sent, count:", exchanges.length)
       } catch (chatErr) {
-        console.error("[LINE Webhook] Chat command error:", chatErr)
+        errorLog("[LINE Webhook] Chat command error:", chatErr)
         try {
           await sendReplyMessage(event.replyToken, [
             { type: "text", text: "❌ โหลดรายการแชทไม่สำเร็จ กรุณาลองใหม่หรือพิมพ์ \"แชท\" อีกครั้ง" },
           ])
         } catch (replyErr) {
-          console.error("[LINE Webhook] Failed to send error reply:", replyErr)
+          errorLog("[LINE Webhook] Failed to send error reply:", replyErr)
         }
       }
       return
@@ -644,7 +671,7 @@ async function handleTextMessage(event: LineEvent) {
       try {
         result = await firestoreQueryOne("users", "email", email)
       } catch (queryError) {
-        console.error("[LINE Webhook] Query user by email error:", queryError)
+        errorLog("[LINE Webhook] Query user by email error:", queryError)
         await sendReplyMessage(event.replyToken, [
           { type: "text", text: "❌ ระบบค้นหาบัญชีมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้ง" },
         ])
@@ -710,7 +737,7 @@ async function handleTextMessage(event: LineEvent) {
           },
         })
       } catch (updateError) {
-        console.error("[LINE Webhook] Link update error:", updateError)
+        errorLog("[LINE Webhook] Link update error:", updateError)
         await sendReplyMessage(event.replyToken, [
           { type: "text", text: "❌ ระบบเชื่อมบัญชีขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง" },
         ])
@@ -719,7 +746,7 @@ async function handleTextMessage(event: LineEvent) {
 
       const richMenuResult = await applyDefaultRichMenuToUser(lineUserId)
       if (!richMenuResult.success && !richMenuResult.skipped) {
-        console.warn("[LINE Webhook] Failed to apply default rich menu:", richMenuResult.error)
+        warnLog("[LINE Webhook] Failed to apply default rich menu:", richMenuResult.error)
       }
 
       await clearChatSession(lineUserId)
@@ -780,7 +807,7 @@ async function handleTextMessage(event: LineEvent) {
           ])
         }
       } catch (statusError) {
-        console.error("[LINE Webhook] Status error:", statusError)
+        errorLog("[LINE Webhook] Status error:", statusError)
         await sendReplyMessage(event.replyToken, [
           { type: "text", text: "❌ ตรวจสอบสถานะไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
         ])
@@ -814,7 +841,7 @@ async function handleTextMessage(event: LineEvent) {
 
           const removeRichMenuResult = await removeRichMenuFromUser(lineUserId)
           if (!removeRichMenuResult.success) {
-            console.warn("[LINE Webhook] Failed to remove user rich menu:", removeRichMenuResult.error)
+            warnLog("[LINE Webhook] Failed to remove user rich menu:", removeRichMenuResult.error)
           }
 
           await clearChatSession(lineUserId)
@@ -834,7 +861,7 @@ async function handleTextMessage(event: LineEvent) {
           ])
         }
       } catch (unlinkError) {
-        console.error("[LINE Webhook] Unlink error:", unlinkError)
+        errorLog("[LINE Webhook] Unlink error:", unlinkError)
         await sendReplyMessage(event.replyToken, [
           { type: "text", text: "❌ ยกเลิกการเชื่อมต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
         ])
@@ -938,7 +965,7 @@ async function handleTextMessage(event: LineEvent) {
           ])
           return
         }
-        console.error("[LINE Webhook] Confirm exchange error:", confirmError)
+        errorLog("[LINE Webhook] Confirm exchange error:", confirmError)
         await sendReplyMessage(event.replyToken, [
           { type: "text", text: "❌ ยืนยันการแลกเปลี่ยนไม่สำเร็จ กรุณาลองอีกครั้ง" },
         ])
@@ -1069,7 +1096,7 @@ async function handleTextMessage(event: LineEvent) {
       },
     ])
   } catch (error) {
-    console.error("[LINE Webhook] handleTextMessage error:", error)
+    errorLog("[LINE Webhook] handleTextMessage error:", error)
     await sendReplyMessage(event.replyToken, [
       { type: "text", text: "เกิดข้อผิดพลาดชั่วคราว กรุณาลองใหม่อีกครั้ง หรือพิมพ์ \"คู่มือ\"" },
     ])

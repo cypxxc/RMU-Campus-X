@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { FieldValue } from "firebase-admin/firestore"
 import { getAdminDb } from "@/lib/firebase-admin"
-import { verifyAdminAccess } from "@/lib/admin-api"
+import { enforceAdminMutationRateLimit, verifyAdminAccess } from "@/lib/admin-api"
 
 const DEFAULT_REASON = "Removed warning from admin user detail"
 
@@ -23,8 +23,14 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; warningId: string }> }
 ) {
+  const isDev = process.env.NODE_ENV === "development"
   const { authorized, user, error } = await verifyAdminAccess(req)
   if (!authorized) return error!
+  if (!user?.uid) {
+    return NextResponse.json({ error: "Admin identity missing" }, { status: 403 })
+  }
+  const rateLimited = await enforceAdminMutationRateLimit(req, user.uid, "delete-warning", 30, 60_000)
+  if (rateLimited) return rateLimited
 
   try {
     const { id: userId, warningId } = await params
@@ -113,7 +119,11 @@ export async function DELETE(
       userStatus: result.userStatus,
     })
   } catch (err) {
-    console.error("[API] Delete Warning Error:", err)
+    if (isDev) {
+      console.error("[API] Delete Warning Error:", err)
+    } else {
+      console.error("[API] Delete Warning Error")
+    }
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }

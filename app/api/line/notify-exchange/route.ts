@@ -13,6 +13,25 @@ const BASE_URL =
   process.env.NEXT_PUBLIC_BASE_URL ||
   "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
+const IS_DEV = process.env.NODE_ENV === "development"
+
+function debugLog(message: string, context?: unknown) {
+  if (!IS_DEV) return
+  if (context === undefined) {
+    console.log(message)
+    return
+  }
+  console.log(message, context)
+}
+
+function errorLog(message: string, error?: unknown) {
+  if (IS_DEV && error !== undefined) {
+    console.error(message, error)
+    return
+  }
+  console.error(message)
+}
+
 const notifyExchangeBodySchema = z
   .object({
     exchangeId: z.string().min(1),
@@ -80,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     const ownerSnap = await db.collection("users").doc(ownerId).get()
     if (!ownerSnap.exists) {
-      console.log("[LINE Notify Exchange] Owner not found")
+      debugLog("[LINE Notify Exchange] Owner not found")
       return NextResponse.json({ sent: false, reason: "owner not found" })
     }
 
@@ -97,14 +116,14 @@ export async function POST(request: NextRequest) {
     const notificationsEnabled = owner?.lineNotifications?.enabled !== false
     const exchangeRequestEnabled = owner?.lineNotifications?.exchangeRequest !== false
 
-    console.log("[LINE Notify Exchange] Owner LINE status:", {
+    debugLog("[LINE Notify Exchange] Owner LINE status:", {
       hasLineId: !!lineUserId,
       notificationsEnabled,
       exchangeRequestEnabled,
     })
 
     if (!lineUserId) {
-      console.log("[LINE Notify Exchange] Owner has no LINE linked")
+      debugLog("[LINE Notify Exchange] Owner has no LINE linked")
       return NextResponse.json({ sent: false, reason: "no LINE linked" })
     }
 
@@ -146,11 +165,11 @@ export async function POST(request: NextRequest) {
       itemImage
     )
 
-    console.log("[LINE Notify Exchange] Sent successfully!")
+    debugLog("[LINE Notify Exchange] Sent successfully!")
     return NextResponse.json({ sent: true })
   } catch (error) {
-    console.error("[LINE Notify Exchange] Error:", error)
+    errorLog("[LINE Notify Exchange] Error:", error)
     // Notification failure should not break the main user flow.
-    return NextResponse.json({ sent: false, error: String(error) })
+    return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
   }
 }

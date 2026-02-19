@@ -79,11 +79,11 @@ service cloud.firestore {
                 (bio is string && bio.size() <= 300));
       }
 
-      // ✅ Student-only system: allow only eligible students/admin to read
-      // - get: any eligible student/admin; OR own doc for RMU+verified (so new users can check profile exists before create)
-      // - list: admin only (prevent directory scrape)
-      allow get: if true;
-      allow list: if isAdmin() || canUseApp();
+      // ✅ Student-only system: allow only eligible students/admin to read.
+      // - get: eligible student/admin
+      // - list: admin only (prevent directory scraping)
+      allow get: if canUseApp();
+      allow list: if isAdmin();
 
       allow create: if isOwner(userId)
         && hasRMUEmail()
@@ -125,7 +125,7 @@ service cloud.firestore {
             && (imagePublicIds == null || (imagePublicIds is list && imagePublicIds.size() <= 5));
       }
 
-      allow get: if true;
+      allow get: if canUseApp();
       allow list: if canUseApp();
 
       allow create: if canUseApp()
@@ -169,9 +169,9 @@ service cloud.firestore {
             || (oldStatus == newStatus); // allow no-op
       }
 
-      // ✅ get: participants or admin; list: any canUseApp (query filtered by requesterId/ownerId)
+      // ✅ get/list: participants or admin only
       allow get: if canUseApp() && (isParticipantExistingDoc() || isAdmin());
-      allow list: if canUseApp();
+      allow list: if canUseApp() && (isParticipantExistingDoc() || isAdmin());
 
       // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
@@ -206,18 +206,36 @@ service cloud.firestore {
 
       function isMessageParticipant() {
         let exPath = /databases/$(database)/documents/exchanges/$(resource.data.exchangeId);
-        return exists(exPath) && (
-          get(exPath).data.requesterId == request.auth.uid
-          || get(exPath).data.ownerId == request.auth.uid
-        );
+        let ex = exists(exPath) ? get(exPath).data : null;
+        return ex != null
+          && (ex.requesterId == request.auth.uid || ex.ownerId == request.auth.uid);
       }
 
       function canSendMessage() {
         let exPath = /databases/$(database)/documents/exchanges/$(request.resource.data.exchangeId);
-        return exists(exPath) && (
-          get(exPath).data.requesterId == request.auth.uid
-          || get(exPath).data.ownerId == request.auth.uid
-        );
+        let ex = exists(exPath) ? get(exPath).data : null;
+        return ex != null
+          && (ex.requesterId == request.auth.uid || ex.ownerId == request.auth.uid);
+      }
+
+      function userHasBlocked(blockerId, targetId) {
+        let userPath = /databases/$(database)/documents/users/$(blockerId);
+        let blockedIds = exists(userPath) ? get(userPath).data.get('blockedUserIds', []) : [];
+        return blockedIds is list && blockedIds.hasAny([targetId]);
+      }
+
+      function isExistingChatBlocked() {
+        let exPath = /databases/$(database)/documents/exchanges/$(resource.data.exchangeId);
+        let ex = exists(exPath) ? get(exPath).data : null;
+        return ex != null
+          && (userHasBlocked(ex.ownerId, ex.requesterId) || userHasBlocked(ex.requesterId, ex.ownerId));
+      }
+
+      function isIncomingChatBlocked() {
+        let exPath = /databases/$(database)/documents/exchanges/$(request.resource.data.exchangeId);
+        let ex = exists(exPath) ? get(exPath).data : null;
+        return ex != null
+          && (userHasBlocked(ex.ownerId, ex.requesterId) || userHasBlocked(ex.requesterId, ex.ownerId));
       }
 
       // ผู้รับอัปเดตเฉพาะ readAt ได้; ผู้ส่งอัปเดตเฉพาะ message, updatedAt, imageUrl, imageType ได้
@@ -227,27 +245,41 @@ service cloud.firestore {
           || (request.auth.uid == resource.data.senderId && keys.hasOnly(['message', 'updatedAt', 'imageUrl', 'imageType']));
       }
 
-      allow get, list: if canUseApp() && (isMessageParticipant() || isAdmin());
+      allow get, list: if canUseApp() && ((isMessageParticipant() && !isExistingChatBlocked()) || isAdmin());
 
       allow create: if canUseApp()
         && isActiveUser()
         && request.resource.data.senderId == request.auth.uid
         && request.resource.data.senderEmail == request.auth.token.email
         && request.resource.data.keys().hasAll(['createdAt'])
-        && canSendMessage();
+        && canSendMessage()
+        && !isIncomingChatBlocked();
 
-      allow update: if canUseApp() && isActiveUser() && isMessageParticipant() && allowedMessageUpdateKeys();
+      allow update: if canUseApp() && isActiveUser() && isMessageParticipant() && !isExistingChatBlocked() && allowedMessageUpdateKeys();
       allow delete: if isAdmin() || (canUseApp() && isActiveUser() && resource.data.senderId == request.auth.uid);
     }
 
     // กำลังพิมพ์ (typing indicator) ต่อ exchange
     match /chatTyping/{exchangeId} {
       function isExchangeParticipant() {
-        let ex = get(/databases/$(database)/documents/exchanges/$(exchangeId));
-        return ex.data.ownerId == request.auth.uid || ex.data.requesterId == request.auth.uid;
+        let exPath = /databases/$(database)/documents/exchanges/$(exchangeId);
+        let ex = exists(exPath) ? get(exPath).data : null;
+        return ex != null
+          && (ex.ownerId == request.auth.uid || ex.requesterId == request.auth.uid);
       }
-      allow get, create, update: if canUseApp() && isExchangeParticipant();
-      allow delete: if canUseApp() && isExchangeParticipant();
+      function userHasBlocked(blockerId, targetId) {
+        let userPath = /databases/$(database)/documents/users/$(blockerId);
+        let blockedIds = exists(userPath) ? get(userPath).data.get('blockedUserIds', []) : [];
+        return blockedIds is list && blockedIds.hasAny([targetId]);
+      }
+      function isExchangeBlocked() {
+        let exPath = /databases/$(database)/documents/exchanges/$(exchangeId);
+        let ex = exists(exPath) ? get(exPath).data : null;
+        return ex != null
+          && (userHasBlocked(ex.ownerId, ex.requesterId) || userHasBlocked(ex.requesterId, ex.ownerId));
+      }
+      allow get, create, update: if canUseApp() && isExchangeParticipant() && !isExchangeBlocked();
+      allow delete: if canUseApp() && isExchangeParticipant() && !isExchangeBlocked();
     }
 
     // ============================================================================
@@ -255,7 +287,7 @@ service cloud.firestore {
     // ============================================================================
     match /reports/{reportId} {
       allow get: if canUseApp() && (resource.data.reporterId == request.auth.uid || isAdmin());
-      allow list: if canUseApp(); // user can query own reports (where reporterId == auth.uid)
+      allow list: if canUseApp() && (resource.data.reporterId == request.auth.uid || isAdmin());
 
       // createdAt: allow serverTimestamp() (sentinel != request.time in rules)
       allow create: if canUseApp()
@@ -274,7 +306,7 @@ service cloud.firestore {
     // ============================================================================
     match /support_tickets/{ticketId} {
       allow get: if canUseApp() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if canUseApp(); // user can query own tickets (where userId == auth.uid)
+      allow list: if canUseApp() && (resource.data.userId == request.auth.uid || isAdmin());
 
       allow create: if canUseApp()
         && request.resource.data.userId == request.auth.uid
@@ -298,7 +330,7 @@ service cloud.firestore {
     // ============================================================================
     match /notifications/{notificationId} {
       allow get: if canUseApp() && resource.data.userId == request.auth.uid;
-      allow list: if canUseApp(); // user can query own notifications (where userId == auth.uid)
+      allow list: if canUseApp() && resource.data.userId == request.auth.uid;
 
       allow create: if canUseApp()
         && request.resource.data.userId == request.auth.uid;
@@ -350,7 +382,7 @@ service cloud.firestore {
       allow get, update, delete: if canUseApp()
         && resource.data.userId == request.auth.uid;
 
-      allow list: if canUseApp(); // user can query own drafts (where userId == auth.uid)
+      allow list: if canUseApp() && resource.data.userId == request.auth.uid;
     }
 
     // ============================================================================
@@ -369,7 +401,7 @@ service cloud.firestore {
 
     match /userWarnings/{warningId} {
       allow get: if canUseApp() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if canUseApp(); // user can query own warnings (where userId == auth.uid)
+      allow list: if canUseApp() && (resource.data.userId == request.auth.uid || isAdmin());
       allow write: if false;
     }
 

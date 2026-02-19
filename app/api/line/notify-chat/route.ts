@@ -13,6 +13,25 @@ const BASE_URL =
   process.env.NEXT_PUBLIC_BASE_URL ||
   "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
+const IS_DEV = process.env.NODE_ENV === "development"
+
+function debugLog(message: string, context?: unknown) {
+  if (!IS_DEV) return
+  if (context === undefined) {
+    console.log(message)
+    return
+  }
+  console.log(message, context)
+}
+
+function errorLog(message: string, error?: unknown) {
+  if (IS_DEV && error !== undefined) {
+    console.error(message, error)
+    return
+  }
+  console.error(message)
+}
+
 const exchangeStatusSchema = z.enum([
   "pending",
   "accepted",
@@ -91,7 +110,10 @@ export async function POST(request: NextRequest) {
     const body = parsed.data
     const recipientId = body.recipientId || body.recipientUserId
     const notificationType = body.type || "chat"
-    console.log("[LINE Notify Chat] Body:", body)
+    debugLog("[LINE Notify Chat] Request accepted", {
+      type: notificationType,
+      exchangeId: body.exchangeId,
+    })
 
     const db = getAdminDb()
     const exchangeSnap = await db.collection("exchanges").doc(body.exchangeId).get()
@@ -125,7 +147,7 @@ export async function POST(request: NextRequest) {
 
     const userSnap = await db.collection("users").doc(recipientId).get()
     if (!userSnap.exists) {
-      console.log("[LINE Notify Chat] User not found")
+      debugLog("[LINE Notify Chat] User not found")
       return NextResponse.json({ sent: false, reason: "user not found" })
     }
 
@@ -143,14 +165,14 @@ export async function POST(request: NextRequest) {
     const lineUserId = userData?.lineUserId
     const notificationsEnabled = userData?.lineNotifications?.enabled !== false
 
-    console.log("[LINE Notify Chat] User LINE status:", {
+    debugLog("[LINE Notify Chat] User LINE status:", {
       hasLineId: !!lineUserId,
       notificationsEnabled,
       type: notificationType,
     })
 
     if (!lineUserId) {
-      console.log("[LINE Notify Chat] User has no LINE linked")
+      debugLog("[LINE Notify Chat] User has no LINE linked")
       return NextResponse.json({ sent: false, reason: "no LINE linked" })
     }
 
@@ -191,10 +213,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log("[LINE Notify Chat] Sent successfully!")
+    debugLog("[LINE Notify Chat] Sent successfully!")
     return NextResponse.json({ sent: true })
   } catch (error) {
-    console.error("[LINE Notify Chat] Error:", error)
-    return NextResponse.json({ sent: false, error: String(error) })
+    errorLog("[LINE Notify Chat] Error:", error)
+    return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
   }
 }

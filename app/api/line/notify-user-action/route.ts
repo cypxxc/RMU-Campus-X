@@ -10,7 +10,7 @@ import {
   notifyAccountStatusChange,
   notifyItemEditedByAdmin,
 } from "@/lib/line"
-import { verifyAdminAccess } from "@/lib/admin-api"
+import { enforceAdminMutationRateLimit, verifyAdminAccess } from "@/lib/admin-api"
 import { getAdminDb } from "@/lib/firebase-admin"
 
 interface NotifyUserActionBody {
@@ -30,14 +30,41 @@ interface NotifyUserActionBody {
   itemTitle?: string
 }
 
+const IS_DEV = process.env.NODE_ENV === "development"
+
+function debugLog(message: string, context?: unknown) {
+  if (!IS_DEV) return
+  if (context === undefined) {
+    console.log(message)
+    return
+  }
+  console.log(message, context)
+}
+
+function errorLog(message: string, error?: unknown) {
+  if (IS_DEV && error !== undefined) {
+    console.error(message, error)
+    return
+  }
+  console.error(message)
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verify Admin Access
-    const { authorized, error } = await verifyAdminAccess(request)
+    const { authorized, user, error } = await verifyAdminAccess(request)
     if (!authorized) return error!
+    if (!user?.uid) {
+      return NextResponse.json({ error: "Admin identity missing" }, { status: 403 })
+    }
+    const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "notify-user-action", 30, 60_000)
+    if (rateLimited) return rateLimited
 
     const body: NotifyUserActionBody = await request.json()
-    console.log("[LINE Notify User Action] Body:", body)
+    debugLog("[LINE Notify User Action] Request accepted", {
+      action: body.action,
+      userId: body.userId,
+    })
 
     const { userId, action } = body
 
@@ -50,7 +77,7 @@ export async function POST(request: NextRequest) {
     const userSnap = await db.collection("users").doc(userId).get()
 
     if (!userSnap.exists) {
-      console.log("[LINE Notify User Action] User not found")
+      debugLog("[LINE Notify User Action] User not found")
       return NextResponse.json({ sent: false, reason: "user not found" })
     }
 
@@ -60,15 +87,15 @@ export async function POST(request: NextRequest) {
     const notificationsEnabled = userData?.lineNotifications?.enabled ?? true
     const accountStatusEnabled = userData?.lineNotifications?.accountStatus ?? true
 
-    console.log("[LINE Notify User Action] User LINE status:", { 
-      hasLineId: !!lineUserId, 
+    debugLog("[LINE Notify User Action] User LINE status:", {
+      hasLineId: !!lineUserId,
       notificationsEnabled,
       accountStatusEnabled,
-      action 
+      action,
     })
 
     if (!lineUserId) {
-      console.log("[LINE Notify User Action] User has no LINE linked")
+      debugLog("[LINE Notify User Action] User has no LINE linked")
       return NextResponse.json({ sent: false, reason: "no LINE linked" })
     }
     
@@ -116,10 +143,10 @@ export async function POST(request: NextRequest) {
         break
     }
 
-    console.log("[LINE Notify User Action] Sent successfully!")
+    debugLog("[LINE Notify User Action] Sent successfully!")
     return NextResponse.json({ sent: true })
   } catch (error) {
-    console.error("[LINE Notify User Action] Error:", error)
-    return NextResponse.json({ sent: false, error: String(error) })
+    errorLog("[LINE Notify User Action] Error:", error)
+    return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
   }
 }

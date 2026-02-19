@@ -14,6 +14,25 @@ const BASE_URL =
   process.env.NEXT_PUBLIC_BASE_URL ||
   "https://rmu-app-3-1-2569-wwn2.vercel.app"
 
+const IS_DEV = process.env.NODE_ENV === "development"
+
+function debugLog(message: string, context?: unknown) {
+  if (!IS_DEV) return
+  if (context === undefined) {
+    console.log(message)
+    return
+  }
+  console.log(message, context)
+}
+
+function errorLog(message: string, error?: unknown) {
+  if (IS_DEV && error !== undefined) {
+    console.error(message, error)
+    return
+  }
+  console.error(message)
+}
+
 const notifyItemBodySchema = z
   .object({
     userId: z.string().min(1),
@@ -55,7 +74,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { userId, itemTitle, itemId, action } = parsed.data
-    console.log("[LINE Notify Item] Body:", parsed.data)
+    debugLog("[LINE Notify Item] Request accepted", {
+      action,
+      userId,
+      itemId,
+    })
 
     // Only allow self notification, unless admin.
     if (decoded.uid !== userId) {
@@ -72,7 +95,7 @@ export async function POST(request: NextRequest) {
     const userSnap = await db.collection("users").doc(userId).get()
 
     if (!userSnap.exists) {
-      console.log("[LINE Notify Item] User not found")
+      debugLog("[LINE Notify Item] User not found")
       return NextResponse.json({ sent: false, reason: "user not found" })
     }
 
@@ -89,14 +112,14 @@ export async function POST(request: NextRequest) {
     const notificationsEnabled = userData?.lineNotifications?.enabled !== false
     const itemNotificationsEnabled = userData?.lineNotifications?.itemPosted !== false
 
-    console.log("[LINE Notify Item] User LINE status:", {
+    debugLog("[LINE Notify Item] User LINE status:", {
       hasLineId: !!lineUserId,
       notificationsEnabled,
       itemNotificationsEnabled,
     })
 
     if (!lineUserId) {
-      console.log("[LINE Notify Item] User has no LINE linked")
+      debugLog("[LINE Notify Item] User has no LINE linked")
       return NextResponse.json({ sent: false, reason: "no LINE linked" })
     }
 
@@ -119,10 +142,10 @@ export async function POST(request: NextRequest) {
         break
     }
 
-    console.log("[LINE Notify Item] Sent successfully!")
+    debugLog("[LINE Notify Item] Sent successfully!")
     return NextResponse.json({ sent: true })
   } catch (error) {
-    console.error("[LINE Notify Item] Error:", error)
-    return NextResponse.json({ sent: false, error: String(error) })
+    errorLog("[LINE Notify Item] Error:", error)
+    return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
   }
 }

@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb } from "@/lib/firebase-admin"
+import { enforceAdminMutationRateLimit, verifyAdminAccess } from "@/lib/admin-api"
 
 export const dynamic = "force-dynamic"
 
@@ -27,11 +28,39 @@ interface ReindexResult {
   }
 }
 
+async function processItemsInChunks(
+  items: FirebaseFirestore.QueryDocumentSnapshot[],
+  batchSize: number,
+  onItem: (itemDoc: FirebaseFirestore.QueryDocumentSnapshot) => Promise<void>,
+  onError: (itemDoc: FirebaseFirestore.QueryDocumentSnapshot, error: unknown) => void
+) {
+  for (let i = 0; i < items.length; i += batchSize) {
+    const chunk = items.slice(i, i + batchSize)
+    const results = await Promise.allSettled(chunk.map((itemDoc) => onItem(itemDoc)))
+
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        onError(chunk[index]!, result.reason)
+      }
+    })
+  }
+}
+
 export async function POST(request: NextRequest) {
+  const { authorized, user, error } = await verifyAdminAccess(request)
+  if (!authorized) return error!
+  if (!user?.uid) {
+    return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
+  }
+
+  const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "reindex-items", 6, 60_000)
+  if (rateLimited) return rateLimited
+
   try {
     const startTime = Date.now()
     const body: ReindexRequest = await request.json()
     const db = getAdminDb()
+    const batchSize = Math.min(Math.max(body.batchSize ?? 100, 1), 500)
 
     if (!body.operation) {
       return NextResponse.json(
@@ -44,16 +73,28 @@ export async function POST(request: NextRequest) {
 
     switch (body.operation) {
       case "all":
-        result = await reindexAllItems(db, body.batchSize || 100)
+        result = await reindexAllItems(db, batchSize)
         break
       case "by-category":
-        result = await reindexByCategory(db, body.categoryId!, body.batchSize || 100)
+        if (!body.categoryId) {
+          return NextResponse.json(
+            { success: false, error: "categoryId is required for by-category operation" },
+            { status: 400 }
+          )
+        }
+        result = await reindexByCategory(db, body.categoryId, batchSize)
         break
       case "by-user":
-        result = await reindexByUser(db, body.userId!, body.batchSize || 100)
+        if (!body.userId) {
+          return NextResponse.json(
+            { success: false, error: "userId is required for by-user operation" },
+            { status: 400 }
+          )
+        }
+        result = await reindexByUser(db, body.userId, batchSize)
         break
       case "missing-search":
-        result = await reindexMissingSearchData(db, body.batchSize || 100)
+        result = await reindexMissingSearchData(db, batchSize)
         break
       default:
         return NextResponse.json(
@@ -93,27 +134,26 @@ async function reindexAllItems(
   const itemsSnapshot = await db.collection("items").get()
   const items = itemsSnapshot.docs
 
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize)
-    
-    for (const itemDoc of batch) {
-      try {
-        const data = itemDoc.data()
-        const updateData = generateSearchIndex(data)
-        
-        // Track categories
-        const category = data.category || "other"
-        categories[category] = (categories[category] || 0) + 1
+  await processItemsInChunks(
+    items,
+    batchSize,
+    async (itemDoc) => {
+      processed++
+      const data = itemDoc.data()
+      const updateData = generateSearchIndex(data)
 
-        await itemDoc.ref.update(updateData)
-        processed++
-        updated++
-      } catch (error) {
-        console.error(`Error reindexing item ${itemDoc.id}:`, error)
-        errors++
-      }
+      // Track categories
+      const category = data.category || "other"
+      categories[category] = (categories[category] || 0) + 1
+
+      await itemDoc.ref.update(updateData)
+      updated++
+    },
+    (itemDoc, error) => {
+      console.error(`Error reindexing item ${itemDoc.id}:`, error)
+      errors++
     }
-  }
+  )
 
   return {
     operation: "all",
@@ -141,23 +181,21 @@ async function reindexByCategory(
 
   const items = itemsSnapshot.docs
 
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize)
-    
-    for (const itemDoc of batch) {
-      try {
-        const data = itemDoc.data()
-        const updateData = generateSearchIndex(data)
-        
-        await itemDoc.ref.update(updateData)
-        processed++
-        updated++
-      } catch (error) {
-        console.error(`Error reindexing item ${itemDoc.id}:`, error)
-        errors++
-      }
+  await processItemsInChunks(
+    items,
+    batchSize,
+    async (itemDoc) => {
+      processed++
+      const data = itemDoc.data()
+      const updateData = generateSearchIndex(data)
+      await itemDoc.ref.update(updateData)
+      updated++
+    },
+    (itemDoc, error) => {
+      console.error(`Error reindexing item ${itemDoc.id}:`, error)
+      errors++
     }
-  }
+  )
 
   return {
     operation: "by-category",
@@ -184,23 +222,21 @@ async function reindexByUser(
 
   const items = itemsSnapshot.docs
 
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize)
-    
-    for (const itemDoc of batch) {
-      try {
-        const data = itemDoc.data()
-        const updateData = generateSearchIndex(data)
-        
-        await itemDoc.ref.update(updateData)
-        processed++
-        updated++
-      } catch (error) {
-        console.error(`Error reindexing item ${itemDoc.id}:`, error)
-        errors++
-      }
+  await processItemsInChunks(
+    items,
+    batchSize,
+    async (itemDoc) => {
+      processed++
+      const data = itemDoc.data()
+      const updateData = generateSearchIndex(data)
+      await itemDoc.ref.update(updateData)
+      updated++
+    },
+    (itemDoc, error) => {
+      console.error(`Error reindexing item ${itemDoc.id}:`, error)
+      errors++
     }
-  }
+  )
 
   return {
     operation: "by-user",
@@ -227,23 +263,21 @@ async function reindexMissingSearchData(
 
   const items = itemsSnapshot.docs
 
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize)
-    
-    for (const itemDoc of batch) {
-      try {
-        const data = itemDoc.data()
-        const updateData = generateSearchIndex(data)
-        
-        await itemDoc.ref.update(updateData)
-        processed++
-        updated++
-      } catch (error) {
-        console.error(`Error reindexing item ${itemDoc.id}:`, error)
-        errors++
-      }
+  await processItemsInChunks(
+    items,
+    batchSize,
+    async (itemDoc) => {
+      processed++
+      const data = itemDoc.data()
+      const updateData = generateSearchIndex(data)
+      await itemDoc.ref.update(updateData)
+      updated++
+    },
+    (itemDoc, error) => {
+      console.error(`Error reindexing item ${itemDoc.id}:`, error)
+      errors++
     }
-  }
+  )
 
   return {
     operation: "missing-search",
