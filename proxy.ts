@@ -13,17 +13,17 @@ function generateRequestId(): string {
 }
 
 /**
- * Next.js Middleware for rate limiting API requests
+ * Next.js Proxy for rate limiting API requests
  * Uses Upstash Redis for distributed rate limiting (persists across deploys)
  * Falls back to in-memory if Upstash env vars are not configured
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   
   // Generate unique request ID for tracing
   const requestId = request.headers.get('X-Request-Id') || generateRequestId()
   
-  // Note: config.matcher restricts this middleware to /api routes only
+  // Note: config.matcher restricts this proxy to /api routes only.
 
   // Auth bootstrap endpoint is called frequently during login/register flow.
   // Skip rate-limit overhead here to reduce perceived auth latency.
@@ -104,7 +104,7 @@ export async function middleware(request: NextRequest) {
   return response
 }
 
-// รัน middleware เฉพาะ /api เพื่อลด latency หน้าเพจและ static files
+// Run proxy only on /api to reduce page/static asset latency.
 export const config = {
   matcher: ["/api/:path*"],
 }
