@@ -72,3 +72,10 @@ chromium_e2e_results.json
 webkit_results*.json
 webkit_nav_fail.json
 webkit_test_output.txt
+
+# Local-only workspace artifacts
+.agent/
+dataconnect/.dataconnect/
+docs/
+TEST_*.csv
+TEST_*.md
