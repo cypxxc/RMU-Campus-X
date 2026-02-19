@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { XIcon } from "lucide-react"
+import { Loader2, XIcon } from "lucide-react"
 import { useI18n } from "@/components/language-provider"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 /**
@@ -311,10 +312,6 @@ export function UnifiedModalActions({
   const resolvedCancelText = cancelText ?? tt("ยกเลิก", "Cancel")
   const resolvedSubmitText = submitText ?? tt("ยืนยัน", "Confirm")
   const resolvedLoadingText = loadingText ?? tt("กำลังดำเนินการ...", "Processing...")
-
-  // Import Button dynamically to avoid circular dependencies
-  const { Button } = require("@/components/ui/button")
-  const { Loader2 } = require("lucide-react")
 
   return (
     <div className="flex flex-col-reverse sm:flex-row gap-3">

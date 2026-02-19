@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react"
-import { type User, onAuthStateChanged } from "firebase/auth"
+import type { User } from "firebase/auth"
 import { isTransientNetworkError } from "@/lib/api-client"
 import type { UserStatus } from "@/types"
 
@@ -26,6 +26,8 @@ interface AuthContextType {
   isAdmin: boolean
   profilePhotoURL: string | null
   accountStatus: AccountStatusInfo | null
+  /** true when user has seen onboarding */
+  hasSeenOnboarding: boolean
   /** true only when user doc has termsAccepted === true */
   termsAccepted: boolean
   /** true when termsAccepted has been resolved from user profile/fallback */
@@ -35,6 +37,8 @@ interface AuthContextType {
   refreshUserProfile: () => Promise<void>
   /** หลังยอมรับ terms บน consent page เรียกเพื่ออัปเดต context ทันที (ไม่ต้องรอ refresh) */
   markTermsAccepted: () => void
+  /** หลังดู onboarding เสร็จ เรียกเพื่ออัปเดต context */
+  markOnboardingSeen: () => void
 }
 
 const TERMS_ACCEPTED_KEY = "rmu_terms_accepted"
@@ -94,11 +98,13 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   profilePhotoURL: null,
   accountStatus: null,
+  hasSeenOnboarding: true,
   termsAccepted: false,
   termsResolved: false,
   logout: async () => {},
   refreshUserProfile: async () => {},
   markTermsAccepted: () => {},
+  markOnboardingSeen: () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -107,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [profilePhotoURL, setProfilePhotoURL] = useState<string | null>(null)
   const [accountStatus, setAccountStatus] = useState<AccountStatusInfo | null>(null)
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(true)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsResolved, setTermsResolved] = useState(false)
 
@@ -116,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initAuth = async () => {
       try {
         const { getFirebaseAuth } = await import("@/lib/firebase")
+        const { onAuthStateChanged } = await import("firebase/auth")
         const auth = getFirebaseAuth()
 
         // Initialize App Check in background so onAuthStateChanged can subscribe immediately.
@@ -158,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     setIsAdmin(Boolean(u.isAdmin))
                     setProfilePhotoURL(typeof u.photoURL === "string" && u.photoURL.trim() ? u.photoURL : null)
                     setAccountStatus(mapAccountStatus(u as Record<string, unknown>))
+                    setHasSeenOnboarding(u.hasSeenOnboarding === true)
                     const accepted = u.termsAccepted === true
                     setTermsAccepted(accepted)
                     if (accepted && typeof sessionStorage !== "undefined") sessionStorage.setItem(TERMS_ACCEPTED_KEY, "1")
@@ -167,6 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     setIsAdmin(false)
                     setProfilePhotoURL(user.photoURL ?? null)
                     setAccountStatus(DEFAULT_ACCOUNT_STATUS)
+                    setHasSeenOnboarding(true)
                     setTermsAccepted(false)
                     setTermsResolved(true)
                   }
@@ -174,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   setIsAdmin(false)
                   setProfilePhotoURL(user.photoURL ?? null)
                   setAccountStatus(DEFAULT_ACCOUNT_STATUS)
+                  setHasSeenOnboarding(true)
                   const fallback = typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1"
                   setTermsAccepted(fallback)
                   setTermsResolved(true)
@@ -191,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsAdmin(false)
                 setProfilePhotoURL(user.photoURL ?? null)
                 setAccountStatus(DEFAULT_ACCOUNT_STATUS)
+                setHasSeenOnboarding(true)
                 const fallback = typeof sessionStorage !== "undefined" && sessionStorage.getItem(TERMS_ACCEPTED_KEY) === "1"
                 setTermsAccepted(fallback)
                 setTermsResolved(true)
@@ -213,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsAdmin(false)
             setProfilePhotoURL(null)
             setAccountStatus(null)
+            setHasSeenOnboarding(true)
             setTermsAccepted(false)
             setTermsResolved(true)
           }
@@ -257,6 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsAdmin(Boolean(u.isAdmin))
           setProfilePhotoURL(typeof u.photoURL === "string" && u.photoURL.trim() ? u.photoURL : null)
           setAccountStatus(mapAccountStatus(u as Record<string, unknown>))
+          setHasSeenOnboarding(u.hasSeenOnboarding === true)
         }
       }
     } catch (error) {
@@ -272,9 +286,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof sessionStorage !== "undefined") sessionStorage.setItem(TERMS_ACCEPTED_KEY, "1")
   }, [])
 
+  const markOnboardingSeen = useCallback(() => {
+    setHasSeenOnboarding(true)
+  }, [])
+
   const value = useMemo(
-    () => ({ user, loading, isAdmin, profilePhotoURL, accountStatus, termsAccepted, termsResolved, logout, refreshUserProfile, markTermsAccepted }),
-    [user, loading, isAdmin, profilePhotoURL, accountStatus, termsAccepted, termsResolved, logout, refreshUserProfile, markTermsAccepted]
+    () => ({ user, loading, isAdmin, profilePhotoURL, accountStatus, hasSeenOnboarding, termsAccepted, termsResolved, logout, refreshUserProfile, markTermsAccepted, markOnboardingSeen }),
+    [user, loading, isAdmin, profilePhotoURL, accountStatus, hasSeenOnboarding, termsAccepted, termsResolved, logout, refreshUserProfile, markTermsAccepted, markOnboardingSeen]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
