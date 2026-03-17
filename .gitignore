@@ -29,8 +29,10 @@ coverage
 .jest
 test-results
 playwright-report
+e2e/
 e2e/.auth/
 e2e/.runtime/
+vitest.rules.config.ts
 
 # OS
 .DS_Store
