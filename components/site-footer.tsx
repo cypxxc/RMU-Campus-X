@@ -14,10 +14,12 @@ export function SiteFooter() {
   const { t } = useI18n()
 
   const footerLinks = [
+    { href: "/about", label: t("footer.about") },
     { href: "/guide", label: t("footer.guide") },
     { href: "/terms", label: t("footer.terms") },
     { href: "/privacy", label: t("footer.privacy") },
     { href: "/guidelines", label: t("footer.guidelines") },
+    { href: "/api-docs", label: t("footer.apiDocs") },
   ]
 
   return (

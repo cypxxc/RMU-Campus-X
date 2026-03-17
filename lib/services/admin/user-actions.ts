@@ -26,6 +26,25 @@ const WARNING_LIMIT_FOR_SUSPENSION = 3
 const AUTO_SUSPEND_DAYS = 7
 const SUSPENSION_LIMIT_FOR_BAN = 2
 
+export class AdminUserActionsService {
+  constructor(
+    private readonly statusDeps: UserStatusUpdateDeps,
+    private readonly warningDeps: WarningIssueDeps
+  ) {}
+
+  async updateUserStatus(params: UpdateStatusParams): Promise<UpdateStatusResult> {
+    return updateUserStatusWithDeps(params, this.statusDeps)
+  }
+
+  async issueWarning(params: AdminActionParams): Promise<IssueWarningResult> {
+    return issueWarningWithDeps(params, this.warningDeps)
+  }
+
+  static createDefault(): AdminUserActionsService {
+    return new AdminUserActionsService(createUserStatusDeps(), createWarningIssueDeps())
+  }
+}
+
 function buildSuspendUntil(suspendDays?: number, suspendMinutes?: number): Date {
   const suspendUntil = new Date()
   if (suspendDays && suspendDays > 0) {

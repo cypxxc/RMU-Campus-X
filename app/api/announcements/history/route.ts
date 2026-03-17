@@ -23,39 +23,46 @@ function getAnnouncementImageRef(data: Record<string, unknown>): string | null {
   return value.length > 0 ? value : null
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const limit = normalizeLimit(request.nextUrl.searchParams.get("limit"))
-    const db = getAdminDb()
-    const snapshot = await db
-      .collection("announcements")
-      .orderBy("createdAt", "desc")
-      .limit(limit)
-      .get()
+class AnnouncementsHistoryController {
+  async get(request: NextRequest) {
+    try {
+      const limit = normalizeLimit(request.nextUrl.searchParams.get("limit"))
+      const db = getAdminDb()
+      const snapshot = await db
+        .collection("announcements")
+        .orderBy("createdAt", "desc")
+        .limit(limit)
+        .get()
 
-    const announcements: Announcement[] = snapshot.docs.map((doc) => {
-      const data = doc.data()
-      return {
-        id: doc.id,
-        title: data.title ?? "",
-        message: data.message ?? "",
-        type: data.type ?? "info",
-        isActive: data.isActive ?? true,
-        startAt: data.startAt ?? null,
-        endAt: data.endAt ?? null,
-        linkUrl: data.linkUrl ?? null,
-        linkLabel: data.linkLabel ?? null,
-        imagePublicId: getAnnouncementImageRef(data),
-        // Public endpoint should not expose admin identity/email.
-        createdBy: "",
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-      }
-    })
+      const announcements: Announcement[] = snapshot.docs.map((doc) => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          title: data.title ?? "",
+          message: data.message ?? "",
+          type: data.type ?? "info",
+          isActive: data.isActive ?? true,
+          startAt: data.startAt ?? null,
+          endAt: data.endAt ?? null,
+          linkUrl: data.linkUrl ?? null,
+          linkLabel: data.linkLabel ?? null,
+          imagePublicId: getAnnouncementImageRef(data),
+          createdBy: "",
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        }
+      })
 
-    return NextResponse.json({ success: true, announcements })
-  } catch (error) {
-    console.error("[Announcements History API] GET Error:", error)
-    return NextResponse.json({ success: false, announcements: [] }, { status: 500 })
+      return NextResponse.json({ success: true, announcements })
+    } catch (error) {
+      console.error("[Announcements History API] GET Error:", error)
+      return NextResponse.json({ success: false, announcements: [] }, { status: 500 })
+    }
   }
+}
+
+const controller = new AnnouncementsHistoryController()
+
+export async function GET(request: NextRequest) {
+  return controller.get(request)
 }

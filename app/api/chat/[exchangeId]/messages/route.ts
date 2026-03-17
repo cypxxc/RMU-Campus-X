@@ -11,11 +11,32 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue, type DocumentSnapshot } from "firebase-admin/firestore"
 import { ApiErrors, getAuthToken, successResponse } from "@/lib/api-response"
+import { log } from "@/lib/logger"
+import { deliverInAppNotification } from "@/lib/server/notification-delivery"
 
 const PAGE_SIZE = 50
 
 function isParticipant(ownerId: string, requesterId: string, userId: string): boolean {
   return ownerId === userId || requesterId === userId
+}
+
+function normalizeBlockedUserIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+}
+
+async function isExchangeBlocked(
+  db: ReturnType<typeof getAdminDb>,
+  ownerId: string,
+  requesterId: string
+): Promise<boolean> {
+  const [ownerSnap, requesterSnap] = await db.getAll(
+    db.collection("users").doc(ownerId),
+    db.collection("users").doc(requesterId)
+  )
+  const ownerBlocked = normalizeBlockedUserIds(ownerSnap?.data()?.blockedUserIds)
+  const requesterBlocked = normalizeBlockedUserIds(requesterSnap?.data()?.blockedUserIds)
+  return ownerBlocked.includes(requesterId) || requesterBlocked.includes(ownerId)
 }
 
 function serializeMessage(doc: DocumentSnapshot): Record<string, unknown> {
@@ -37,79 +58,204 @@ function isIndexError(e: unknown): boolean {
   return /index|FAILED_PRECONDITION|9\s+FAILED/.test(msg)
 }
 
+class ChatMessagesController {
+  async get(request: NextRequest, params: Promise<{ exchangeId: string }>) {
+    try {
+      const token = getAuthToken(request)
+      if (!token) return ApiErrors.unauthorized("Missing authentication token")
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+
+      const { exchangeId } = await params
+      if (!exchangeId) return ApiErrors.badRequest("Missing exchangeId")
+
+      const db = getAdminDb()
+      const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
+      if (!exchangeSnap.exists) return ApiErrors.notFound("Exchange not found")
+
+      const exchangeData = exchangeSnap.data()
+      const ownerId = exchangeData && typeof exchangeData.ownerId === "string" ? exchangeData.ownerId : ""
+      const requesterId = exchangeData && typeof exchangeData.requesterId === "string" ? exchangeData.requesterId : ""
+      if (!ownerId || !requesterId) {
+        return ApiErrors.badRequest("Exchange data is invalid (missing ownerId or requesterId)")
+      }
+      if (!isParticipant(ownerId, requesterId, decoded.uid)) {
+        return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้น")
+      }
+
+      if (await isExchangeBlocked(db, ownerId, requesterId)) {
+        return ApiErrors.forbidden("Chat is unavailable because one participant has blocked the other")
+      }
+
+      const { searchParams } = new URL(request.url)
+      const limitParam = Math.min(Number(searchParams.get("limit")) || PAGE_SIZE, 100)
+      const beforeId = searchParams.get("beforeId") ?? undefined
+
+      const col = db.collection("chatMessages")
+
+      if (beforeId) {
+        const beforeRef = db.collection("chatMessages").doc(beforeId)
+        const beforeSnap = await beforeRef.get()
+        if (!beforeSnap.exists) return ApiErrors.badRequest("Invalid beforeId")
+        const beforeData = beforeSnap.data() as { exchangeId?: string } | undefined
+        if (beforeData?.exchangeId !== exchangeId) {
+          return ApiErrors.badRequest("beforeId does not belong to this exchange")
+        }
+        const q = col
+          .where("exchangeId", "==", exchangeId)
+          .orderBy("createdAt", "asc")
+          .endBefore(beforeSnap)
+          .limit(limitParam)
+        const snapshot = await q.get()
+        const messages = snapshot.docs.map(serializeMessage)
+        return successResponse({ messages })
+      }
+
+      const query = col
+        .where("exchangeId", "==", exchangeId)
+        .orderBy("createdAt", "desc")
+        .limit(limitParam)
+      const snapshot = await query.get()
+      const messages = snapshot.docs.map(serializeMessage)
+      return successResponse({ messages: [...messages].reverse() })
+    } catch (e) {
+      console.error("[Chat Messages API] GET Error:", e)
+      if (isIndexError(e)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "ต้องสร้าง Firestore index สำหรับ chatMessages (exchangeId + createdAt). รัน: firebase deploy --only firestore:indexes",
+            code: "INDEX_REQUIRED",
+          },
+          { status: 503 }
+        )
+      }
+      return ApiErrors.internalError("Internal server error")
+    }
+  }
+
+  async post(request: NextRequest, params: Promise<{ exchangeId: string }>) {
+    try {
+      const token = getAuthToken(request)
+      if (!token) return ApiErrors.unauthorized("Missing authentication token")
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+
+      const { exchangeId } = await params
+      if (!exchangeId) return ApiErrors.badRequest("Missing exchangeId")
+
+      const db = getAdminDb()
+      const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
+      if (!exchangeSnap.exists) return ApiErrors.notFound("Exchange not found")
+
+      const exchangeData = exchangeSnap.data()
+      const ownerId = exchangeData && typeof exchangeData.ownerId === "string" ? exchangeData.ownerId : ""
+      const requesterId = exchangeData && typeof exchangeData.requesterId === "string" ? exchangeData.requesterId : ""
+      if (!ownerId || !requesterId) {
+        return ApiErrors.badRequest("Exchange data is invalid (missing ownerId or requesterId)")
+      }
+      if (!isParticipant(ownerId, requesterId, decoded.uid)) {
+        return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้น")
+      }
+
+      if (await isExchangeBlocked(db, ownerId, requesterId)) {
+        return ApiErrors.forbidden("Chat is unavailable because one participant has blocked the other")
+      }
+
+      const status = (exchangeData?.status as string) ?? ""
+      const CHATABLE_STATUSES = ["pending", "accepted", "in_progress"]
+      if (!CHATABLE_STATUSES.includes(status)) {
+        return ApiErrors.badRequest(
+          "ห้องแชทปิดแล้ว — การแลกเปลี่ยนเสร็จสิ้น/ยกเลิก/ปฏิเสธแล้ว ไม่สามารถส่งข้อความได้"
+        )
+      }
+
+      let body: { message?: string }
+      try {
+        body = await request.json()
+      } catch {
+        return ApiErrors.badRequest("Invalid JSON body")
+      }
+
+      const messageText = typeof body.message === "string" ? body.message.trim() : ""
+      if (!messageText) return ApiErrors.badRequest("กรุณาระบุข้อความ")
+
+      const ref = await db.collection("chatMessages").add({
+        exchangeId,
+        senderId: decoded.uid,
+        senderEmail: decoded.email ?? "",
+        message: messageText,
+        createdAt: FieldValue.serverTimestamp(),
+      })
+
+      const doc = await ref.get()
+      const created = doc.data()
+      const createdAt =
+        created?.createdAt && typeof (created.createdAt as { toDate?: () => Date }).toDate === "function"
+          ? (created.createdAt as { toDate: () => Date }).toDate().toISOString()
+          : new Date().toISOString()
+
+      const recipientId = decoded.uid === ownerId ? requesterId : ownerId
+      const senderName = decoded.email ? decoded.email.split("@")[0] : "Someone"
+      const messagePreview = messageText.length > 80 ? `${messageText.slice(0, 80)}...` : messageText
+
+      try {
+        const delivery = await deliverInAppNotification(
+          {
+            userId: recipientId,
+            title: `New message from ${senderName}`,
+            message: `Sent you a message: ${messagePreview}`,
+            type: "chat",
+            relatedId: exchangeId,
+            senderId: decoded.uid,
+          },
+          {
+            db,
+            source: "api.chat.messages.post",
+          }
+        )
+        if (delivery.queued) {
+          log.warn("Chat message notification queued for retry", {
+            exchangeId,
+            senderId: decoded.uid,
+            recipientId,
+            queueId: delivery.queueId,
+          })
+        }
+        if (!delivery.delivered && !delivery.queued) {
+          log.warn("Chat message inserted but notification delivery failed", {
+            exchangeId,
+            senderId: decoded.uid,
+            recipientId,
+            error: delivery.error,
+          })
+        }
+      } catch (notifyError) {
+        log.warn("Chat message inserted but notification insert failed", {
+          exchangeId,
+          senderId: decoded.uid,
+          recipientId,
+          error: notifyError instanceof Error ? notifyError.message : String(notifyError),
+        })
+      }
+
+      return successResponse({ messageId: ref.id, createdAt })
+    } catch (e) {
+      console.error("[Chat Messages API] POST Error:", e)
+      return ApiErrors.internalError("Internal server error")
+    }
+  }
+}
+
+const controller = new ChatMessagesController()
+
 /** GET /api/chat/[exchangeId]/messages?limit=50&beforeId=xxx */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ exchangeId: string }> }
 ) {
-  try {
-    const token = getAuthToken(request)
-    if (!token) return ApiErrors.unauthorized("Missing authentication token")
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
-
-    const { exchangeId } = await params
-    if (!exchangeId) return ApiErrors.badRequest("Missing exchangeId")
-
-    const db = getAdminDb()
-    const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
-    if (!exchangeSnap.exists) return ApiErrors.notFound("Exchange not found")
-
-    const exchangeData = exchangeSnap.data()
-    const ownerId = exchangeData && typeof exchangeData.ownerId === "string" ? exchangeData.ownerId : ""
-    const requesterId = exchangeData && typeof exchangeData.requesterId === "string" ? exchangeData.requesterId : ""
-    if (!ownerId || !requesterId) {
-      return ApiErrors.badRequest("Exchange data is invalid (missing ownerId or requesterId)")
-    }
-    if (!isParticipant(ownerId, requesterId, decoded.uid)) {
-      return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้น")
-    }
-
-    const { searchParams } = new URL(request.url)
-    const limitParam = Math.min(Number(searchParams.get("limit")) || PAGE_SIZE, 100)
-    const beforeId = searchParams.get("beforeId") ?? undefined
-
-    const col = db.collection("chatMessages")
-
-    if (beforeId) {
-      const beforeRef = db.collection("chatMessages").doc(beforeId)
-      const beforeSnap = await beforeRef.get()
-      if (!beforeSnap.exists) return ApiErrors.badRequest("Invalid beforeId")
-      const beforeData = beforeSnap.data() as { exchangeId?: string } | undefined
-      if (beforeData?.exchangeId !== exchangeId) {
-        return ApiErrors.badRequest("beforeId does not belong to this exchange")
-      }
-      const q = col
-        .where("exchangeId", "==", exchangeId)
-        .orderBy("createdAt", "asc")
-        .endBefore(beforeSnap)
-        .limit(limitParam)
-      const snapshot = await q.get()
-      const messages = snapshot.docs.map(serializeMessage)
-      return successResponse({ messages })
-    }
-
-    const query = col
-      .where("exchangeId", "==", exchangeId)
-      .orderBy("createdAt", "desc")
-      .limit(limitParam)
-    const snapshot = await query.get()
-    const messages = snapshot.docs.map(serializeMessage)
-    return successResponse({ messages: [...messages].reverse() })
-  } catch (e) {
-    console.error("[Chat Messages API] GET Error:", e)
-    if (isIndexError(e)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "ต้องสร้าง Firestore index สำหรับ chatMessages (exchangeId + createdAt). รัน: firebase deploy --only firestore:indexes",
-          code: "INDEX_REQUIRED",
-        },
-        { status: 503 }
-      )
-    }
-    return ApiErrors.internalError("Internal server error")
-  }
+  return controller.get(request, params)
 }
 
 /** POST /api/chat/[exchangeId]/messages */
@@ -117,65 +263,5 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ exchangeId: string }> }
 ) {
-  try {
-    const token = getAuthToken(request)
-    if (!token) return ApiErrors.unauthorized("Missing authentication token")
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
-
-    const { exchangeId } = await params
-    if (!exchangeId) return ApiErrors.badRequest("Missing exchangeId")
-
-    const db = getAdminDb()
-    const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
-    if (!exchangeSnap.exists) return ApiErrors.notFound("Exchange not found")
-
-    const exchangeData = exchangeSnap.data()
-    const ownerId = exchangeData && typeof exchangeData.ownerId === "string" ? exchangeData.ownerId : ""
-    const requesterId = exchangeData && typeof exchangeData.requesterId === "string" ? exchangeData.requesterId : ""
-    if (!ownerId || !requesterId) {
-      return ApiErrors.badRequest("Exchange data is invalid (missing ownerId or requesterId)")
-    }
-    if (!isParticipant(ownerId, requesterId, decoded.uid)) {
-      return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้น")
-    }
-
-    const status = (exchangeData?.status as string) ?? ""
-    const CHATABLE_STATUSES = ["pending", "accepted", "in_progress"]
-    if (!CHATABLE_STATUSES.includes(status)) {
-      return ApiErrors.badRequest(
-        "ห้องแชทปิดแล้ว — การแลกเปลี่ยนเสร็จสิ้น/ยกเลิก/ปฏิเสธแล้ว ไม่สามารถส่งข้อความได้"
-      )
-    }
-
-    let body: { message?: string }
-    try {
-      body = await request.json()
-    } catch {
-      return ApiErrors.badRequest("Invalid JSON body")
-    }
-
-    const messageText = typeof body.message === "string" ? body.message.trim() : ""
-    if (!messageText) return ApiErrors.badRequest("กรุณาระบุข้อความ")
-
-    const ref = await db.collection("chatMessages").add({
-      exchangeId,
-      senderId: decoded.uid,
-      senderEmail: decoded.email ?? "",
-      message: messageText,
-      createdAt: FieldValue.serverTimestamp(),
-    })
-
-    const doc = await ref.get()
-    const created = doc.data()
-    const createdAt =
-      created?.createdAt && typeof (created.createdAt as { toDate?: () => Date }).toDate === "function"
-        ? (created.createdAt as { toDate: () => Date }).toDate().toISOString()
-        : new Date().toISOString()
-
-    return successResponse({ messageId: ref.id, createdAt })
-  } catch (e) {
-    console.error("[Chat Messages API] POST Error:", e)
-    return ApiErrors.internalError("Internal server error")
-  }
+  return controller.post(request, params)
 }

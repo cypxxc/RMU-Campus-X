@@ -17,93 +17,77 @@ import { log } from "@/lib/logger"
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
 
-function toISO(v: unknown): string | null {
-  if (!v) return null
-  if (typeof (v as { toDate?: () => Date }).toDate === "function") return (v as { toDate: () => Date }).toDate().toISOString()
-  if (typeof (v as { toMillis?: () => number }).toMillis === "function") return new Date((v as { toMillis: () => number }).toMillis()).toISOString()
-  if (typeof v === "string") return v
-  if (typeof v === "number") return new Date(v).toISOString()
-  return null
-}
+class SupportTicketsController {
+  async get(request: NextRequest) {
+    try {
+      const token =
+        getAuthToken(request) ?? extractBearerToken(request.headers.get("Authorization"))
+      if (!token) {
+        return NextResponse.json(
+          { error: "Authentication required", code: "AUTH_REQUIRED" },
+          { status: 401 }
+        )
+      }
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) {
+        return NextResponse.json(
+          { error: "Invalid or expired token", code: "INVALID_TOKEN" },
+          { status: 401 }
+        )
+      }
 
-/**
- * GET /api/support - list current user's tickets
- */
-export async function GET(request: NextRequest) {
-  try {
-    const token = getAuthToken(request) ?? extractBearerToken(request.headers.get("Authorization"))
-    if (!token) return NextResponse.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 })
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return NextResponse.json({ error: "Invalid or expired token", code: "INVALID_TOKEN" }, { status: 401 })
+      const db = getAdminDb()
+      const summary = request.nextUrl.searchParams.get("summary")
+      if (summary === "hasTickets") {
+        const hasTicketsSnap = await db
+          .collection("support_tickets")
+          .where("userId", "==", decoded.uid)
+          .limit(1)
+          .get()
+        return NextResponse.json({ success: true, data: { hasTickets: !hasTicketsSnap.empty } })
+      }
 
-    const db = getAdminDb()
-    const summary = request.nextUrl.searchParams.get("summary")
-    if (summary === "hasTickets") {
-      const hasTicketsSnap = await db
+      const snapshot = await db
         .collection("support_tickets")
         .where("userId", "==", decoded.uid)
-        .limit(1)
+        .orderBy("createdAt", "desc")
+        .limit(100)
         .get()
-      return NextResponse.json({ success: true, data: { hasTickets: !hasTicketsSnap.empty } })
+
+      const tickets = snapshot.docs
+        .map((d) => {
+          const data = d.data()
+          if (data.deletedByUser) return null
+          return {
+            id: d.id,
+            subject: data.subject,
+            category: data.category,
+            description: data.description,
+            userId: data.userId,
+            userEmail: data.userEmail,
+            status: data.status,
+            adminReply: data.adminReply,
+            messages: data.messages ?? [],
+            repliedBy: data.repliedBy,
+            repliedAt: data.repliedAt ? toISO(data.repliedAt) : null,
+            resolvedAt: data.resolvedAt ? toISO(data.resolvedAt) : null,
+            createdAt: data.createdAt ? toISO(data.createdAt) : null,
+            updatedAt: data.updatedAt ? toISO(data.updatedAt) : null,
+          }
+        })
+        .filter((t): t is NonNullable<typeof t> => t !== null)
+
+      return NextResponse.json({ success: true, data: { tickets } })
+    } catch (error) {
+      log.apiError("GET", "/api/support", error, { endpoint: "support-tickets" })
+      return NextResponse.json(
+        { error: "Internal server error", code: "INTERNAL_ERROR" },
+        { status: 500 }
+      )
     }
-
-    const snapshot = await db
-      .collection("support_tickets")
-      .where("userId", "==", decoded.uid)
-      .orderBy("createdAt", "desc")
-      .limit(100)
-      .get()
-
-    const tickets = snapshot.docs
-      .map((d) => {
-        const data = d.data()
-        if (data.deletedByUser) return null
-        return {
-          id: d.id,
-          subject: data.subject,
-          category: data.category,
-          description: data.description,
-          userId: data.userId,
-          userEmail: data.userEmail,
-          status: data.status,
-          adminReply: data.adminReply,
-          messages: data.messages ?? [],
-          repliedBy: data.repliedBy,
-          repliedAt: data.repliedAt ? toISO(data.repliedAt) : null,
-          resolvedAt: data.resolvedAt ? toISO(data.resolvedAt) : null,
-          createdAt: data.createdAt ? toISO(data.createdAt) : null,
-          updatedAt: data.updatedAt ? toISO(data.updatedAt) : null,
-        }
-      })
-      .filter((t): t is NonNullable<typeof t> => t !== null)
-
-    return NextResponse.json({ success: true, data: { tickets } })
-  } catch (error) {
-    log.apiError("GET", "/api/support", error, { endpoint: "support-tickets" })
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 })
   }
-}
 
-const createTicketSchema = z.object({
-  subject: z.string().min(1, "Please provide a subject").max(200, "Subject is too long").transform(sanitizeText),
-  category: z.enum(["general", "technical", "account", "exchange", "report", "other"], {
-    errorMap: () => ({ message: "Please select a category" }),
-  }),
-  description: z
-    .string()
-    .min(10, "Description must be at least 10 characters")
-    .max(2000, "Description is too long")
-    .transform(sanitizeText),
-})
-
-type CreateTicketInput = z.infer<typeof createTicketSchema>
-
-/**
- * POST /api/support - create support ticket
- */
-export const POST = withValidation(
-  createTicketSchema,
-  async (_request, data: CreateTicketInput, ctx: ValidationContext | null) => {
+  async createTicket(data: CreateTicketInput, ctx: ValidationContext | null) {
     if (!ctx) {
       return NextResponse.json(
         { error: "Authentication context missing", code: "AUTH_ERROR" },
@@ -130,11 +114,19 @@ export const POST = withValidation(
       const adminUsers = await getAdminUsersByEmail(db)
 
       notifyAdminsInApp(db, adminUsers, subject, ctx.email || "", docRef.id).catch((err) => {
-        log.warn("Failed to send admin in-app notification", { error: err, ticketId: docRef.id }, "SUPPORT")
+        log.warn(
+          "Failed to send admin in-app notification",
+          { error: err, ticketId: docRef.id },
+          "SUPPORT"
+        )
       })
 
       sendAdminLineNotifications(adminUsers, subject, category, ctx.email || "").catch((err) => {
-        log.warn("Failed to send admin LINE notification", { error: err, ticketId: docRef.id }, "SUPPORT")
+        log.warn(
+          "Failed to send admin LINE notification",
+          { error: err, ticketId: docRef.id },
+          "SUPPORT"
+        )
       })
 
       return NextResponse.json({
@@ -148,6 +140,48 @@ export const POST = withValidation(
         { status: 500 }
       )
     }
+  }
+}
+
+const controller = new SupportTicketsController()
+
+function toISO(v: unknown): string | null {
+  if (!v) return null
+  if (typeof (v as { toDate?: () => Date }).toDate === "function") return (v as { toDate: () => Date }).toDate().toISOString()
+  if (typeof (v as { toMillis?: () => number }).toMillis === "function") return new Date((v as { toMillis: () => number }).toMillis()).toISOString()
+  if (typeof v === "string") return v
+  if (typeof v === "number") return new Date(v).toISOString()
+  return null
+}
+
+/**
+ * GET /api/support - list current user's tickets
+ */
+export async function GET(request: NextRequest) {
+  return controller.get(request)
+}
+
+const createTicketSchema = z.object({
+  subject: z.string().min(1, "Please provide a subject").max(200, "Subject is too long").transform(sanitizeText),
+  category: z.enum(["general", "technical", "account", "exchange", "report", "other"], {
+    errorMap: () => ({ message: "Please select a category" }),
+  }),
+  description: z
+    .string()
+    .min(10, "Description must be at least 10 characters")
+    .max(2000, "Description is too long")
+    .transform(sanitizeText),
+})
+
+type CreateTicketInput = z.infer<typeof createTicketSchema>
+
+/**
+ * POST /api/support - create support ticket
+ */
+export const POST = withValidation(
+  createTicketSchema,
+  async (_request, data: CreateTicketInput, ctx: ValidationContext | null) => {
+    return controller.createTicket(data, ctx)
   },
   { requireAuth: true, requireTermsAccepted: true }
 )

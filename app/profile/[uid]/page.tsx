@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useParams } from "next/navigation"
 import { 
   Package, 
@@ -9,7 +9,9 @@ import {
   Loader2,
   ShieldCheck,
   AlertCircle,
-  Edit2
+  Edit2,
+  Ban,
+  UserCheck
 } from "lucide-react"
 
 import { Label } from "@/components/ui/label"
@@ -19,6 +21,7 @@ import { useToast } from "@/hooks/use-toast"
 import { StarRating } from "@/components/star-rating"
 
 import { getUserPublicProfile } from "@/lib/firestore"
+import { blockUser, unblockUser, getBlockedUserIds } from "@/lib/db/blocked-users"
 import { resolveImageUrl } from "@/lib/cloudinary-url"
 import { useItems } from "@/hooks/use-items"
 import { ItemCard } from "@/components/item-card"
@@ -71,6 +74,8 @@ export default function PublicProfilePage() {
   const [loadingReviews, setLoadingReviews] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([])
+  const [blockLoading, setBlockLoading] = useState(false)
   const mountedRef = useRef(true)
 
   const { items: rawItems, isLoading: loadingItems } = useItems({
@@ -96,15 +101,9 @@ export default function PublicProfilePage() {
   }, [])
 
   useEffect(() => {
-    if (!uid) {
-      setLoading(false)
-      setProfile(null)
-      setReviews([])
-      return
-    }
-    loadProfile()
-    loadReviews()
-  }, [uid])
+    if (!currentUser || !uid || currentUser.uid === uid) return
+    getBlockedUserIds().then((ids) => mountedRef.current && setBlockedUserIds(ids)).catch(() => {})
+  }, [currentUser, uid])
 
   /* Bio Editing State */
   const [isEditingBio, setIsEditingBio] = useState(false)
@@ -143,7 +142,7 @@ export default function PublicProfilePage() {
     }
   }
 
-  const loadReviews = async () => {
+  const loadReviews = useCallback(async () => {
     if (!uid) {
       setReviews([])
       setReviewerProfiles({})
@@ -173,9 +172,9 @@ export default function PublicProfilePage() {
     } finally {
       if (mountedRef.current) setLoadingReviews(false)
     }
-  }
+  }, [uid])
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       setLoading(true)
       const data = await getUserPublicProfile(uid)
@@ -188,7 +187,18 @@ export default function PublicProfilePage() {
     } finally {
       if (mountedRef.current) setLoading(false)
     }
-  }
+  }, [uid])
+
+  useEffect(() => {
+    if (!uid) {
+      setLoading(false)
+      setProfile(null)
+      setReviews([])
+      return
+    }
+    void loadProfile()
+    void loadReviews()
+  }, [loadProfile, loadReviews, uid])
 
   if (loading) {
     return (
@@ -236,11 +246,40 @@ export default function PublicProfilePage() {
               
               {/* User Info - Centered on Mobile, Left on Desktop */}
               <div className="flex-1 text-center sm:text-left space-y-3 pt-2">
-                <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground/90 inline-flex items-center justify-center sm:justify-start gap-2 flex-wrap">
                     <span>{profile.displayName || tt("ผู้ใช้งาน", "User")}</span>
                     <OwnerRatingBadge rating={profile.rating} className="text-base sm:text-lg" />
                   </h1>
+                  {currentUser && uid && currentUser.uid !== uid && (
+                    <Button
+                      variant={blockedUserIds.includes(uid) ? "outline" : "destructive"}
+                      size="sm"
+                      className="gap-2 shrink-0 self-center sm:self-auto"
+                      disabled={blockLoading}
+                      onClick={async () => {
+                        setBlockLoading(true)
+                        try {
+                          if (blockedUserIds.includes(uid)) {
+                            await unblockUser(uid)
+                            setBlockedUserIds((prev) => prev.filter((id) => id !== uid))
+                            toast({ title: tt("ยกเลิกการบล็อกแล้ว", "User unblocked") })
+                          } else {
+                            await blockUser(uid)
+                            setBlockedUserIds((prev) => [...prev, uid])
+                            toast({ title: tt("บล็อกผู้ใช้แล้ว", "User blocked") })
+                          }
+                        } catch {
+                          toast({ title: tt("เกิดข้อผิดพลาด", "Error"), variant: "destructive" })
+                        } finally {
+                          if (mountedRef.current) setBlockLoading(false)
+                        }
+                      }}
+                    >
+                      {blockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : blockedUserIds.includes(uid) ? <UserCheck className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+                      {blockedUserIds.includes(uid) ? tt("ยกเลิกการบล็อก", "Unblock") : tt("บล็อก", "Block")}
+                    </Button>
+                  )}
                 </div>
 
                 {/* Bio / Introduction Section */}

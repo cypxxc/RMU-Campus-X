@@ -29,10 +29,12 @@ export const MESSAGES = {
       userAlt: "ผู้ใช้งาน",
     },
     footer: {
+      about: "เกี่ยวกับเรา",
       guide: "คู่มือการใช้งาน",
       terms: "ข้อกำหนดการใช้งาน",
       privacy: "นโยบายความเป็นส่วนตัว",
       guidelines: "แนวทางชุมชน",
+      apiDocs: "เอกสาร API",
       description:
         "แพลตฟอร์มแลกเปลี่ยนสิ่งของสำหรับนักศึกษามหาวิทยาลัยราชภัฏมหาสารคาม",
       supportLabel: "ติดต่อทีมสนับสนุน:",
@@ -161,10 +163,12 @@ export const MESSAGES = {
       userAlt: "User",
     },
     footer: {
+      about: "About us",
       guide: "User guide",
       terms: "Terms of use",
       privacy: "Privacy policy",
       guidelines: "Community guidelines",
+      apiDocs: "API docs",
       description:
         "A campus exchange platform for students and staff at Rajabhat Maha Sarakham University.",
       supportLabel: "Contact support:",

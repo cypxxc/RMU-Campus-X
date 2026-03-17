@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertCircle,
@@ -87,15 +87,6 @@ export default function SupportPage() {
   }, [currentPage, sortedTickets])
 
   useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    loadTickets()
-  }, [authLoading, router, user])
-
-  useEffect(() => {
     const ticketId = searchParams.get("ticketId")
     if (!ticketId || tickets.length === 0) return
     const ticket = tickets.find((t) => t.id === ticketId)
@@ -106,7 +97,7 @@ export default function SupportPage() {
     if (currentPage > totalPages) setCurrentPage(totalPages)
   }, [currentPage, totalPages])
 
-  const loadTickets = async () => {
+  const loadTickets = useCallback(async () => {
     if (!user) return
     setLoading(true)
     try {
@@ -118,7 +109,16 @@ export default function SupportPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    void loadTickets()
+  }, [authLoading, loadTickets, router, user])
 
   useEffect(() => {
     if (!selectedTicket) return

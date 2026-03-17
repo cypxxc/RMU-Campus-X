@@ -5,6 +5,10 @@ import tseslint from "typescript-eslint"
 const config = [
   ...nextCoreWebVitals,
   {
+    name: "rmu-campus-x/ignores",
+    ignores: ["src/dataconnect-generated/**"],
+  },
+  {
     name: "rmu-campus-x/overrides",
     rules: {
       // Keep lint usable: warn for style, error only for real issues.
@@ -13,7 +17,7 @@ const config = [
 
       // The Next.js config enables some React hooks rules as errors.
       // These are useful, but currently too strict for this codebase.
-      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/set-state-in-effect": "off",
       "react-hooks/static-components": "warn",
       "react-hooks/purity": "warn",
       "react-hooks/immutability": "warn",
@@ -30,8 +34,11 @@ const config = [
       "@typescript-eslint": tseslint.plugin,
     },
     rules: {
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 ]

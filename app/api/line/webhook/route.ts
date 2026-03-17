@@ -502,56 +502,72 @@ async function confirmExchangeFromLine(
   }
 }
 
-export async function POST(request: NextRequest) {
-  debugLog("[LINE Webhook] Received request")
-  
-  try {
-    const body = await request.text()
-    const signature = request.headers.get("x-line-signature")
+class LineWebhookController {
+  async post(request: NextRequest) {
+    debugLog("[LINE Webhook] Received request")
 
-    debugLog("[LINE Webhook] Signature present:", !!signature)
-    debugLog("[LINE Webhook] Body length:", body.length)
+    try {
+      const body = await request.text()
+      const signature = request.headers.get("x-line-signature")
 
-    if (!signature) {
-      errorLog("[LINE Webhook] Missing signature header")
-      return NextResponse.json({ error: "Missing signature" }, { status: 401 })
-    }
+      debugLog("[LINE Webhook] Signature present:", !!signature)
+      debugLog("[LINE Webhook] Body length:", body.length)
 
-    const isValid = await verifySignature(body, signature)
-    debugLog("[LINE Webhook] Signature verification result:", isValid)
-    
-    if (!isValid) {
-      errorLog("[LINE Webhook] Invalid signature - check LINE_CHANNEL_SECRET env var")
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
-    }
-
-    const data: LineWebhookBody = JSON.parse(body)
-    debugLog("[LINE Webhook] Events count:", data.events.length)
-
-    for (const event of data.events) {
-      debugLog("[LINE Webhook] Processing event:", event.type, "from:", event.source?.userId?.substring(0, 10) + "...")
-      
-      if (event.type === "follow") {
-        debugLog("[LINE Webhook] Handling follow event")
-        const result = await sendReplyMessage(event.replyToken, [
-          {
-            type: "text",
-            text: buildFollowWelcomeText(),
-          },
-        ])
-        debugLog("[LINE Webhook] Follow reply result:", result)
-      } else if (event.type === "message" && event.message?.type === "text") {
-        debugLog("[LINE Webhook] Handling text message:", event.message.text?.substring(0, 30))
-        await handleTextMessage(event)
+      if (!signature) {
+        errorLog("[LINE Webhook] Missing signature header")
+        return NextResponse.json({ error: "Missing signature" }, { status: 401 })
       }
-    }
 
-    debugLog("[LINE Webhook] Completed successfully")
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    errorLog("[LINE Webhook] Error:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+      const isValid = await verifySignature(body, signature)
+      debugLog("[LINE Webhook] Signature verification result:", isValid)
+
+      if (!isValid) {
+        errorLog("[LINE Webhook] Invalid signature - check LINE_CHANNEL_SECRET env var")
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+      }
+
+      const data: LineWebhookBody = JSON.parse(body)
+      debugLog("[LINE Webhook] Events count:", data.events.length)
+
+      for (const event of data.events) {
+        debugLog(
+          "[LINE Webhook] Processing event:",
+          event.type,
+          "from:",
+          event.source?.userId?.substring(0, 10) + "..."
+        )
+
+        if (event.type === "follow") {
+          debugLog("[LINE Webhook] Handling follow event")
+          const result = await sendReplyMessage(event.replyToken, [
+            {
+              type: "text",
+              text: buildFollowWelcomeText(),
+            },
+          ])
+          debugLog("[LINE Webhook] Follow reply result:", result)
+        } else if (event.type === "message" && event.message?.type === "text") {
+          debugLog(
+            "[LINE Webhook] Handling text message:",
+            event.message.text?.substring(0, 30)
+          )
+          await handleTextMessage(event)
+        }
+      }
+
+      debugLog("[LINE Webhook] Completed successfully")
+      return NextResponse.json({ success: true })
+    } catch (error) {
+      errorLog("[LINE Webhook] Error:", error)
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    }
   }
+}
+
+const controller = new LineWebhookController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }
 
 async function handleTextMessage(event: LineEvent) {

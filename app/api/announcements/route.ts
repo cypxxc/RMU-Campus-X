@@ -25,64 +25,72 @@ function getAnnouncementImageRef(data: Record<string, unknown>): string | null {
   return value.length > 0 ? value : null
 }
 
-export async function GET() {
-  try {
-    const db = getAdminDb()
-    const now = new Date()
-    const snapshot = await db
-      .collection("announcements")
-      .where("isActive", "==", true)
-      .limit(50)
-      .get()
+class AnnouncementsController {
+  async get() {
+    try {
+      const db = getAdminDb()
+      const now = new Date()
+      const snapshot = await db
+        .collection("announcements")
+        .where("isActive", "==", true)
+        .limit(50)
+        .get()
 
-    const list: Announcement[] = []
-    const nextChangeTimes: number[] = []
-    const docs = snapshot.docs
-    for (const doc of docs) {
-      const data = doc.data()
-      const startAt = toDate(data.startAt)
-      const endAt = toDate(data.endAt)
-      if (startAt && startAt > now) {
-        nextChangeTimes.push(startAt.getTime())
-        continue
+      const list: Announcement[] = []
+      const nextChangeTimes: number[] = []
+      const docs = snapshot.docs
+      for (const doc of docs) {
+        const data = doc.data()
+        const startAt = toDate(data.startAt)
+        const endAt = toDate(data.endAt)
+        if (startAt && startAt > now) {
+          nextChangeTimes.push(startAt.getTime())
+          continue
+        }
+        if (endAt && endAt < now) continue
+        if (endAt) nextChangeTimes.push(endAt.getTime())
+        list.push({
+          id: doc.id,
+          title: data.title ?? "",
+          message: data.message ?? "",
+          type: data.type ?? "info",
+          isActive: data.isActive ?? true,
+          startAt: data.startAt ?? null,
+          endAt: data.endAt ?? null,
+          linkUrl: data.linkUrl ?? null,
+          linkLabel: data.linkLabel ?? null,
+          imagePublicId: getAnnouncementImageRef(data),
+          createdBy: "",
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        })
       }
-      if (endAt && endAt < now) continue
-      if (endAt) nextChangeTimes.push(endAt.getTime())
-      list.push({
-        id: doc.id,
-        title: data.title ?? "",
-        message: data.message ?? "",
-        type: data.type ?? "info",
-        isActive: data.isActive ?? true,
-        startAt: data.startAt ?? null,
-        endAt: data.endAt ?? null,
-        linkUrl: data.linkUrl ?? null,
-        linkLabel: data.linkLabel ?? null,
-        imagePublicId: getAnnouncementImageRef(data),
-        // Public endpoint should not expose admin identity/email.
-        createdBy: "",
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
+      list.sort((a, b) => {
+        const tA = toDate(a.createdAt)?.getTime() ?? 0
+        const tB = toDate(b.createdAt)?.getTime() ?? 0
+        return tB - tA
       })
+
+      const nowMs = now.getTime()
+      const futureChanges = nextChangeTimes.filter((t) => t > nowMs)
+      const nextChangeAt = futureChanges.length > 0 ? Math.min(...futureChanges) : null
+      const nextCheckInMs =
+        nextChangeAt != null ? Math.min(nextChangeAt - nowMs + 500, 5 * 60 * 1000) : null
+
+      return NextResponse.json({
+        success: true,
+        announcements: list,
+        nextCheckInMs: nextCheckInMs != null ? Math.max(1000, nextCheckInMs) : null,
+      })
+    } catch (error) {
+      console.error("[Announcements API] GET Error:", error)
+      return NextResponse.json({ success: false, announcements: [] }, { status: 500 })
     }
-    list.sort((a, b) => {
-      const tA = toDate(a.createdAt)?.getTime() ?? 0
-      const tB = toDate(b.createdAt)?.getTime() ?? 0
-      return tB - tA
-    })
-
-    const nowMs = now.getTime()
-    const futureChanges = nextChangeTimes.filter((t) => t > nowMs)
-    const nextChangeAt = futureChanges.length > 0 ? Math.min(...futureChanges) : null
-    const nextCheckInMs = nextChangeAt != null ? Math.min(nextChangeAt - nowMs + 500, 5 * 60 * 1000) : null
-
-    return NextResponse.json({
-      success: true,
-      announcements: list,
-      nextCheckInMs: nextCheckInMs != null ? Math.max(1000, nextCheckInMs) : null,
-    })
-  } catch (error) {
-    console.error("[Announcements API] GET Error:", error)
-    return NextResponse.json({ success: false, announcements: [] }, { status: 500 })
   }
+}
+
+const controller = new AnnouncementsController()
+
+export async function GET() {
+  return controller.get()
 }

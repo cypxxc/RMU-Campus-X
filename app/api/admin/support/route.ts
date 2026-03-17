@@ -13,6 +13,62 @@ import {
 } from "@/lib/admin-api"
 import type { SupportTicketStatus } from "@/types"
 
+class AdminSupportTicketsController {
+  async get(request: NextRequest) {
+    const { authorized, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+
+    try {
+      const { searchParams } = new URL(request.url)
+      const pageSize = Math.min(Math.max(Number(searchParams.get("limit")) || 20, 1), 100)
+      const cursor = searchParams.get("cursor")
+      const statuses = parseStatuses(searchParams.get("status"))
+
+      const db = getAdminDb()
+
+      let baseQuery: FirebaseFirestore.Query = db.collection("support_tickets")
+      if (statuses.length === 1) {
+        baseQuery = baseQuery.where("status", "==", statuses[0])
+      } else if (statuses.length > 1) {
+        baseQuery = baseQuery.where("status", "in", statuses.slice(0, 10))
+      }
+
+      let paginatedQuery = baseQuery.orderBy("createdAt", "desc")
+      if (cursor) {
+        const cursorSnap = await db.collection("support_tickets").doc(cursor).get()
+        if (cursorSnap.exists) {
+          paginatedQuery = paginatedQuery.startAfter(cursorSnap)
+        }
+      }
+
+      const snapshot = await paginatedQuery.limit(pageSize + 1).get()
+      const hasMore = snapshot.docs.length > pageSize
+      const pageDocs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs
+      const lastId = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1]!.id : null
+
+      let totalCount = pageDocs.length
+      try {
+        const countSnap = await baseQuery.count().get()
+        totalCount = countSnap.data().count ?? pageDocs.length
+      } catch {
+        totalCount = pageDocs.length
+      }
+
+      return successResponse({
+        tickets: pageDocs.map(serializeTicket),
+        lastId,
+        hasMore,
+        totalCount,
+      })
+    } catch (err) {
+      console.error("[Admin API] Support GET Error:", err)
+      return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to fetch support tickets", 500)
+    }
+  }
+}
+
+const controller = new AdminSupportTicketsController()
+
 const VALID_STATUSES = new Set<SupportTicketStatus>([
   "new",
   "in_progress",
@@ -74,53 +130,5 @@ function serializeTicket(doc: FirebaseFirestore.QueryDocumentSnapshot) {
 }
 
 export async function GET(request: NextRequest) {
-  const { authorized, error } = await verifyAdminAccess(request)
-  if (!authorized) return error!
-
-  try {
-    const { searchParams } = new URL(request.url)
-    const pageSize = Math.min(Math.max(Number(searchParams.get("limit")) || 20, 1), 100)
-    const cursor = searchParams.get("cursor")
-    const statuses = parseStatuses(searchParams.get("status"))
-
-    const db = getAdminDb()
-
-    let baseQuery: FirebaseFirestore.Query = db.collection("support_tickets")
-    if (statuses.length === 1) {
-      baseQuery = baseQuery.where("status", "==", statuses[0])
-    } else if (statuses.length > 1) {
-      baseQuery = baseQuery.where("status", "in", statuses.slice(0, 10))
-    }
-
-    let paginatedQuery = baseQuery.orderBy("createdAt", "desc")
-    if (cursor) {
-      const cursorSnap = await db.collection("support_tickets").doc(cursor).get()
-      if (cursorSnap.exists) {
-        paginatedQuery = paginatedQuery.startAfter(cursorSnap)
-      }
-    }
-
-    const snapshot = await paginatedQuery.limit(pageSize + 1).get()
-    const hasMore = snapshot.docs.length > pageSize
-    const pageDocs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs
-    const lastId = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1]!.id : null
-
-    let totalCount = pageDocs.length
-    try {
-      const countSnap = await baseQuery.count().get()
-      totalCount = countSnap.data().count ?? pageDocs.length
-    } catch {
-      totalCount = pageDocs.length
-    }
-
-    return successResponse({
-      tickets: pageDocs.map(serializeTicket),
-      lastId,
-      hasMore,
-      totalCount,
-    })
-  } catch (err) {
-    console.error("[Admin API] Support GET Error:", err)
-    return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to fetch support tickets", 500)
-  }
+  return controller.get(request)
 }

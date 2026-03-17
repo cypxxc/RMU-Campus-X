@@ -10,6 +10,15 @@ import { authFetchJson } from "@/lib/api-client"
 // Create notification - client should use API only
 export const createNotification = async (notificationData: Omit<AppNotification, "id" | "createdAt" | "isRead">) => {
   if (typeof window !== "undefined") {
+    const { getAuth } = await import("firebase/auth")
+    const currentUserId = getAuth().currentUser?.uid
+    if (!currentUserId) {
+      throw new Error("Authentication required for notifications")
+    }
+    if (notificationData.userId !== currentUserId) {
+      throw new Error("Cross-user notifications must be created from trusted server routes")
+    }
+
     const res = await authFetchJson<{ notificationId?: string }>("/api/notifications", {
       method: "POST",
       body: notificationData,

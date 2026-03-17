@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useEffect, useState } from "react"
+import { OnboardingModal } from "@/components/onboarding-modal"
 import debounce from "lodash/debounce"
 import { ChevronLeft, ChevronRight, Loader2, Package, Search, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
@@ -31,7 +32,7 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, hasSeenOnboarding } = useAuth()
   const { tt } = useI18n()
 
   useEffect(() => {
@@ -76,6 +77,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <OnboardingModal open={!!user && !authLoading && !hasSeenOnboarding} onOpenChange={() => {}} />
       <div className="border-b bg-linear-to-b from-primary/5 to-background">
         <div className="container mx-auto px-4 py-10 sm:py-14">
           <div className="space-y-3">

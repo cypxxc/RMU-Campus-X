@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useCallback, useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { deleteItem, updateItem } from "@/lib/firestore"
@@ -25,14 +25,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Loader2, Package, Trash2, Edit, Save, History, Camera, AlertTriangle, ImagePlus, X, MapPin } from "lucide-react"
+import { Loader2, Package, Trash2, Edit, Save, History, Camera, AlertTriangle, ImagePlus, X, MapPin, Ban, UserCheck } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 import Image from "next/image"
 import { uploadToCloudinary, validateImageFile } from "@/lib/storage"
 import { getFirebaseAuth } from "@/lib/firebase"
 import { IMAGE_UPLOAD_CONFIG, LOCATION_OPTIONS } from "@/lib/constants"
-import { updateUserProfile, getUserProfile } from "@/lib/firestore"
+import { updateUserProfile, getUserProfile, getUserPublicProfile } from "@/lib/firestore"
 import { extractPublicIdFromUrl, resolveImageUrl } from "@/lib/cloudinary-url"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -47,6 +47,13 @@ import { MyItemsList } from "@/components/profile/my-items-list"
 import { CompletedExchangesList } from "@/components/profile/completed-exchanges-list"
 import { EditProfileForm } from "@/components/profile/edit-profile-form"
 import { PasswordChangeForm } from "@/components/profile/password-change-form"
+import { getBlockedUserIds, unblockUser } from "@/lib/db/blocked-users"
+
+interface BlockedUserPreview {
+  uid: string
+  displayName: string
+  photoURL: string | null
+}
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
@@ -55,6 +62,9 @@ export default function ProfilePage() {
   // Data State
   const [completedExchanges, setCompletedExchanges] = useState<Exchange[]>([])
   const [loadingExchanges, setLoadingExchanges] = useState(true)
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserPreview[]>([])
+  const [loadingBlockedUsers, setLoadingBlockedUsers] = useState(true)
+  const [unblockingUserId, setUnblockingUserId] = useState<string | null>(null)
   // Edit Item State
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [editTitle, setEditTitle] = useState("")
@@ -104,29 +114,7 @@ export default function ProfilePage() {
     enabled: !!user,
   })
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login")
-    } else if (!authLoading && user) {
-      setLoading(false)
-      loadProfile()
-      loadCompletedExchanges()
-    }
-  }, [user, authLoading, router])
-
-  useEffect(() => {
-    if (!user) return
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refetchMyItems()
-        loadCompletedExchanges()
-      }
-    }
-    document.addEventListener("visibilitychange", onVisibilityChange)
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange)
-  }, [user, refetchMyItems])
-
-  const loadCompletedExchanges = async () => {
+  const loadCompletedExchanges = useCallback(async () => {
     if (!user) return
     setLoadingExchanges(true)
     try {
@@ -142,9 +130,69 @@ export default function ProfilePage() {
     } finally {
       if (mountedRef.current) setLoadingExchanges(false)
     }
+  }, [user])
+
+  const loadBlockedUsers = useCallback(async () => {
+    if (!user) return
+    setLoadingBlockedUsers(true)
+    try {
+      const blockedIds = await getBlockedUserIds()
+      if (!mountedRef.current) return
+      if (blockedIds.length === 0) {
+        setBlockedUsers([])
+        return
+      }
+
+      const profiles = await Promise.all(
+        blockedIds.slice(0, 200).map(async (blockedUserId) => {
+          const profile = await getUserPublicProfile(blockedUserId)
+          const displayName =
+            typeof profile?.displayName === "string" && profile.displayName.trim()
+              ? profile.displayName
+              : blockedUserId
+          const photoURL = typeof profile?.photoURL === "string" && profile.photoURL.trim()
+            ? profile.photoURL
+            : null
+          return {
+            uid: blockedUserId,
+            displayName,
+            photoURL,
+          } satisfies BlockedUserPreview
+        })
+      )
+
+      if (!mountedRef.current) return
+      setBlockedUsers(profiles)
+    } catch (error) {
+      if (!mountedRef.current) return
+      console.error("Error loading blocked users:", error)
+      setBlockedUsers([])
+    } finally {
+      if (mountedRef.current) setLoadingBlockedUsers(false)
+    }
+  }, [user])
+
+  const handleUnblockUser = async (targetUserId: string) => {
+    setUnblockingUserId(targetUserId)
+    try {
+      await unblockUser(targetUserId)
+      if (!mountedRef.current) return
+      setBlockedUsers((prev) => prev.filter((blocked) => blocked.uid !== targetUserId))
+      toast({ title: tt("ยกเลิกการบล็อกแล้ว", "User unblocked") })
+    } catch (error) {
+      console.error("Error unblocking user:", error)
+      if (!mountedRef.current) return
+      toast({
+        title: tt("เกิดข้อผิดพลาด", "Error"),
+        description: tt("ยกเลิกการบล็อกไม่สำเร็จ โปรดลองอีกครั้ง", "Unable to unblock user. Please try again."),
+        variant: "destructive",
+      })
+    } finally {
+      if (mountedRef.current) setUnblockingUserId(null)
+    }
   }
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     if (!user) return
     try {
       const profile = await getUserProfile(user.uid)
@@ -157,7 +205,31 @@ export default function ProfilePage() {
       if (!mountedRef.current) return
       console.error("Error loading profile:", error)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login")
+    } else if (!authLoading && user) {
+      setLoading(false)
+      void loadProfile()
+      void loadCompletedExchanges()
+      void loadBlockedUsers()
+    }
+  }, [authLoading, loadBlockedUsers, loadCompletedExchanges, loadProfile, router, user])
+
+  useEffect(() => {
+    if (!user) return
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refetchMyItems()
+        void loadCompletedExchanges()
+        void loadBlockedUsers()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange)
+  }, [loadBlockedUsers, loadCompletedExchanges, refetchMyItems, user])
 
   const handleOpenEditItem = (item: Item) => {
     setSelectedItem(item)
@@ -497,6 +569,64 @@ export default function ProfilePage() {
                 <div className="mt-6">
                   <LineNotificationSettings profile={userProfile} onUpdate={loadProfile} />
                 </div>
+
+                <Card className="mt-6 border-border/60">
+                  <CardContent className="p-4 sm:p-5 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Ban className="h-4 w-4 text-destructive" />
+                        <h4 className="font-medium">{tt("Blocked users", "Blocked users")}</h4>
+                      </div>
+                      <Badge variant="outline">{blockedUsers.length}</Badge>
+                    </div>
+
+                    {loadingBlockedUsers ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {tt("Loading blocked users...", "Loading blocked users...")}
+                      </div>
+                    ) : blockedUsers.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {tt("You have no blocked users.", "You have no blocked users.")}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {blockedUsers.map((blockedUser) => (
+                          <div
+                            key={blockedUser.uid}
+                            className="flex items-center justify-between gap-3 rounded-md border p-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Avatar className="h-9 w-9">
+                                <AvatarImage src={resolveImageUrl(blockedUser.photoURL ?? undefined) || undefined} />
+                                <AvatarFallback>{blockedUser.displayName[0] || "?"}</AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{blockedUser.displayName}</p>
+                                <p className="text-xs text-muted-foreground truncate">{blockedUser.uid}</p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={unblockingUserId === blockedUser.uid}
+                              className="gap-2 shrink-0"
+                              onClick={() => handleUnblockUser(blockedUser.uid)}
+                            >
+                              {unblockingUserId === blockedUser.uid ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <UserCheck className="h-4 w-4" />
+                              )}
+                              {tt("Unblock", "Unblock")}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
                 <PasswordChangeForm 
                   onCheckPassword={(pass, confirm) => {

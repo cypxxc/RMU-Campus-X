@@ -61,6 +61,9 @@ export interface User {
     average: number
     count: number
   }
+
+  // Blocked users (user IDs that this user has blocked)
+  blockedUserIds?: string[]
 }
 
 export interface Item {

@@ -53,100 +53,116 @@ function parseDateInput(input: unknown): { value: Date | null; valid: boolean } 
   return { value: parsed, valid: true }
 }
 
+class AdminAnnouncementController {
+  async patch(request: NextRequest, params: Promise<{ id: string }>) {
+    const { authorized, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+
+    const { id } = await params
+    if (!id) return errorResponse(AdminErrorCode.VALIDATION_ERROR, "Missing announcement ID", 400)
+
+    try {
+      const db = getAdminDb()
+      const ref = db.collection("announcements").doc(id)
+      const snap = await ref.get()
+      if (!snap.exists) return errorResponse(AdminErrorCode.NOT_FOUND, "ไม่พบประกาศนี้", 404)
+
+      const current = snap.data() ?? {}
+      const body = await request.json().catch(() => ({}))
+
+      const titleSource = hasKey(body, "title") ? (body as { title?: unknown }).title : current.title
+      const messageSource = hasKey(body, "message") ? (body as { message?: unknown }).message : current.message
+      const title = typeof titleSource === "string" ? titleSource.trim() : ""
+      const message = typeof messageSource === "string" ? messageSource.trim() : ""
+      if (!title) {
+        return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุหัวข้อประกาศ", 400)
+      }
+      if (!message) {
+        return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุเนื้อหาประกาศ", 400)
+      }
+
+      const type = hasKey(body, "type") ? parseType((body as { type?: unknown }).type) : parseType(current.type)
+      const isActive = hasKey(body, "isActive") ? (body as { isActive?: unknown }).isActive !== false : current.isActive !== false
+      const linkUrl = hasKey(body, "linkUrl")
+        ? parseOptionalText((body as { linkUrl?: unknown }).linkUrl)
+        : (current.linkUrl ?? null)
+      const linkLabel = hasKey(body, "linkLabel")
+        ? parseOptionalText((body as { linkLabel?: unknown }).linkLabel)
+        : (current.linkLabel ?? null)
+      const imagePublicId = hasKey(body, "imagePublicId")
+        ? parseOptionalText((body as { imagePublicId?: unknown }).imagePublicId)
+        : (parseOptionalText(current.imagePublicId) ?? parseOptionalText(current.imageUrl))
+
+      const startInput = hasKey(body, "startAt")
+        ? parseDateInput((body as { startAt?: unknown }).startAt)
+        : { value: toDate(current.startAt), valid: true }
+      const endInput = hasKey(body, "endAt")
+        ? parseDateInput((body as { endAt?: unknown }).endAt)
+        : { value: toDate(current.endAt), valid: true }
+
+      if (!startInput.valid) {
+        return errorResponse(AdminErrorCode.VALIDATION_ERROR, "รูปแบบวันเริ่มแสดงไม่ถูกต้อง", 400)
+      }
+      if (!endInput.valid) {
+        return errorResponse(AdminErrorCode.VALIDATION_ERROR, "รูปแบบวันหมดอายุไม่ถูกต้อง", 400)
+      }
+      if (startInput.value && endInput.value && endInput.value < startInput.value) {
+        return errorResponse(AdminErrorCode.VALIDATION_ERROR, "วันหมดอายุต้องมากกว่าวันเริ่มแสดง", 400)
+      }
+
+      await ref.update({
+        title,
+        message,
+        type,
+        isActive,
+        startAt: startInput.value ? Timestamp.fromDate(startInput.value) : null,
+        endAt: endInput.value ? Timestamp.fromDate(endInput.value) : null,
+        linkUrl,
+        linkLabel,
+        imagePublicId,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+
+      return successResponse({ id })
+    } catch (err) {
+      console.error("[Admin API] Announcement PATCH Error:", err)
+      return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to update announcement", 500)
+    }
+  }
+
+  async delete(request: NextRequest, params: Promise<{ id: string }>) {
+    const { authorized, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+
+    const { id } = await params
+    if (!id) return errorResponse(AdminErrorCode.VALIDATION_ERROR, "Missing announcement ID", 400)
+
+    try {
+      const db = getAdminDb()
+      const ref = db.collection("announcements").doc(id)
+      const snap = await ref.get()
+      if (!snap.exists) return errorResponse(AdminErrorCode.NOT_FOUND, "ไม่พบประกาศนี้", 404)
+      await ref.delete()
+      return successResponse({ id })
+    } catch (err) {
+      console.error("[Admin API] Announcement DELETE Error:", err)
+      return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to delete announcement", 500)
+    }
+  }
+}
+
+const controller = new AdminAnnouncementController()
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { authorized, error } = await verifyAdminAccess(request)
-  if (!authorized) return error!
-
-  const { id } = await params
-  if (!id) return errorResponse(AdminErrorCode.VALIDATION_ERROR, "Missing announcement ID", 400)
-
-  try {
-    const db = getAdminDb()
-    const ref = db.collection("announcements").doc(id)
-    const snap = await ref.get()
-    if (!snap.exists) return errorResponse(AdminErrorCode.NOT_FOUND, "ไม่พบประกาศนี้", 404)
-
-    const current = snap.data() ?? {}
-    const body = await request.json().catch(() => ({}))
-
-    const titleSource = hasKey(body, "title") ? body.title : current.title
-    const messageSource = hasKey(body, "message") ? body.message : current.message
-    const title = typeof titleSource === "string" ? titleSource.trim() : ""
-    const message = typeof messageSource === "string" ? messageSource.trim() : ""
-    if (!title) {
-      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุหัวข้อประกาศ", 400)
-    }
-    if (!message) {
-      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุเนื้อหาประกาศ", 400)
-    }
-
-    const type = hasKey(body, "type") ? parseType(body.type) : parseType(current.type)
-    const isActive = hasKey(body, "isActive") ? body.isActive !== false : current.isActive !== false
-    const linkUrl = hasKey(body, "linkUrl") ? parseOptionalText(body.linkUrl) : (current.linkUrl ?? null)
-    const linkLabel = hasKey(body, "linkLabel") ? parseOptionalText(body.linkLabel) : (current.linkLabel ?? null)
-    const imagePublicId = hasKey(body, "imagePublicId")
-      ? parseOptionalText(body.imagePublicId)
-      : (parseOptionalText(current.imagePublicId) ?? parseOptionalText(current.imageUrl))
-
-    const startInput = hasKey(body, "startAt")
-      ? parseDateInput(body.startAt)
-      : { value: toDate(current.startAt), valid: true }
-    const endInput = hasKey(body, "endAt")
-      ? parseDateInput(body.endAt)
-      : { value: toDate(current.endAt), valid: true }
-
-    if (!startInput.valid) {
-      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "รูปแบบวันเริ่มแสดงไม่ถูกต้อง", 400)
-    }
-    if (!endInput.valid) {
-      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "รูปแบบวันหมดอายุไม่ถูกต้อง", 400)
-    }
-    if (startInput.value && endInput.value && endInput.value < startInput.value) {
-      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "วันหมดอายุต้องมากกว่าวันเริ่มแสดง", 400)
-    }
-
-    await ref.update({
-      title,
-      message,
-      type,
-      isActive,
-      startAt: startInput.value ? Timestamp.fromDate(startInput.value) : null,
-      endAt: endInput.value ? Timestamp.fromDate(endInput.value) : null,
-      linkUrl,
-      linkLabel,
-      imagePublicId,
-      updatedAt: FieldValue.serverTimestamp(),
-    })
-
-    return successResponse({ id })
-  } catch (err) {
-    console.error("[Admin API] Announcement PATCH Error:", err)
-    return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to update announcement", 500)
-  }
+  return controller.patch(request, params)
 }
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { authorized, error } = await verifyAdminAccess(request)
-  if (!authorized) return error!
-
-  const { id } = await params
-  if (!id) return errorResponse(AdminErrorCode.VALIDATION_ERROR, "Missing announcement ID", 400)
-
-  try {
-    const db = getAdminDb()
-    const ref = db.collection("announcements").doc(id)
-    const snap = await ref.get()
-    if (!snap.exists) return errorResponse(AdminErrorCode.NOT_FOUND, "ไม่พบประกาศนี้", 404)
-    await ref.delete()
-    return successResponse({ id })
-  } catch (err) {
-    console.error("[Admin API] Announcement DELETE Error:", err)
-    return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to delete announcement", 500)
-  }
+  return controller.delete(request, params)
 }

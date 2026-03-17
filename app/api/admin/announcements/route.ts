@@ -39,91 +39,103 @@ function parseImageRef(input: unknown): string | null {
   return value.length > 0 ? value : null
 }
 
-export async function GET(request: NextRequest) {
-  const { authorized, error } = await verifyAdminAccess(request)
-  if (!authorized) return error!
+class AdminAnnouncementsController {
+  async get(request: NextRequest) {
+    const { authorized, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
 
-  try {
-    const db = getAdminDb()
-    const snapshot = await db
-      .collection("announcements")
-      .orderBy("createdAt", "desc")
-      .limit(100)
-      .get()
+    try {
+      const db = getAdminDb()
+      const snapshot = await db
+        .collection("announcements")
+        .orderBy("createdAt", "desc")
+        .limit(100)
+        .get()
 
-    const announcements = snapshot.docs.map((doc) => {
-      const data = doc.data()
-      return {
-        id: doc.id,
-        title: data.title ?? "",
-        message: data.message ?? "",
-        type: parseType(data.type),
-        isActive: data.isActive ?? true,
-        startAt: data.startAt ?? null,
-        endAt: data.endAt ?? null,
-        linkUrl: data.linkUrl ?? null,
-        linkLabel: data.linkLabel ?? null,
-        imagePublicId: parseImageRef(data.imagePublicId) ?? parseImageRef(data.imageUrl),
-        createdBy: data.createdBy ?? "",
-        createdByEmail: data.createdByEmail ?? undefined,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
+      const announcements = snapshot.docs.map((doc) => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          title: data.title ?? "",
+          message: data.message ?? "",
+          type: parseType(data.type),
+          isActive: data.isActive ?? true,
+          startAt: data.startAt ?? null,
+          endAt: data.endAt ?? null,
+          linkUrl: data.linkUrl ?? null,
+          linkLabel: data.linkLabel ?? null,
+          imagePublicId: parseImageRef(data.imagePublicId) ?? parseImageRef(data.imageUrl),
+          createdBy: data.createdBy ?? "",
+          createdByEmail: data.createdByEmail ?? undefined,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        }
+      })
+
+      return successResponse({ announcements })
+    } catch (err) {
+      console.error("[Admin API] Announcements GET Error:", err)
+      return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to fetch announcements", 500)
+    }
+  }
+
+  async post(request: NextRequest) {
+    const { authorized, error, user } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+
+    try {
+      const body = await request.json()
+      const title = typeof body.title === "string" ? body.title.trim() : ""
+      const message = typeof body.message === "string" ? body.message.trim() : ""
+      const type = parseType(body.type)
+      const isActive = body.isActive !== false
+      const startAt = parseOptionalDate(body.startAt)
+      const endAt = parseOptionalDate(body.endAt)
+      const linkUrl = parseOptionalText(body.linkUrl)
+      const linkLabel = parseOptionalText(body.linkLabel)
+      const imagePublicId = parseOptionalText(body.imagePublicId)
+
+      if (!title) {
+        return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุหัวข้อประกาศ", 400)
       }
-    })
+      if (!message) {
+        return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุเนื้อหาประกาศ", 400)
+      }
+      if (startAt && endAt && endAt < startAt) {
+        return errorResponse(AdminErrorCode.VALIDATION_ERROR, "วันหมดอายุต้องมากกว่าวันเริ่มแสดง", 400)
+      }
 
-    return successResponse({ announcements })
-  } catch (err) {
-    console.error("[Admin API] Announcements GET Error:", err)
-    return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to fetch announcements", 500)
+      const db = getAdminDb()
+      const ref = await db.collection("announcements").add({
+        title,
+        message,
+        type,
+        isActive,
+        startAt: startAt ? Timestamp.fromDate(startAt) : null,
+        endAt: endAt ? Timestamp.fromDate(endAt) : null,
+        linkUrl,
+        linkLabel,
+        imagePublicId,
+        createdBy: user?.uid ?? "",
+        createdByEmail: user?.email ?? "",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+
+      return successResponse({ id: ref.id })
+    } catch (err) {
+      console.error("[Admin API] Announcements POST Error:", err)
+      return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to create announcement", 500)
+    }
   }
 }
 
+const controller = new AdminAnnouncementsController()
+
+export async function GET(request: NextRequest) {
+  return controller.get(request)
+}
+
 export async function POST(request: NextRequest) {
-  const { authorized, error, user } = await verifyAdminAccess(request)
-  if (!authorized) return error!
-
-  try {
-    const body = await request.json()
-    const title = typeof body.title === "string" ? body.title.trim() : ""
-    const message = typeof body.message === "string" ? body.message.trim() : ""
-    const type = parseType(body.type)
-    const isActive = body.isActive !== false
-    const startAt = parseOptionalDate(body.startAt)
-    const endAt = parseOptionalDate(body.endAt)
-    const linkUrl = parseOptionalText(body.linkUrl)
-    const linkLabel = parseOptionalText(body.linkLabel)
-    const imagePublicId = parseOptionalText(body.imagePublicId)
-
-    if (!title) {
-      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุหัวข้อประกาศ", 400)
-    }
-    if (!message) {
-      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "กรุณาระบุเนื้อหาประกาศ", 400)
-    }
-    if (startAt && endAt && endAt < startAt) {
-      return errorResponse(AdminErrorCode.VALIDATION_ERROR, "วันหมดอายุต้องมากกว่าวันเริ่มแสดง", 400)
-    }
-
-    const db = getAdminDb()
-    const ref = await db.collection("announcements").add({
-      title,
-      message,
-      type,
-      isActive,
-      startAt: startAt ? Timestamp.fromDate(startAt) : null,
-      endAt: endAt ? Timestamp.fromDate(endAt) : null,
-      linkUrl,
-      linkLabel,
-      imagePublicId,
-      createdBy: user?.uid ?? "",
-      createdByEmail: user?.email ?? "",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    })
-
-    return successResponse({ id: ref.id })
-  } catch (err) {
-    console.error("[Admin API] Announcements POST Error:", err)
-    return errorResponse(AdminErrorCode.INTERNAL_ERROR, "Failed to create announcement", 500)
-  }
+  return controller.post(request)
 }

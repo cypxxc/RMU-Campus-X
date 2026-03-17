@@ -2,7 +2,7 @@
 
 // React import removed - not needed
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, useCallback, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { getItemById } from "@/lib/firestore"
@@ -93,18 +93,7 @@ function ReportContent() {
     else setReportType("item_report")
   }, [itemId, exchangeId, chatId, userId])
 
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    if (itemId) {
-      loadItem()
-    }
-  }, [itemId, user, authLoading])
-
-  const loadItem = async () => {
+  const loadItem = useCallback(async () => {
     if (!itemId) return
 
     try {
@@ -121,7 +110,18 @@ function ReportContent() {
         variant: "destructive",
       })
     }
-  }
+  }, [itemId, toast, tt])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    if (itemId) {
+      void loadItem()
+    }
+  }, [authLoading, itemId, loadItem, router, user])
 
   const reportTypeLabels: Record<ReportType, string> = {
     item_report: tt("รายงานสิ่งของ", "Item report"),

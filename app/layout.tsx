@@ -13,6 +13,7 @@ import { ConsentGuard } from "@/components/consent-guard"
 import { TopLoadingBar } from "@/components/top-loading-bar"
 import { SmoothScrollProvider } from "@/components/smooth-scroll-provider"
 import { CookieConsentBanner } from "@/components/cookie-consent-banner"
+import { HelpBotWrapper } from "@/components/help-bot-wrapper"
 import { LanguageProvider } from "@/components/language-provider"
 import { getServerLocale } from "@/lib/i18n/server"
 import "./globals.css"
@@ -128,6 +129,7 @@ export default async function RootLayout({
                     <TopLoadingBar />
                     {children}
                     <ConditionalFooter />
+                    <HelpBotWrapper />
                     <CookieConsentBanner />
                   </SmoothScrollProvider>
                 </NavigationHistoryProvider>

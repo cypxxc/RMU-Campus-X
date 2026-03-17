@@ -13,9 +13,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { confirmExchangeSchema } from "@/lib/schemas";
 import type { ExchangeStatus } from "@/types";
 
-export const POST = withValidation(
-  confirmExchangeSchema,
-  async (_request, data, ctx: ValidationContext | null) => {
+class ConfirmExchangeController {
+  async post(data: unknown, ctx: ValidationContext | null) {
     if (!ctx) {
       return NextResponse.json(
         { error: "Authentication context missing", code: "AUTH_ERROR" },
@@ -23,7 +22,7 @@ export const POST = withValidation(
       );
     }
 
-    const { exchangeId, role } = data;
+    const { exchangeId, role } = data as { exchangeId: string; role: "owner" | "requester" };
     const userId = ctx.userId;
 
     try {
@@ -47,17 +46,12 @@ export const POST = withValidation(
         };
 
         if (!["accepted", "in_progress"].includes(exchange.status)) {
-          throw new Error(
-            `Cannot confirm exchange in status: ${exchange.status}`
-          );
+          throw new Error(`Cannot confirm exchange in status: ${exchange.status}`);
         }
 
         const isOwner = exchange.ownerId === userId;
         const isRequester = exchange.requesterId === userId;
-        if (
-          (role === "owner" && !isOwner) ||
-          (role === "requester" && !isRequester)
-        ) {
+        if ((role === "owner" && !isOwner) || (role === "requester" && !isRequester)) {
           throw new Error("Only the owner or requester can confirm for their role");
         }
 
@@ -74,7 +68,6 @@ export const POST = withValidation(
 
         let newStatus: ExchangeStatus = exchange.status;
 
-        // Legacy compatibility: old "accepted" records should be treated as in_progress
         if (exchange.status === "accepted") {
           newStatus = "in_progress";
           updates.status = "in_progress";
@@ -101,7 +94,6 @@ export const POST = withValidation(
         };
       });
 
-      // Notifications (outside transaction)
       if (result.status === "completed") {
         await db.collection("notifications").add({
           userId: result.ownerId,
@@ -122,8 +114,7 @@ export const POST = withValidation(
           createdAt: FieldValue.serverTimestamp(),
         });
       } else {
-        const otherUserId =
-          role === "owner" ? result.requesterId : result.ownerId;
+        const otherUserId = role === "owner" ? result.requesterId : result.ownerId;
         const title = "อีกฝ่ายยืนยันแล้ว";
         const message =
           role === "owner"
@@ -147,37 +138,28 @@ export const POST = withValidation(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
 
-      if (
-        message.includes("not found") ||
-        message.includes("Exchange not found")
-      ) {
-        return NextResponse.json(
-          { error: message, code: "NOT_FOUND" },
-          { status: 404 }
-        );
+      if (message.includes("not found") || message.includes("Exchange not found")) {
+        return NextResponse.json({ error: message, code: "NOT_FOUND" }, { status: 404 });
       }
-      if (
-        message.includes("Only the owner") ||
-        message.includes("cannot confirm")
-      ) {
-        return NextResponse.json(
-          { error: message, code: "FORBIDDEN" },
-          { status: 403 }
-        );
+      if (message.includes("Only the owner") || message.includes("cannot confirm")) {
+        return NextResponse.json({ error: message, code: "FORBIDDEN" }, { status: 403 });
       }
       if (message.includes("Cannot confirm")) {
-        return NextResponse.json(
-          { error: message, code: "INVALID_STATE" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: message, code: "INVALID_STATE" }, { status: 400 });
       }
 
       console.error("[ConfirmExchange] Error:", error);
-      return NextResponse.json(
-        { error: message, code: "INTERNAL_ERROR" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: message, code: "INTERNAL_ERROR" }, { status: 500 });
     }
+  }
+}
+
+const controller = new ConfirmExchangeController();
+
+export const POST = withValidation(
+  confirmExchangeSchema,
+  async (_request, data, ctx: ValidationContext | null) => {
+    return controller.post(data, ctx);
   },
   { requireAuth: true }
 );

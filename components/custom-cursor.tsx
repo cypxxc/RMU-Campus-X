@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 
 /**
  * Custom Brand Cursor - วงกลมเล็กขยายเมื่อ hover ปุ่ม/ลิงก์
@@ -13,13 +13,6 @@ export function CustomCursor() {
   const rafRef = useRef<number>(0)
   const posRef = useRef({ x: -100, y: -100 })
   const targetRef = useRef({ x: -100, y: -100 })
-
-  const updateCursor = useCallback(() => {
-    posRef.current.x += (targetRef.current.x - posRef.current.x) * 0.15
-    posRef.current.y += (targetRef.current.y - posRef.current.y) * 0.15
-    setPos({ ...posRef.current })
-    rafRef.current = requestAnimationFrame(updateCursor)
-  }, [])
 
   useEffect(() => {
     setMounted(true)
@@ -49,10 +42,17 @@ export function CustomCursor() {
       if (!related?.closest?.(interactiveSelector)) setIsHovering(false)
     }
 
+    const tick = () => {
+      posRef.current.x += (targetRef.current.x - posRef.current.x) * 0.15
+      posRef.current.y += (targetRef.current.y - posRef.current.y) * 0.15
+      setPos({ ...posRef.current })
+      rafRef.current = requestAnimationFrame(tick)
+    }
+
     document.addEventListener("mousemove", onMove, { passive: true })
     document.addEventListener("mouseover", onOver, { passive: true })
     document.addEventListener("mouseout", onOut, { passive: true })
-    rafRef.current = requestAnimationFrame(updateCursor)
+    rafRef.current = requestAnimationFrame(tick)
 
     return () => {
       document.removeEventListener("mousemove", onMove)
@@ -60,7 +60,7 @@ export function CustomCursor() {
       document.removeEventListener("mouseout", onOut)
       cancelAnimationFrame(rafRef.current)
     }
-  }, [mounted, updateCursor])
+  }, [mounted])
 
   useEffect(() => {
     if (!mounted) return

@@ -12,9 +12,11 @@ import { respondExchangeSchema } from "@/lib/schemas"
 import { validateTransition } from "@/lib/exchange-state-machine"
 import type { ExchangeStatus } from "@/types"
 
-export const POST = withValidation(
-  respondExchangeSchema,
-  async (_request, data, ctx: ValidationContext | null) => {
+class RespondExchangeController {
+  async post(
+    data: unknown,
+    ctx: ValidationContext | null
+  ) {
     if (!ctx) {
       return NextResponse.json(
         { error: "Authentication context missing", code: "AUTH_ERROR" },
@@ -22,7 +24,7 @@ export const POST = withValidation(
       )
     }
 
-    const { exchangeId, action } = data
+    const { exchangeId, action } = data as { exchangeId: string; action: "accept" | "reject" }
     const userId = ctx.userId
 
     try {
@@ -85,30 +87,27 @@ export const POST = withValidation(
       const message = error instanceof Error ? error.message : "Unknown error"
 
       if (message.includes("ไม่พบ") || message.includes("not found")) {
-        return NextResponse.json(
-          { error: message, code: "NOT_FOUND" },
-          { status: 404 }
-        )
+        return NextResponse.json({ error: message, code: "NOT_FOUND" }, { status: 404 })
       }
       if (message.includes("เฉพาะเจ้าของ") || message.includes("owner")) {
-        return NextResponse.json(
-          { error: message, code: "FORBIDDEN" },
-          { status: 403 }
-        )
+        return NextResponse.json({ error: message, code: "FORBIDDEN" }, { status: 403 })
       }
       if (message.includes("Invalid status") || message.includes("Cannot change")) {
-        return NextResponse.json(
-          { error: message, code: "INVALID_TRANSITION" },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: message, code: "INVALID_TRANSITION" }, { status: 400 })
       }
 
       console.error("[RespondExchange] Error:", error)
-      return NextResponse.json(
-        { error: message, code: "INTERNAL_ERROR" },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: message, code: "INTERNAL_ERROR" }, { status: 500 })
     }
+  }
+}
+
+const controller = new RespondExchangeController()
+
+export const POST = withValidation(
+  respondExchangeSchema,
+  async (_request, data, ctx: ValidationContext | null) => {
+    return controller.post(data, ctx)
   },
   { requireAuth: true, requireTermsAccepted: true }
 )

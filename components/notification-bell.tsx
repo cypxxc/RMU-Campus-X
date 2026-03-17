@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState, useRef, useCallback } from "react"
-import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from "@/lib/firestore"
-import { isTransientNetworkError } from "@/lib/api-client"
+import { subscribeToNotifications } from "@/lib/services/client-firestore"
+import { markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from "@/lib/firestore"
 import { useAuth } from "@/components/auth-provider"
 import type { AppNotification } from "@/types"
 import { Bell } from "lucide-react"
@@ -21,8 +21,8 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const shownToasts = useRef<Map<string, number>>(new Map())
-  const lastProcessedTime = useRef<number>(0)
   const prevNotificationIds = useRef<Set<string>>(new Set())
+  const realtimeErrorShown = useRef(false)
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -52,70 +52,64 @@ export function NotificationBell() {
     }
   }, [router])
 
-  const fetchNotifications = useCallback(async (showNewToasts = false) => {
-    if (!user) return
-    if (typeof navigator !== "undefined" && navigator.onLine === false) return
-    try {
-      const { notifications: list } = await getNotifications(user.uid, { pageSize: 20, includeTotalCount: false })
-      const all = (list || []).slice(0, 10)
-
-      if (showNewToasts) {
-        const prevIds = prevNotificationIds.current
-        const now = Date.now()
-        all.forEach((n) => {
-          if (prevIds.has(n.id)) return
-          const notifTime = toCreatedAtMs(n)
-          if (now - notifTime > 30000) return
-          if (shownToasts.current.has(n.id)) return
-          const contentHash = `${n.title}::${n.message}`
-          let contentShownRecently = false
-          shownToasts.current.forEach((ts, key) => {
-            if (key === `content::${contentHash}` && now - ts < 5000) contentShownRecently = true
-          })
-          if (contentShownRecently) return
-          shownToasts.current.set(n.id, now)
-          shownToasts.current.set(`content::${contentHash}`, now)
-          toast({
-            title: n.title,
-            description: n.message,
-            onClick: () => handleMarkAsRead(n.id, n.relatedId, n.type),
-          })
+  const showNewToastsForList = useCallback(
+    (all: AppNotification[]) => {
+      const prevIds = prevNotificationIds.current
+      const now = Date.now()
+      all.slice(0, 10).forEach((n) => {
+        if (prevIds.has(n.id)) return
+        const notifTime = toCreatedAtMs(n)
+        if (now - notifTime > 30000) return
+        if (shownToasts.current.has(n.id)) return
+        const contentHash = `${n.title}::${n.message}`
+        let contentShownRecently = false
+        shownToasts.current.forEach((ts, key) => {
+          if (key === `content::${contentHash}` && now - ts < 5000) contentShownRecently = true
         })
-      }
-
-      setNotifications(all)
-      setUnreadCount(all.filter((n) => !n.isRead).length)
+        if (contentShownRecently) return
+        shownToasts.current.set(n.id, now)
+        shownToasts.current.set(`content::${contentHash}`, now)
+        toast({
+          title: n.title,
+          description: n.message,
+          onClick: () => handleMarkAsRead(n.id, n.relatedId, n.type),
+        })
+      })
       prevNotificationIds.current = new Set(all.map((n) => n.id))
-      lastProcessedTime.current = Date.now()
-    } catch (err) {
-      if (isTransientNetworkError(err)) return
-      console.error("[NotificationBell] Fetch error:", err)
-    }
-  }, [user, toast, handleMarkAsRead])
+    },
+    [toast, handleMarkAsRead]
+  )
 
   useEffect(() => {
     if (!user) return
 
-    const POLL_MS = 45_000
-    const t = setTimeout(() => fetchNotifications(false), 0)
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
-      fetchNotifications(true)
-    }, POLL_MS)
-
-    const onVisibilityChange = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        fetchNotifications(true)
+    const unsub = subscribeToNotifications(
+      user.uid,
+      20,
+      (list) => {
+        realtimeErrorShown.current = false
+        const all = list.slice(0, 10)
+        setNotifications(all)
+        setUnreadCount(all.filter((n) => !n.isRead).length)
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          showNewToastsForList(all)
+        }
+      },
+      () => {
+        if (realtimeErrorShown.current) return
+        realtimeErrorShown.current = true
+        toast({
+          title: tt("การแจ้งเตือนแบบเรียลไทม์ขัดข้องชั่วคราว", "Realtime notifications interrupted"),
+          description: tt("ระบบจะพยายามเชื่อมต่อใหม่อัตโนมัติ", "The app will reconnect automatically."),
+          variant: "destructive",
+        })
       }
-    }
-    document.addEventListener("visibilitychange", onVisibilityChange)
+    )
 
     return () => {
-      clearTimeout(t)
-      clearInterval(interval)
-      document.removeEventListener("visibilitychange", onVisibilityChange)
+      unsub()
     }
-  }, [user, fetchNotifications])
+  }, [user, showNewToastsForList, toast, tt])
 
   const handleMarkAllRead = async () => {
     if (!user) return
@@ -159,7 +153,7 @@ export function NotificationBell() {
   if (!user) return null
 
   return (
-    <DropdownMenu onOpenChange={(open) => open && fetchNotifications(false)}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative h-9 w-9 group" aria-label={tt("การแจ้งเตือน", "Notifications")}>
           <Bell className={`h-5 w-5 transition-transform group-hover:scale-110 ${unreadCount > 0 ? "text-primary" : ""}`} />

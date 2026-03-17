@@ -10,66 +10,102 @@ import { ApiErrors, getAuthToken, successResponse } from "@/lib/api-response"
 
 const MAX_MARK_READ_IDS = 200
 
+class ChatMessagesReadController {
+  async post(request: NextRequest, params: Promise<{ exchangeId: string }>) {
+    try {
+      const token = getAuthToken(request)
+      if (!token) return ApiErrors.unauthorized("Missing authentication token")
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+
+      const { exchangeId } = await params
+      if (!exchangeId) return ApiErrors.badRequest("Missing exchangeId")
+
+      const db = getAdminDb()
+      const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
+      if (!exchangeSnap.exists) return ApiErrors.notFound("Exchange not found")
+
+      const exchange = exchangeSnap.data() as { ownerId: string; requesterId: string }
+      if (!isParticipant(exchange.ownerId, exchange.requesterId, decoded.uid)) {
+        return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้น")
+      }
+
+      if (await isExchangeBlocked(db, exchange.ownerId, exchange.requesterId)) {
+        return ApiErrors.forbidden(
+          "Chat is unavailable because one participant has blocked the other"
+        )
+      }
+
+      let body: { messageIds?: string[] }
+      try {
+        body = await request.json()
+      } catch {
+        return ApiErrors.badRequest("Invalid JSON body")
+      }
+      const messageIds = Array.isArray(body?.messageIds)
+        ? [...new Set(body.messageIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0))].slice(
+            0,
+            MAX_MARK_READ_IDS
+          )
+        : []
+      if (messageIds.length === 0) return successResponse({ updated: 0 })
+
+      const refs = messageIds.map((id) => db.collection("chatMessages").doc(id))
+      const snapshots = await db.getAll(...refs)
+
+      const now = FieldValue.serverTimestamp()
+      const batch = db.batch()
+      let updated = 0
+
+      for (const snap of snapshots) {
+        if (!snap.exists) continue
+        const data = snap.data() as { exchangeId?: string; readAt?: unknown }
+        if (data.exchangeId !== exchangeId) continue
+        if (data.readAt) continue
+        batch.update(snap.ref, { readAt: now })
+        updated += 1
+      }
+
+      if (updated > 0) {
+        await batch.commit()
+      }
+
+      return successResponse({ updated, requested: messageIds.length })
+    } catch (e) {
+      console.error("[Chat Messages Read API] POST Error:", e)
+      return ApiErrors.internalError("Internal server error")
+    }
+  }
+}
+
+const controller = new ChatMessagesReadController()
+
 function isParticipant(ownerId: string, requesterId: string, userId: string): boolean {
   return ownerId === userId || requesterId === userId
+}
+
+function normalizeBlockedUserIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+}
+
+async function isExchangeBlocked(
+  db: ReturnType<typeof getAdminDb>,
+  ownerId: string,
+  requesterId: string
+): Promise<boolean> {
+  const [ownerSnap, requesterSnap] = await db.getAll(
+    db.collection("users").doc(ownerId),
+    db.collection("users").doc(requesterId)
+  )
+  const ownerBlocked = normalizeBlockedUserIds(ownerSnap?.data()?.blockedUserIds)
+  const requesterBlocked = normalizeBlockedUserIds(requesterSnap?.data()?.blockedUserIds)
+  return ownerBlocked.includes(requesterId) || requesterBlocked.includes(ownerId)
 }
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ exchangeId: string }> }
 ) {
-  try {
-    const token = getAuthToken(request)
-    if (!token) return ApiErrors.unauthorized("Missing authentication token")
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
-
-    const { exchangeId } = await params
-    if (!exchangeId) return ApiErrors.badRequest("Missing exchangeId")
-
-    const db = getAdminDb()
-    const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
-    if (!exchangeSnap.exists) return ApiErrors.notFound("Exchange not found")
-
-    const exchange = exchangeSnap.data() as { ownerId: string; requesterId: string }
-    if (!isParticipant(exchange.ownerId, exchange.requesterId, decoded.uid)) {
-      return ApiErrors.forbidden("เฉพาะผู้เกี่ยวข้องกับการแลกเปลี่ยนเท่านั้น")
-    }
-
-    let body: { messageIds?: string[] }
-    try {
-      body = await request.json()
-    } catch {
-      return ApiErrors.badRequest("Invalid JSON body")
-    }
-    const messageIds = Array.isArray(body?.messageIds)
-      ? [...new Set(body.messageIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0))].slice(0, MAX_MARK_READ_IDS)
-      : []
-    if (messageIds.length === 0) return successResponse({ updated: 0 })
-
-    const refs = messageIds.map((id) => db.collection("chatMessages").doc(id))
-    const snapshots = await db.getAll(...refs)
-
-    const now = FieldValue.serverTimestamp()
-    const batch = db.batch()
-    let updated = 0
-
-    for (const snap of snapshots) {
-      if (!snap.exists) continue
-      const data = snap.data() as { exchangeId?: string; readAt?: unknown }
-      if (data.exchangeId !== exchangeId) continue
-      if (data.readAt) continue
-      batch.update(snap.ref, { readAt: now })
-      updated += 1
-    }
-
-    if (updated > 0) {
-      await batch.commit()
-    }
-
-    return successResponse({ updated, requested: messageIds.length })
-  } catch (e) {
-    console.error("[Chat Messages Read API] POST Error:", e)
-    return ApiErrors.internalError("Internal server error")
-  }
+  return controller.post(request, params)
 }

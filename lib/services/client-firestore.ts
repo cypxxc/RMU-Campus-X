@@ -18,7 +18,8 @@ import {
   limit,
 } from "firebase/firestore"
 import { getFirebaseDb } from "@/lib/firebase"
-import type { ChatMessage, Exchange } from "@/types"
+import type { AppNotification, ChatMessage, Exchange } from "@/types"
+import { log } from "@/lib/logger"
 
 // ============ Admin ============
 
@@ -224,6 +225,79 @@ export function setChatTyping(
  * @param otherKey คีย์ของอีกฝั่ง (ownerTypingAt หรือ requesterTypingAt)
  * @returns ฟังก์ชันยกเลิกการ subscribe
  */
+/**
+ * Subscribe notifications real-time
+ * @returns unsubscribe function
+ */
+export function subscribeToNotifications(
+  userId: string,
+  pageSize: number,
+  onUpdate: (notifications: AppNotification[]) => void,
+  onError?: () => void
+): () => void {
+  const db = getFirebaseDb()
+  const subscribedAt = Date.now()
+  let firstSnapshot = true
+  let lastSize = -1
+
+  return subscribeWithOnlineGuard(
+    () =>
+      onSnapshot(
+        query(
+          collection(db, "notifications"),
+          where("userId", "==", userId),
+          orderBy("createdAt", "desc"),
+          limit(pageSize)
+        ),
+        (snapshot) => {
+          const list: AppNotification[] = snapshot.docs.map((d) => {
+            const data = d.data()
+            return {
+              id: d.id,
+              userId: data.userId as string,
+              title: data.title as string,
+              message: data.message as string,
+              type: data.type as AppNotification["type"],
+              relatedId: data.relatedId as string | undefined,
+              isRead: Boolean(data.isRead),
+              createdAt: data.createdAt,
+              senderId: data.senderId as string | undefined,
+            }
+          })
+
+          if (firstSnapshot) {
+            firstSnapshot = false
+            log.performance("notifications.realtime.initial_snapshot", Date.now() - subscribedAt, {
+              userId,
+              pageSize,
+              size: snapshot.size,
+            })
+          } else if (snapshot.size !== lastSize) {
+            log.debug("notifications.realtime.size_changed", {
+              userId,
+              previousSize: lastSize,
+              nextSize: snapshot.size,
+            })
+          }
+          lastSize = snapshot.size
+
+          onUpdate(list)
+        },
+        (error) => {
+          log.warn("notifications.realtime.error", {
+            userId,
+            error: error?.message ?? String(error),
+          })
+          onError?.()
+        }
+      ),
+    () => {
+      log.info("notifications.realtime.offline", { userId })
+      onError?.()
+    }
+  )
+}
+
 export function subscribeToChatTyping(
   exchangeId: string,
   otherKey: "ownerTypingAt" | "requesterTypingAt",

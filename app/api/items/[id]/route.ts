@@ -32,56 +32,122 @@ function fallbackPostedByName(item: Item): string {
   return item.postedByName ?? item.postedByEmail?.split("@")[0] ?? item.postedBy
 }
 
+class ItemController {
+  async get(req: NextRequest, params: Promise<{ id: string }>) {
+    try {
+      const auth = await requireAuth(req)
+      if ("error" in auth) return auth.error
+
+      const { id: itemId } = await params
+      if (!itemId) return NextResponse.json({ error: "Missing item ID" }, { status: 400 })
+
+      const snap = await itemsCollection().doc(itemId).get()
+      if (!snap.exists) {
+        return NextResponse.json({ success: true, item: null })
+      }
+
+      const item = parseItemFromFirestore(snap.id, snap.data())
+      if (!item) {
+        return NextResponse.json({ success: true, item: null })
+      }
+
+      let postedByName = fallbackPostedByName(item)
+      let postedByRating = item.postedByRating
+      try {
+        const posterSnap = await usersCollection().doc(item.postedBy).get()
+        if (posterSnap.exists) {
+          const posterData = posterSnap.data()
+          postedByName =
+            (posterData?.displayName as string | undefined) ||
+            (posterData?.email as string | undefined)?.split("@")[0] ||
+            postedByName
+          postedByRating = normalizeRatingSummary(posterData?.rating)
+        }
+      } catch {
+        // Keep fallback owner fields if profile lookup fails.
+      }
+
+      return NextResponse.json({
+        success: true,
+        item: {
+          ...item,
+          postedByName,
+          postedByRating,
+        },
+      })
+    } catch (e) {
+      console.error("[Items API] GET Error:", e)
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    }
+  }
+
+  async patch(request: NextRequest, params: Promise<{ id: string }>) {
+    try {
+      const auth = await requireAuth(request)
+      if ("error" in auth) return auth.error
+
+      const { id: itemId } = await params
+      if (!itemId) return NextResponse.json({ error: "Missing item ID" }, { status: 400 })
+
+      let body: unknown
+      try {
+        body = await request.json()
+      } catch {
+        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+      }
+      const parsed = itemUpdateSchema.safeParse(body)
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: "Validation failed", details: parsed.error.flatten() },
+          { status: 400 }
+        )
+      }
+
+      const deps = createItemUpdateAdminDeps()
+      await updateItemWithValidation({ itemId, requesterId: auth.userId, data: parsed.data }, deps)
+      return NextResponse.json({ success: true, message: "Item updated" })
+    } catch (error) {
+      if (error instanceof ItemUpdateError) {
+        return NextResponse.json({ error: error.message }, { status: error.statusCode })
+      }
+      console.error("[Items API] PATCH Error:", error)
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    }
+  }
+
+  async delete(request: NextRequest, params: Promise<{ id: string }>) {
+    try {
+      const auth = await requireAuth(request)
+      if ("error" in auth) return auth.error
+
+      const { id: itemId } = await params
+      if (!itemId) return NextResponse.json({ error: "Missing item ID" }, { status: 400 })
+
+      const deps = createFirebaseAdminItemDeps()
+      try {
+        await deleteItemAsOwner({ itemId, requesterId: auth.userId }, deps)
+      } catch (error) {
+        if (isItemDeletionError(error)) {
+          return NextResponse.json({ error: error.message }, { status: error.status })
+        }
+        throw error
+      }
+      return NextResponse.json({ success: true, message: "Item deleted successfully" })
+    } catch (e) {
+      console.error("[ItemDelete] Error:", e)
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    }
+  }
+}
+
+const controller = new ItemController()
+
 /** GET /api/items/[id] – ดึงรายการเดียว */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const auth = await requireAuth(req)
-    if ("error" in auth) return auth.error
-
-    const { id: itemId } = await params
-    if (!itemId) return NextResponse.json({ error: "Missing item ID" }, { status: 400 })
-
-    const snap = await itemsCollection().doc(itemId).get()
-    if (!snap.exists) {
-      return NextResponse.json({ success: true, item: null })
-    }
-
-    const item = parseItemFromFirestore(snap.id, snap.data())
-    if (!item) {
-      return NextResponse.json({ success: true, item: null })
-    }
-
-    let postedByName = fallbackPostedByName(item)
-    let postedByRating = item.postedByRating
-    try {
-      const posterSnap = await usersCollection().doc(item.postedBy).get()
-      if (posterSnap.exists) {
-        const posterData = posterSnap.data()
-        postedByName =
-          (posterData?.displayName as string | undefined) ||
-          (posterData?.email as string | undefined)?.split("@")[0] ||
-          postedByName
-        postedByRating = normalizeRatingSummary(posterData?.rating)
-      }
-    } catch {
-      // Keep fallback owner fields if profile lookup fails.
-    }
-
-    return NextResponse.json({
-      success: true,
-      item: {
-        ...item,
-        postedByName,
-        postedByRating,
-      },
-    })
-  } catch (e) {
-    console.error("[Items API] GET Error:", e)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
+  return controller.get(req, params)
 }
 
 /** PATCH /api/items/[id] – แก้ไข (เจ้าของเท่านั้น) */
@@ -89,40 +155,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const auth = await requireAuth(request)
-    if ("error" in auth) return auth.error
-
-    const { id: itemId } = await params
-    if (!itemId) return NextResponse.json({ error: "Missing item ID" }, { status: 400 })
-
-    let body: unknown
-    try {
-      body = await request.json()
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
-    }
-    const parsed = itemUpdateSchema.safeParse(body)
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten() },
-        { status: 400 }
-      )
-    }
-
-    const deps = createItemUpdateAdminDeps()
-    await updateItemWithValidation(
-      { itemId, requesterId: auth.userId, data: parsed.data },
-      deps
-    )
-    return NextResponse.json({ success: true, message: "Item updated" })
-  } catch (error) {
-    if (error instanceof ItemUpdateError) {
-      return NextResponse.json({ error: error.message }, { status: error.statusCode })
-    }
-    console.error("[Items API] PATCH Error:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
+  return controller.patch(request, params)
 }
 
 /** DELETE /api/items/[id] */
@@ -130,25 +163,5 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const auth = await requireAuth(request)
-    if ("error" in auth) return auth.error
-
-    const { id: itemId } = await params
-    if (!itemId) return NextResponse.json({ error: "Missing item ID" }, { status: 400 })
-
-    const deps = createFirebaseAdminItemDeps()
-    try {
-      await deleteItemAsOwner({ itemId, requesterId: auth.userId }, deps)
-    } catch (error) {
-      if (isItemDeletionError(error)) {
-        return NextResponse.json({ error: error.message }, { status: error.status })
-      }
-      throw error
-    }
-    return NextResponse.json({ success: true, message: "Item deleted successfully" })
-  } catch (e) {
-    console.error("[ItemDelete] Error:", e)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
+  return controller.delete(request, params)
 }

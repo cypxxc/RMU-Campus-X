@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, lazy, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { authFetchJson } from "@/lib/api-client"
-import { cancelExchange, hideExchange, createNotification, respondToExchange } from "@/lib/firestore"
+import { cancelExchange, hideExchange, respondToExchange } from "@/lib/firestore"
 import type { Exchange } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -111,22 +111,7 @@ export default function MyExchangesPage() {
         title: tt("ยกเลิกสำเร็จ", "Cancelled"),
         description: tt("การแลกเปลี่ยนถูกยกเลิกแล้ว", "This exchange has been cancelled."),
       })
-
-      // Notify the other party
       const recipientId = user.uid === exchangeToCancel.ownerId ? exchangeToCancel.requesterId : exchangeToCancel.ownerId
-      
-      const reasonText = reason.trim() ? tt(`. เหตุผล: ${reason.trim()}`, `. Reason: ${reason.trim()}`) : ""
-      await createNotification({
-        userId: recipientId,
-        title: tt("การแลกเปลี่ยนถูกยกเลิก", "Exchange cancelled"),
-        message: tt(
-          `การแลกเปลี่ยน "${exchangeToCancel.itemTitle}" ถูกยกเลิกโดยอีกฝ่าย${reasonText}`,
-          `Exchange "${exchangeToCancel.itemTitle}" was cancelled by the other party${reasonText}`
-        ),
-        type: "exchange",
-        relatedId: exchangeToCancel.id,
-        senderId: user.uid,
-      })
 
       // Send LINE notification to the other party (async, don't block)
       try {
@@ -516,3 +501,4 @@ export default function MyExchangesPage() {
     </div>
   )
 }
+

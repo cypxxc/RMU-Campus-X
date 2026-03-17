@@ -647,9 +647,9 @@ bun start
 ## 📖 API Documentation
 
 > 📄 **รายละเอียด API:** [docs/API.md](docs/API.md)  
-> (หน้า Swagger UI `/api-docs` ปิดใช้งานชั่วคราว)
+> หน้า Swagger UI `/api-docs` แสดงเอกสาร API แล้ว
 
-**ฟีเจอร์ที่ปิดใช้งานชั่วคราว:** หน้าเกี่ยวกับเรา (/about), API Docs (/api-docs), Help Bot (แชทบอท) · หน้า Contact ถูกลบแล้ว · Cron cleanup ถูกลบออกจาก Vercel แล้ว · หน้า Admin Data (/admin/data) ยังมีอยู่แต่ไม่แสดงในเมนู
+**ฟีเจอร์ที่เปิดใช้งานแล้ว:** หน้าเกี่ยวกับเรา (/about), API Docs (/api-docs), Help Bot (แชทบอท FAQ), Admin Data ในเมนูแอดมิน, Onboarding สำหรับผู้ใช้ใหม่ · หน้า Contact ถูกลบแล้ว · Cron cleanup ถูกลบออกจาก Vercel แล้ว
 
 ### API Endpoints (สรุป)
 

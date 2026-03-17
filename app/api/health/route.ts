@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server'
 import { getAdminDb } from '@/lib/firebase-admin'
+import { getNotificationDeliveryHealth } from '@/lib/server/notification-delivery'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -85,6 +86,33 @@ export async function GET() {
   })
 
   if (memoryPercent > 90) {
+    overallStatus = overallStatus === 'healthy' ? 'degraded' : overallStatus
+  }
+
+  // Check 4: Notification delivery queue health
+  try {
+    const notificationStart = Date.now()
+    const notificationHealth = await getNotificationDeliveryHealth()
+    const notificationLatency = Date.now() - notificationStart
+
+    checks.push({
+      name: 'notification_delivery',
+      status: notificationHealth.status === 'healthy' ? 'pass' : 'fail',
+      latency: notificationLatency,
+      message:
+        `pending=${notificationHealth.stats.pendingQueue}, stale=${notificationHealth.stats.stalePending}, dead=${notificationHealth.stats.deadLetter}` +
+        (notificationHealth.reasons.length ? ` (${notificationHealth.reasons.join('; ')})` : ''),
+    })
+
+    if (notificationHealth.status !== 'healthy') {
+      overallStatus = overallStatus === 'healthy' ? 'degraded' : overallStatus
+    }
+  } catch (error) {
+    checks.push({
+      name: 'notification_delivery',
+      status: 'fail',
+      message: error instanceof Error ? error.message : 'Notification delivery health check failed',
+    })
     overallStatus = overallStatus === 'healthy' ? 'degraded' : overallStatus
   }
 

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState, useRef, lazy, Suspense } from "react"
+import { useCallback, useEffect, useState, useRef, lazy, Suspense } from "react"
 import { use } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
@@ -12,7 +12,7 @@ import {
   subscribeToChatTyping,
   setChatTyping,
 } from "@/lib/services/client-firestore"
-import { createNotification, getItemById, confirmExchange, getUserProfile, respondToExchange } from "@/lib/firestore"
+import { getItemById, confirmExchange, getUserProfile, respondToExchange } from "@/lib/firestore"
 import { authFetchJson } from "@/lib/api-client"
 import type { Exchange, ChatMessage, Item, ItemCategory } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -50,6 +50,7 @@ import {
 } from "@/lib/exchange-state-machine"
 import { getItemPrimaryImageUrl } from "@/lib/cloudinary-url"
 import { ExchangeStepIndicator } from "@/components/exchange/exchange-step-indicator"
+import { ExchangeQRCode } from "@/components/exchange-qr-code"
 import { useI18n } from "@/components/language-provider"
 import { CATEGORY_LABELS } from "@/lib/constants"
 
@@ -73,6 +74,7 @@ export default function ChatPage({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState("")
   const [responding, setResponding] = useState(false)
+  const [chatBlocked, setChatBlocked] = useState(false)
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const oldestMessageRef = useRef<ChatMessage | null>(null)
@@ -103,6 +105,13 @@ export default function ChatPage({
   const { locale, tt } = useI18n()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const currentUserId = user?.uid
+  const ownerId = exchange?.ownerId
+  const requesterId = exchange?.requesterId
+  const isBlockedChatError = useCallback((error: unknown): boolean => {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+    return message.includes("blocked") || message.includes("chat is unavailable")
+  }, [])
   const categoryLabelByValue: Record<ItemCategory, string> = {
     electronics: tt(CATEGORY_LABELS.electronics.th, CATEGORY_LABELS.electronics.en),
     books: tt(CATEGORY_LABELS.books.th, CATEGORY_LABELS.books.en),
@@ -122,15 +131,6 @@ export default function ChatPage({
     mountedRef.current = true
     return () => { mountedRef.current = false }
   }, [])
-
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    loadExchange()
-  }, [exchangeId, user, authLoading])
 
   // Real-time: ใช้ onSnapshot เฉพาะจุดที่จำเป็น (แชท + typing) — Logic อยู่ใน client-firestore
   const MESSAGE_PAGE_SIZE = 50
@@ -177,10 +177,32 @@ export default function ChatPage({
   }, [exchangeId, user, toast, tt])
 
   useEffect(() => {
+    if (!currentUserId || !exchangeId) return
+    let cancelled = false
+
+    const probeChatAvailability = async () => {
+      try {
+        await authFetchJson(`/api/chat/${exchangeId}/messages?limit=1`, { method: "GET" })
+        if (!cancelled && mountedRef.current) setChatBlocked(false)
+      } catch (error) {
+        if (!cancelled && mountedRef.current && isBlockedChatError(error)) {
+          setChatBlocked(true)
+        }
+      }
+    }
+
+    probeChatAvailability()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentUserId, exchangeId, isBlockedChatError])
+
+  useEffect(() => {
     scrollToBottom()
   }, [messages])
 
-  const loadExchange = async () => {
+  const loadExchange = useCallback(async () => {
     try {
       const res = await authFetchJson<{ exchange?: Record<string, unknown> }>(
         `/api/exchanges/${exchangeId}`,
@@ -190,6 +212,7 @@ export default function ChatPage({
       const exchangeData = res.data?.exchange as Exchange | undefined
       if (exchangeData) {
         setExchange({ ...exchangeData, id: exchangeData.id ?? exchangeId } as Exchange)
+        setChatBlocked(false)
         const itemId = exchangeData.itemId as string
         if (itemId) {
           const itemRes = await getItemById(itemId)
@@ -210,7 +233,16 @@ export default function ChatPage({
     } finally {
       if (mountedRef.current) setLoading(false)
     }
-  }
+  }, [exchangeId, router, toast, tt])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    void loadExchange()
+  }, [authLoading, loadExchange, router, user])
 
   useEffect(() => {
     if (exchange?.status === "completed" && user) {
@@ -222,28 +254,33 @@ export default function ChatPage({
 
   // โหลดชื่อที่อีกฝั่งตั้งในโปรไฟล์ (displayName) สำหรับแสดงในหัวแชท
   useEffect(() => {
-    if (!exchange) return
-    const otherId = user?.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
+    if (!ownerId || !requesterId || !currentUserId) return
+    const otherId = currentUserId === ownerId ? requesterId : ownerId
     if (!otherId) return
     setOtherUserDisplayName(null)
     getUserProfile(otherId).then((profile) => {
       if (mountedRef.current && profile?.displayName) setOtherUserDisplayName(profile.displayName)
     })
-  }, [exchange?.ownerId, exchange?.requesterId, user?.uid])
+  }, [currentUserId, ownerId, requesterId])
 
   const LOAD_MORE_SIZE = 20
 
   useEffect(() => {
-    if (!user || !exchange || newestMessages.length === 0) return
-    const otherId = user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
+    if (!currentUserId || !ownerId || !requesterId || newestMessages.length === 0) return
+    const otherId = currentUserId === ownerId ? requesterId : ownerId
     const unread = newestMessages.filter((m) => m.senderId === otherId && !m.readAt)
     if (unread.length === 0) return
     const messageIds = unread.slice(0, 500).map((m) => m.id)
     authFetchJson(`/api/chat/${exchangeId}/messages/read`, {
       method: "POST",
       body: { messageIds },
-    }).catch((e) => console.warn("Mark read failed:", e))
-  }, [newestMessages, user?.uid, exchange?.ownerId, exchange?.requesterId, exchange?.id, exchangeId])
+    }).catch((e) => {
+      console.warn("Mark read failed:", e)
+      if (mountedRef.current && isBlockedChatError(e)) {
+        setChatBlocked(true)
+      }
+    })
+  }, [currentUserId, exchangeId, isBlockedChatError, newestMessages, ownerId, requesterId])
 
   const loadMoreOlder = async () => {
     if (!user || loadingOlder || !hasMoreOlder) return
@@ -259,22 +296,35 @@ export default function ChatPage({
       setOlderMessages((prev) => [...docs, ...prev])
       if (docs.length < LOAD_MORE_SIZE) setHasMoreOlder(false)
       if (docs.length > 0) oldestMessageRef.current = docs[0] ?? null
+      setChatBlocked(false)
     } catch (err) {
-      toast({ title: tt("โหลดข้อความเก่าไม่สำเร็จ", "Unable to load older messages"), variant: "destructive" })
+      if (isBlockedChatError(err)) {
+        setChatBlocked(true)
+        toast({
+          title: tt("Chat unavailable", "Chat unavailable"),
+          description: tt(
+            "Messaging is unavailable because one participant blocked the other.",
+            "Messaging is unavailable because one participant blocked the other."
+          ),
+          variant: "destructive",
+        })
+      } else {
+        toast({ title: tt("Unable to load older messages", "Unable to load older messages"), variant: "destructive" })
+      }
     } finally {
       setLoadingOlder(false)
     }
   }
 
-  const setTyping = (value: boolean) => {
-    if (!user || !exchangeId || !exchange) return
-    const key = user.uid === exchange.ownerId ? "ownerTypingAt" : "requesterTypingAt"
+  const setTyping = useCallback((value: boolean) => {
+    if (!currentUserId || !exchangeId || !ownerId || !requesterId || chatBlocked) return
+    const key = currentUserId === ownerId ? "ownerTypingAt" : "requesterTypingAt"
     setChatTyping(exchangeId, key, value)
-  }
+  }, [chatBlocked, currentUserId, exchangeId, ownerId, requesterId])
 
   useEffect(() => {
-    if (!exchange || !user || !exchangeId) return
-    const otherKey = user.uid === exchange.ownerId ? "requesterTypingAt" : "ownerTypingAt"
+    if (!exchangeId || !currentUserId || !ownerId || !requesterId) return
+    const otherKey = currentUserId === ownerId ? "requesterTypingAt" : "ownerTypingAt"
     const unsub = subscribeToChatTyping(
       exchangeId,
       otherKey,
@@ -284,7 +334,7 @@ export default function ChatPage({
       }
     )
     return unsub
-  }, [exchangeId, exchange?.ownerId, user?.uid])
+  }, [currentUserId, exchangeId, ownerId, requesterId])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value)
@@ -298,7 +348,7 @@ export default function ChatPage({
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
       setTyping(false)
     }
-  }, [exchangeId])
+  }, [setTyping])
 
   const handleEditMessage = async (msg: ChatMessage, newText: string) => {
     if (!user || msg.senderId !== user.uid || !newText.trim()) return
@@ -307,11 +357,24 @@ export default function ChatPage({
         `/api/chat/${exchangeId}/messages/${msg.id}`,
         { method: "PATCH", body: { message: newText.trim() } }
       )
-      if (!res?.data?.updated) throw new Error(res?.error ?? tt("แก้ไขไม่สำเร็จ", "Update failed"))
+      if (!res?.data?.updated) throw new Error(res?.error ?? tt("Update failed", "Update failed"))
       setEditingMessageId(null)
       setEditDraft("")
-    } catch {
-      toast({ title: tt("แก้ไขไม่สำเร็จ", "Update failed"), variant: "destructive" })
+      setChatBlocked(false)
+    } catch (error) {
+      if (isBlockedChatError(error)) {
+        setChatBlocked(true)
+        toast({
+          title: tt("Chat unavailable", "Chat unavailable"),
+          description: tt(
+            "Messaging is unavailable because one participant blocked the other.",
+            "Messaging is unavailable because one participant blocked the other."
+          ),
+          variant: "destructive",
+        })
+        return
+      }
+      toast({ title: tt("Update failed", "Update failed"), variant: "destructive" })
     }
   }
 
@@ -322,10 +385,23 @@ export default function ChatPage({
         `/api/chat/${exchangeId}/messages/${msg.id}`,
         { method: "DELETE" }
       )
-      if (!res?.data?.deleted) throw new Error(res?.error ?? tt("ลบไม่สำเร็จ", "Delete failed"))
+      if (!res?.data?.deleted) throw new Error(res?.error ?? tt("Delete failed", "Delete failed"))
       setEditingMessageId(null)
-    } catch {
-      toast({ title: tt("ลบไม่สำเร็จ", "Delete failed"), variant: "destructive" })
+      setChatBlocked(false)
+    } catch (error) {
+      if (isBlockedChatError(error)) {
+        setChatBlocked(true)
+        toast({
+          title: tt("Chat unavailable", "Chat unavailable"),
+          description: tt(
+            "Messaging is unavailable because one participant blocked the other.",
+            "Messaging is unavailable because one participant blocked the other."
+          ),
+          variant: "destructive",
+        })
+        return
+      }
+      toast({ title: tt("Delete failed", "Delete failed"), variant: "destructive" })
     }
   }
 
@@ -339,6 +415,7 @@ export default function ChatPage({
     exchange?.status === "cancelled" ||
     exchange?.status === "rejected" ||
     exchange?.status === "completed"
+  const isChatUnavailable = isChatClosed || chatBlocked
 
   const handleRespondToRequest = async (action: "accept" | "reject") => {
     if (!user || !exchange) return
@@ -367,7 +444,7 @@ export default function ChatPage({
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !user || !exchange) return
-    if (isChatClosed) return
+    if (isChatUnavailable) return
 
     setSending(true)
     try {
@@ -395,36 +472,22 @@ export default function ChatPage({
       ])
 
       setNewMessage("")
+      setChatBlocked(false)
       scrollToBottom()
-
-      // Create notification for recipient
-      const recipientId = user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
-      const notificationMessage = tt(
-        `ส่งข้อความถึงคุณ: ${messageText.substring(0, 30)}${messageText.length > 30 ? "..." : ""}`,
-        `Sent you a message: ${messageText.substring(0, 30)}${messageText.length > 30 ? "..." : ""}`
-      )
-
-      await createNotification({
-        userId: recipientId,
-        title: tt("ข้อความใหม่จาก ", "New message from ") + (user.displayName || user.email?.split('@')[0]),
-        message: notificationMessage,
-        type: "chat",
-        relatedId: exchangeId,
-        senderId: user.uid,
-      })
 
       // Send LINE notification (async, don't block)
       try {
+        const recipientId = user.uid === exchange.ownerId ? exchange.requesterId : exchange.ownerId
         const token = await user.getIdToken()
         fetch('/api/line/notify-chat', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             recipientId,
-            senderName: user.email?.split('@')[0] || tt("ผู้ใช้", "User"),
+            senderName: user.email?.split('@')[0] || tt("User", "User"),
             itemTitle: exchange.itemTitle,
             messagePreview: messageText,
             exchangeId
@@ -435,9 +498,21 @@ export default function ChatPage({
       }
     } catch (error: unknown) {
       console.error('Send message error:', error)
+      if (isBlockedChatError(error)) {
+        setChatBlocked(true)
+        toast({
+          title: tt("Chat unavailable", "Chat unavailable"),
+          description: tt(
+            "Messaging is unavailable because one participant blocked the other.",
+            "Messaging is unavailable because one participant blocked the other."
+          ),
+          variant: "destructive",
+        })
+        return
+      }
       toast({
-        title: tt("ส่งข้อความไม่สำเร็จ", "Message failed"),
-        description: error instanceof Error ? error.message : tt("โปรดลองใหม่อีกครั้ง", "Please try again."),
+        title: tt("Message failed", "Message failed"),
+        description: error instanceof Error ? error.message : tt("Please try again.", "Please try again."),
         variant: "destructive",
       })
     } finally {
@@ -658,6 +733,7 @@ export default function ChatPage({
                 )}
                 {phaseStatus === "in_progress" && (
                   <>
+                    <ExchangeQRCode exchangeId={exchangeId} />
                     {!hasConfirmed && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -865,9 +941,9 @@ export default function ChatPage({
               <div ref={messagesEndRef} />
             </div>
 
-            {isChatClosed ? (
+            {isChatUnavailable ? (
               <div className="border-t p-4 bg-muted/50 text-center text-sm text-muted-foreground">
-                {exchange.status === "cancelled"
+                {chatBlocked ? tt("Chat is unavailable because one participant blocked the other.", "Chat is unavailable because one participant blocked the other.") : exchange.status === "cancelled"
                   ? tt("การแลกเปลี่ยนนี้ถูกยกเลิกแล้ว ไม่สามารถส่งข้อความได้", "This exchange was cancelled. Messaging is disabled.")
                   : exchange.status === "rejected"
                     ? tt("การแลกเปลี่ยนนี้ถูกปฏิเสธแล้ว ไม่สามารถส่งข้อความได้", "This exchange was rejected. Messaging is disabled.")
@@ -931,3 +1007,4 @@ export default function ChatPage({
     </div>
   )
 }
+
