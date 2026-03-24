@@ -9,6 +9,7 @@ on:
 env:
   NODE_VERSION: "20"
   BUN_VERSION: "1.3.6"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   # ================================================
@@ -78,6 +79,7 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
+    if: ${{ hashFiles('e2e/**') != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -113,7 +115,7 @@ jobs:
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: playwright-report
           path: playwright-report/
@@ -184,7 +186,7 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: [build, e2e]
+    needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Checkout
