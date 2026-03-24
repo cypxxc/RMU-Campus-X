@@ -8,7 +8,6 @@
 [![Firebase](https://img.shields.io/badge/Firebase-12.5-orange?logo=firebase)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
 [![Tests](https://img.shields.io/badge/Tests-130%20unit%20%7C%2084%20e2e-success)]()
-[![Sentry](https://img.shields.io/badge/Sentry-Enabled-362D59?logo=sentry)](https://sentry.io)
 
 ---
 
@@ -102,7 +101,6 @@ User Action → Component → lib/db/* (authFetchJson) → API Route → Firesto
 
 | Tool | การใช้งาน |
 |------|-----------|
-| **Sentry** | Error tracking & Performance monitoring |
 | **Upstash Redis** | Scalable rate limiting (optional) |
 | **Vercel Analytics** | Web analytics |
 
@@ -279,7 +277,6 @@ rmu-campus-x/
 | `CLOUDINARY_*` | ✅ | อัปโหลดรูปภาพ (Signed Upload) |
 | `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | ✅ | แปลง public_id เป็น URL บน client |
 | `UPSTASH_REDIS_REST_*` | แนะนำ | Rate limiting แบบกระจาย (Production) |
-| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | ไม่บังคับ | Error tracking |
 
 - **Project name ใน Vercel:** เปลี่ยนจากชื่อเก่าเป็น `rmu-campus-x` (หรือตามต้องการ) ได้ที่ Settings → General → Project Name เพื่อให้โดเมน `*.vercel.app` ตรงกับชื่อโปรเจกต์
 - คัดลอกจาก `.env.example` ไปใส่ใน Vercel ให้ครบตาม environment (Production / Preview / Development) ตามความต้องการ
@@ -430,7 +427,6 @@ npm run check-all
 - **Error Logging** - บันทึก errors แบบศูนย์กลาง
 - **Performance Tracking** - จับเวลา operations
 - **Log Levels** - debug, info, warn, error, fatal
-- **Exception Capturing** - รองรับ Sentry integration
 
 ```typescript
 import { error, startTimer, captureException } from '@/lib/monitoring'
@@ -763,7 +759,7 @@ bun start
 ### ระบบใหม่ที่เพิ่มเข้ามา
 | ระบบ | ไฟล์ | รายละเอียด |
 |------|------|------------|
-| **Error Tracking** | `lib/error-tracker.ts` | Sentry-ready error logging |
+| **Error Tracking** | `lib/error-tracker.ts` | Error logging system |
 | **Login Protection** | `lib/login-tracker.ts` | ป้องกัน brute force attack |
 | **Session Management** | `lib/session-manager.ts` | จัดการ sessions หลายอุปกรณ์ |
 | **Caching** | `lib/cache.ts` | In-memory cache with TTL |
