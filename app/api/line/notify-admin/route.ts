@@ -114,100 +114,108 @@ async function getAdminLineUserIds(): Promise<string[]> {
   return Array.from(lineUserIds)
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    // 1) Require authentication (prevents anonymous spam)
-    const token = getAuthToken(request)
-    if (!token) return ApiErrors.unauthorized("Missing authentication token")
+class LineNotifyAdminController {
+  async post(request: NextRequest) {
+    try {
+      // 1) Require authentication (prevents anonymous spam)
+      const token = getAuthToken(request)
+      if (!token) return ApiErrors.unauthorized("Missing authentication token")
 
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
-    const clientIp = getClientIP(request)
-    const rateKey = `line:notify-admin:${decoded.uid}:${clientIp}`
-    const rate = await checkRateLimitScalable(rateKey, NOTIFY_ADMIN_LIMIT, NOTIFY_ADMIN_WINDOW_MS)
-    if (!rate.allowed) {
-      return ApiErrors.rateLimited("Too many admin notification requests. Please try again shortly.")
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+      const clientIp = getClientIP(request)
+      const rateKey = `line:notify-admin:${decoded.uid}:${clientIp}`
+      const rate = await checkRateLimitScalable(rateKey, NOTIFY_ADMIN_LIMIT, NOTIFY_ADMIN_WINDOW_MS)
+      if (!rate.allowed) {
+        return ApiErrors.rateLimited("Too many admin notification requests. Please try again shortly.")
+      }
+
+      // 2) Parse and validate body
+      const body = await parseRequestBody<NotifyBody>(request)
+      if (!body) return ApiErrors.badRequest("Invalid request body")
+
+      const type = body.type as NotifyType
+
+      debugLog(`[Admin Notify] Received notification request - Type: ${type}`)
+
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        "https://rmu-app-3-1-2569.vercel.app"
+      
+      // Get all admin LINE user IDs
+      const adminLineIds = await getAdminLineUserIds()
+      
+      if (adminLineIds.length === 0) {
+        debugLog("[Admin Notify] No admins with LINE linked, skipping notification")
+        return successResponse({ success: true, message: "No admins to notify" })
+      }
+
+      debugLog(`[Admin Notify] Will notify ${adminLineIds.length} admin(s) for ${type}`)
+
+      switch (type) {
+        case "new_report":
+          if (!("reportType" in body) || !("targetTitle" in body) || !("reporterEmail" in body)) {
+            return ApiErrors.missingFields(["reportType", "targetTitle", "reporterEmail"])
+          }
+          await notifyAdminsNewReport(
+            adminLineIds,
+            body.reportType,
+            body.targetTitle,
+            body.reporterEmail,
+            baseUrl
+          )
+          debugLog("[Admin Notify] Report notification sent")
+          break
+
+        case "new_support_ticket":
+          if (!("subject" in body) || !("category" in body) || !("userEmail" in body)) {
+            return ApiErrors.missingFields(["subject", "category", "userEmail"])
+          }
+          await notifyAdminsNewSupportTicket(
+            adminLineIds,
+            body.subject,
+            body.category,
+            body.userEmail,
+            baseUrl
+          )
+          debugLog("[Admin Notify] Support ticket notification sent")
+          break
+
+        case "custom":
+          // Custom broadcasts should be admin-only
+          if (!decoded.email) return ApiErrors.forbidden("Missing email in token")
+          const allowed = await isAdmin(decoded.email)
+          if (!allowed) return ApiErrors.forbidden("Admin permission required")
+          if (!("message" in body) || !body.message?.trim()) {
+            return ApiErrors.missingFields(["message"])
+          }
+          // Send custom message to all admins
+          const message = {
+            type: "text" as const,
+            text: body.message
+          }
+          await Promise.allSettled(
+            adminLineIds.map((adminId) => sendPushMessage(adminId, [message]))
+          )
+          debugLog("[Admin Notify] Custom notification sent")
+          break
+
+        default:
+          debugLog(`[Admin Notify] Unknown notification type: ${type}`)
+          return ApiErrors.badRequest("Unknown notification type")
+      }
+
+      return successResponse({ success: true, notifiedCount: adminLineIds.length })
+    } catch (error) {
+      errorLog("[Admin Notify] Error:", error)
+      return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 })
     }
-
-    // 2) Parse and validate body
-    const body = await parseRequestBody<NotifyBody>(request)
-    if (!body) return ApiErrors.badRequest("Invalid request body")
-
-    const type = body.type as NotifyType
-
-    debugLog(`[Admin Notify] Received notification request - Type: ${type}`)
-
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      "https://rmu-app-3-1-2569.vercel.app"
-    
-    // Get all admin LINE user IDs
-    const adminLineIds = await getAdminLineUserIds()
-    
-    if (adminLineIds.length === 0) {
-      debugLog("[Admin Notify] No admins with LINE linked, skipping notification")
-      return successResponse({ success: true, message: "No admins to notify" })
-    }
-
-    debugLog(`[Admin Notify] Will notify ${adminLineIds.length} admin(s) for ${type}`)
-
-    switch (type) {
-      case "new_report":
-        if (!("reportType" in body) || !("targetTitle" in body) || !("reporterEmail" in body)) {
-          return ApiErrors.missingFields(["reportType", "targetTitle", "reporterEmail"])
-        }
-        await notifyAdminsNewReport(
-          adminLineIds,
-          body.reportType,
-          body.targetTitle,
-          body.reporterEmail,
-          baseUrl
-        )
-        debugLog("[Admin Notify] Report notification sent")
-        break
-
-      case "new_support_ticket":
-        if (!("subject" in body) || !("category" in body) || !("userEmail" in body)) {
-          return ApiErrors.missingFields(["subject", "category", "userEmail"])
-        }
-        await notifyAdminsNewSupportTicket(
-          adminLineIds,
-          body.subject,
-          body.category,
-          body.userEmail,
-          baseUrl
-        )
-        debugLog("[Admin Notify] Support ticket notification sent")
-        break
-
-      case "custom":
-        // Custom broadcasts should be admin-only
-        if (!decoded.email) return ApiErrors.forbidden("Missing email in token")
-        const allowed = await isAdmin(decoded.email)
-        if (!allowed) return ApiErrors.forbidden("Admin permission required")
-        if (!("message" in body) || !body.message?.trim()) {
-          return ApiErrors.missingFields(["message"])
-        }
-        // Send custom message to all admins
-        const message = {
-          type: "text" as const,
-          text: body.message
-        }
-        await Promise.allSettled(
-          adminLineIds.map((adminId) => sendPushMessage(adminId, [message]))
-        )
-        debugLog("[Admin Notify] Custom notification sent")
-        break
-
-      default:
-        debugLog(`[Admin Notify] Unknown notification type: ${type}`)
-        return ApiErrors.badRequest("Unknown notification type")
-    }
-
-    return successResponse({ success: true, notifiedCount: adminLineIds.length })
-  } catch (error) {
-    errorLog("[Admin Notify] Error:", error)
-    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 })
   }
+}
+
+const controller = new LineNotifyAdminController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

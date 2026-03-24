@@ -49,104 +49,112 @@ function errorLog(message: string, error?: unknown) {
   console.error(message)
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    // Verify Admin Access
-    const { authorized, user, error } = await verifyAdminAccess(request)
-    if (!authorized) return error!
-    if (!user?.uid) {
-      return NextResponse.json({ error: "Admin identity missing" }, { status: 403 })
+class LineNotifyUserActionController {
+  async post(request: NextRequest) {
+    try {
+      // Verify Admin Access
+      const { authorized, user, error } = await verifyAdminAccess(request)
+      if (!authorized) return error!
+      if (!user?.uid) {
+        return NextResponse.json({ error: "Admin identity missing" }, { status: 403 })
+      }
+      const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "notify-user-action", 30, 60_000)
+      if (rateLimited) return rateLimited
+
+      const body: NotifyUserActionBody = await request.json()
+      debugLog("[LINE Notify User Action] Request accepted", {
+        action: body.action,
+        userId: body.userId,
+      })
+
+      const { userId, action } = body
+
+      if (!userId || !action) {
+        return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+      }
+
+      // Check if user has LINE notifications enabled
+      const db = getAdminDb()
+      const userSnap = await db.collection("users").doc(userId).get()
+
+      if (!userSnap.exists) {
+        debugLog("[LINE Notify User Action] User not found")
+        return NextResponse.json({ sent: false, reason: "user not found" })
+      }
+
+      const userData = userSnap.data() as any
+      const lineUserId = userData?.lineUserId as string | undefined
+      // Default to true if not explicitly set
+      const notificationsEnabled = userData?.lineNotifications?.enabled ?? true
+      const accountStatusEnabled = userData?.lineNotifications?.accountStatus ?? true
+
+      debugLog("[LINE Notify User Action] User LINE status:", {
+        hasLineId: !!lineUserId,
+        notificationsEnabled,
+        accountStatusEnabled,
+        action,
+      })
+
+      if (!lineUserId) {
+        debugLog("[LINE Notify User Action] User has no LINE linked")
+        return NextResponse.json({ sent: false, reason: "no LINE linked" })
+      }
+      
+      if (!notificationsEnabled) {
+        return NextResponse.json({ sent: false, reason: "notifications disabled" })
+      }
+
+      // Send LINE notification based on action
+      switch (action) {
+        case "reported":
+          if (body.reportType && body.targetTitle) {
+            await notifyUserReported(
+              lineUserId,
+              body.reportType,
+              body.targetTitle,
+              body.reportReason
+            )
+          }
+          break
+
+        case "warning":
+          if (body.reason && body.warningCount) {
+            await notifyUserWarning(lineUserId, body.reason, body.warningCount)
+          }
+          break
+
+        case "status_change":
+          if (body.status && accountStatusEnabled) {
+            const suspendedUntil = body.suspendedUntil 
+              ? new Date(body.suspendedUntil) 
+              : undefined
+            await notifyAccountStatusChange(
+              lineUserId, 
+              body.status, 
+              body.reason,
+              suspendedUntil
+            )
+          }
+          break
+
+        case "item_edited_by_admin":
+          if (body.itemTitle) {
+            await notifyItemEditedByAdmin(lineUserId, body.itemTitle)
+          }
+          break
+      }
+
+      debugLog("[LINE Notify User Action] Sent successfully!")
+      return NextResponse.json({ sent: true })
+    } catch (error) {
+      errorLog("[LINE Notify User Action] Error:", error)
+      return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
     }
-    const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "notify-user-action", 30, 60_000)
-    if (rateLimited) return rateLimited
-
-    const body: NotifyUserActionBody = await request.json()
-    debugLog("[LINE Notify User Action] Request accepted", {
-      action: body.action,
-      userId: body.userId,
-    })
-
-    const { userId, action } = body
-
-    if (!userId || !action) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    // Check if user has LINE notifications enabled
-    const db = getAdminDb()
-    const userSnap = await db.collection("users").doc(userId).get()
-
-    if (!userSnap.exists) {
-      debugLog("[LINE Notify User Action] User not found")
-      return NextResponse.json({ sent: false, reason: "user not found" })
-    }
-
-    const userData = userSnap.data() as any
-    const lineUserId = userData?.lineUserId as string | undefined
-    // Default to true if not explicitly set
-    const notificationsEnabled = userData?.lineNotifications?.enabled ?? true
-    const accountStatusEnabled = userData?.lineNotifications?.accountStatus ?? true
-
-    debugLog("[LINE Notify User Action] User LINE status:", {
-      hasLineId: !!lineUserId,
-      notificationsEnabled,
-      accountStatusEnabled,
-      action,
-    })
-
-    if (!lineUserId) {
-      debugLog("[LINE Notify User Action] User has no LINE linked")
-      return NextResponse.json({ sent: false, reason: "no LINE linked" })
-    }
-    
-    if (!notificationsEnabled) {
-      return NextResponse.json({ sent: false, reason: "notifications disabled" })
-    }
-
-    // Send LINE notification based on action
-    switch (action) {
-      case "reported":
-        if (body.reportType && body.targetTitle) {
-          await notifyUserReported(
-            lineUserId,
-            body.reportType,
-            body.targetTitle,
-            body.reportReason
-          )
-        }
-        break
-
-      case "warning":
-        if (body.reason && body.warningCount) {
-          await notifyUserWarning(lineUserId, body.reason, body.warningCount)
-        }
-        break
-
-      case "status_change":
-        if (body.status && accountStatusEnabled) {
-          const suspendedUntil = body.suspendedUntil 
-            ? new Date(body.suspendedUntil) 
-            : undefined
-          await notifyAccountStatusChange(
-            lineUserId, 
-            body.status, 
-            body.reason,
-            suspendedUntil
-          )
-        }
-        break
-
-      case "item_edited_by_admin":
-        if (body.itemTitle) {
-          await notifyItemEditedByAdmin(lineUserId, body.itemTitle)
-        }
-        break
-    }
-
-    debugLog("[LINE Notify User Action] Sent successfully!")
-    return NextResponse.json({ sent: true })
-  } catch (error) {
-    errorLog("[LINE Notify User Action] Error:", error)
-    return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
   }
+}
+
+const controller = new LineNotifyUserActionController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

@@ -7,33 +7,40 @@ import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { ApiErrors, getAuthToken } from "@/lib/api-response"
 
-export async function POST(request: NextRequest) {
-  try {
-    const token = getAuthToken(request)
-    if (!token) return ApiErrors.unauthorized("Missing authentication token")
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+class NotificationsReadAllController {
+  async post(request: NextRequest) {
+    try {
+      const token = getAuthToken(request)
+      if (!token) return ApiErrors.unauthorized("Missing authentication token")
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
 
-    const db = getAdminDb()
-    const snapshot = await db
-      .collection("notifications")
-      .where("userId", "==", decoded.uid)
-      .where("isRead", "==", false)
-      .limit(500)
-      .get()
+      const db = getAdminDb()
+      const snapshot = await db
+        .collection("notifications")
+        .where("userId", "==", decoded.uid)
+        .where("isRead", "==", false)
+        .limit(500)
+        .get()
 
-    if (snapshot.empty) {
-      return NextResponse.json({ success: true, message: "Already read", count: 0 })
+      if (snapshot.empty) {
+        return NextResponse.json({ success: true, message: "Already read", count: 0 })
+      }
+
+      const batch = db.batch()
+      snapshot.docs.forEach((d) => {
+        batch.update(d.ref, { isRead: true, updatedAt: FieldValue.serverTimestamp() })
+      })
+      await batch.commit()
+      return NextResponse.json({ success: true, message: "Marked all as read", count: snapshot.size })
+    } catch (e) {
+      console.error("[Notifications API] read-all Error:", e)
+      return ApiErrors.internalError("Internal server error")
     }
-
-    const batch = db.batch()
-    snapshot.docs.forEach((d) => {
-      batch.update(d.ref, { isRead: true, updatedAt: FieldValue.serverTimestamp() })
-    })
-    await batch.commit()
-    return NextResponse.json({ success: true, message: "Marked all as read", count: snapshot.size })
-  } catch (e) {
-    console.error("[Notifications API] read-all Error:", e)
-    return ApiErrors.internalError("Internal server error")
   }
+}
+
+const controller = new NotificationsReadAllController()
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

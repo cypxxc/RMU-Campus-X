@@ -41,135 +41,143 @@ const notifyExchangeBodySchema = z
   })
   .strict()
 
-export async function POST(request: NextRequest) {
-  try {
-    const token = extractBearerToken(request.headers.get("Authorization"))
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+class LineNotifyExchangeController {
+  async post(request: NextRequest) {
+    try {
+      const token = extractBearerToken(request.headers.get("Authorization"))
+      if (!token) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
 
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) {
+        return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+      }
 
-    const bodyRaw = await request.json().catch(() => null)
-    const parsed = notifyExchangeBodySchema.safeParse(bodyRaw)
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: parsed.error.errors.map((issue) => ({
-            field: issue.path.join(".") || "root",
-            message: issue.message,
-          })),
-        },
-        { status: 400 }
-      )
-    }
+      const bodyRaw = await request.json().catch(() => null)
+      const parsed = notifyExchangeBodySchema.safeParse(bodyRaw)
+      if (!parsed.success) {
+        return NextResponse.json(
+          {
+            error: "Validation failed",
+            details: parsed.error.errors.map((issue) => ({
+              field: issue.path.join(".") || "root",
+              message: issue.message,
+            })),
+          },
+          { status: 400 }
+        )
+      }
 
-    const body = parsed.data
-    const exchangeId = body.exchangeId
-    const db = getAdminDb()
-    const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
-    if (!exchangeSnap.exists) {
-      return NextResponse.json({ sent: false, reason: "exchange not found" })
-    }
+      const body = parsed.data
+      const exchangeId = body.exchangeId
+      const db = getAdminDb()
+      const exchangeSnap = await db.collection("exchanges").doc(exchangeId).get()
+      if (!exchangeSnap.exists) {
+        return NextResponse.json({ sent: false, reason: "exchange not found" })
+      }
 
-    const exchange = exchangeSnap.data() as
-      | {
-          ownerId?: string
-          requesterId?: string
-          requesterName?: string
-          itemTitle?: string
-          itemId?: string
-        }
-      | undefined
-    const ownerId = exchange?.ownerId
-    const requesterId = exchange?.requesterId
-
-    // Only requester can trigger the "request created" notification.
-    if (!requesterId || decoded.uid !== requesterId) {
-      return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
-    }
-
-    if (!ownerId) {
-      return NextResponse.json({ sent: false, reason: "owner missing" })
-    }
-
-    const ownerSnap = await db.collection("users").doc(ownerId).get()
-    if (!ownerSnap.exists) {
-      debugLog("[LINE Notify Exchange] Owner not found")
-      return NextResponse.json({ sent: false, reason: "owner not found" })
-    }
-
-    const owner = ownerSnap.data() as
-      | {
-          lineUserId?: string
-          lineNotifications?: {
-            enabled?: boolean
-            exchangeRequest?: boolean
-          }
-        }
-      | undefined
-    const lineUserId = owner?.lineUserId
-    const notificationsEnabled = owner?.lineNotifications?.enabled !== false
-    const exchangeRequestEnabled = owner?.lineNotifications?.exchangeRequest !== false
-
-    debugLog("[LINE Notify Exchange] Owner LINE status:", {
-      hasLineId: !!lineUserId,
-      notificationsEnabled,
-      exchangeRequestEnabled,
-    })
-
-    if (!lineUserId) {
-      debugLog("[LINE Notify Exchange] Owner has no LINE linked")
-      return NextResponse.json({ sent: false, reason: "no LINE linked" })
-    }
-
-    if (!notificationsEnabled || !exchangeRequestEnabled) {
-      return NextResponse.json({ sent: false, reason: "notifications disabled" })
-    }
-
-    const itemTitle = exchange?.itemTitle || body.itemTitle || "สิ่งของ"
-    const requesterName =
-      body.requesterName ||
-      exchange?.requesterName ||
-      (decoded.email ? decoded.email.split("@")[0] : "ผู้ใช้") ||
-      "ผู้ใช้"
-
-    let itemImage: string | undefined
-    const itemId = exchange?.itemId
-    if (itemId) {
-      const itemSnap = await db.collection("items").doc(itemId).get()
-      const itemData = itemSnap.data() as
+      const exchange = exchangeSnap.data() as
         | {
-            imagePublicIds?: string[]
-            imageUrls?: string[]
-            imageUrl?: string
+            ownerId?: string
+            requesterId?: string
+            requesterName?: string
+            itemTitle?: string
+            itemId?: string
           }
         | undefined
-      const ref = itemData?.imagePublicIds?.[0] ?? itemData?.imageUrls?.[0] ?? itemData?.imageUrl
-      if (ref) {
-        const { resolveImageUrl } = await import("@/lib/cloudinary-url")
-        itemImage = resolveImageUrl(ref)
+      const ownerId = exchange?.ownerId
+      const requesterId = exchange?.requesterId
+
+      // Only requester can trigger the "request created" notification.
+      if (!requesterId || decoded.uid !== requesterId) {
+        return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
       }
+
+      if (!ownerId) {
+        return NextResponse.json({ sent: false, reason: "owner missing" })
+      }
+
+      const ownerSnap = await db.collection("users").doc(ownerId).get()
+      if (!ownerSnap.exists) {
+        debugLog("[LINE Notify Exchange] Owner not found")
+        return NextResponse.json({ sent: false, reason: "owner not found" })
+      }
+
+      const owner = ownerSnap.data() as
+        | {
+            lineUserId?: string
+            lineNotifications?: {
+              enabled?: boolean
+              exchangeRequest?: boolean
+            }
+          }
+        | undefined
+      const lineUserId = owner?.lineUserId
+      const notificationsEnabled = owner?.lineNotifications?.enabled !== false
+      const exchangeRequestEnabled = owner?.lineNotifications?.exchangeRequest !== false
+
+      debugLog("[LINE Notify Exchange] Owner LINE status:", {
+        hasLineId: !!lineUserId,
+        notificationsEnabled,
+        exchangeRequestEnabled,
+      })
+
+      if (!lineUserId) {
+        debugLog("[LINE Notify Exchange] Owner has no LINE linked")
+        return NextResponse.json({ sent: false, reason: "no LINE linked" })
+      }
+
+      if (!notificationsEnabled || !exchangeRequestEnabled) {
+        return NextResponse.json({ sent: false, reason: "notifications disabled" })
+      }
+
+      const itemTitle = exchange?.itemTitle || body.itemTitle || "สิ่งของ"
+      const requesterName =
+        body.requesterName ||
+        exchange?.requesterName ||
+        (decoded.email ? decoded.email.split("@")[0] : "ผู้ใช้") ||
+        "ผู้ใช้"
+
+      let itemImage: string | undefined
+      const itemId = exchange?.itemId
+      if (itemId) {
+        const itemSnap = await db.collection("items").doc(itemId).get()
+        const itemData = itemSnap.data() as
+          | {
+              imagePublicIds?: string[]
+              imageUrls?: string[]
+              imageUrl?: string
+            }
+          | undefined
+        const ref = itemData?.imagePublicIds?.[0] ?? itemData?.imageUrls?.[0] ?? itemData?.imageUrl
+        if (ref) {
+          const { resolveImageUrl } = await import("@/lib/cloudinary-url")
+          itemImage = resolveImageUrl(ref)
+        }
+      }
+
+      await notifyExchangeRequest(
+        lineUserId,
+        itemTitle,
+        requesterName,
+        exchangeId,
+        BASE_URL,
+        itemImage
+      )
+
+      debugLog("[LINE Notify Exchange] Sent successfully!")
+      return NextResponse.json({ sent: true })
+    } catch (error) {
+      errorLog("[LINE Notify Exchange] Error:", error)
+      // Notification failure should not break the main user flow.
+      return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
     }
-
-    await notifyExchangeRequest(
-      lineUserId,
-      itemTitle,
-      requesterName,
-      exchangeId,
-      BASE_URL,
-      itemImage
-    )
-
-    debugLog("[LINE Notify Exchange] Sent successfully!")
-    return NextResponse.json({ sent: true })
-  } catch (error) {
-    errorLog("[LINE Notify Exchange] Error:", error)
-    // Notification failure should not break the main user flow.
-    return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
   }
+}
+
+const controller = new LineNotifyExchangeController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

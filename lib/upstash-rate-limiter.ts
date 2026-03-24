@@ -72,6 +72,39 @@ async function getUpstashRatelimit(limit: number, windowMs: number) {
   return instance as InstanceType<typeof import('@upstash/ratelimit').Ratelimit>
 }
 
+class UpstashRateLimiterService {
+  async checkRateLimitScalable(
+    key: string,
+    limit: number = RATE_LIMITS.API.limit,
+    windowMs: number = RATE_LIMITS.API.windowMs
+  ): Promise<RateLimitResult> {
+    // Try Upstash first (with per-endpoint configuration)
+    const ratelimit = await getUpstashRatelimit(limit, windowMs)
+
+    if (ratelimit) {
+      try {
+        const result = await ratelimit.limit(key)
+        return {
+          allowed: result.success,
+          remaining: result.remaining,
+          resetTime: result.reset,
+        }
+      } catch (error) {
+        console.warn('[Rate Limit] Upstash error, falling back to in-memory:', error)
+      }
+    }
+
+    // Fallback to in-memory
+    return inMemoryCheck(key, limit, windowMs)
+  }
+
+  isUpstashConfigured(): boolean {
+    return UPSTASH_CONFIGURED
+  }
+}
+
+const upstashRateLimiterService = new UpstashRateLimiterService()
+
 /**
  * Check rate limit using Upstash Redis (with in-memory fallback)
  */
@@ -80,24 +113,7 @@ export async function checkRateLimitScalable(
   limit: number = RATE_LIMITS.API.limit,
   windowMs: number = RATE_LIMITS.API.windowMs
 ): Promise<RateLimitResult> {
-  // Try Upstash first (with per-endpoint configuration)
-  const ratelimit = await getUpstashRatelimit(limit, windowMs)
-  
-  if (ratelimit) {
-    try {
-      const result = await ratelimit.limit(key)
-      return {
-        allowed: result.success,
-        remaining: result.remaining,
-        resetTime: result.reset,
-      }
-    } catch (error) {
-      console.warn('[Rate Limit] Upstash error, falling back to in-memory:', error)
-    }
-  }
-  
-  // Fallback to in-memory
-  return inMemoryCheck(key, limit, windowMs)
+  return upstashRateLimiterService.checkRateLimitScalable(key, limit, windowMs)
 }
 
 /**
@@ -118,5 +134,5 @@ export { getClientIP, RATE_LIMITS }
  * Check if Upstash is configured
  */
 export function isUpstashConfigured(): boolean {
-  return UPSTASH_CONFIGURED
+  return upstashRateLimiterService.isUpstashConfigured()
 }

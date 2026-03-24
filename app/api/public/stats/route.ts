@@ -11,40 +11,48 @@ import { getAdminDb } from "@/lib/firebase-admin"
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000
 
-export async function GET() {
-  try {
-    const db = getAdminDb()
-    const oneYearAgo = Timestamp.fromDate(new Date(Date.now() - ONE_YEAR_MS))
+class PublicStatsController {
+  async get() {
+    try {
+      const db = getAdminDb()
+      const oneYearAgo = Timestamp.fromDate(new Date(Date.now() - ONE_YEAR_MS))
 
-    const [itemsCount, usersCount, completedExchangesCount] = await Promise.all([
-      db.collection("items").count().get().then((s) => s.data().count),
-      db.collection("users").count().get().then((s) => s.data().count),
-      // นับเฉพาะการแลกเปลี่ยนที่สำเร็จใน 1 ปีล่าสุด (กรองข้อมูลเก่าค้าง)
-      db
-        .collection("exchanges")
-        .where("status", "==", "completed")
-        .where("updatedAt", ">=", oneYearAgo)
-        .count()
-        .get()
-        .then((s) => s.data().count)
-        .catch(() =>
-          // fallback: ถ้าไม่มี composite index (status, updatedAt) ให้นับทั้งหมด
-          db.collection("exchanges").where("status", "==", "completed").count().get().then((s) => s.data().count)
-        ),
-    ])
-    return NextResponse.json({
-      success: true,
-      data: {
-        items: itemsCount,
-        users: usersCount,
-        completedExchanges: completedExchangesCount,
-      },
-    })
-  } catch (error) {
-    console.error("[Public Stats] Error:", error)
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch stats" },
-      { status: 500 }
-    )
+      const [itemsCount, usersCount, completedExchangesCount] = await Promise.all([
+        db.collection("items").count().get().then((s) => s.data().count),
+        db.collection("users").count().get().then((s) => s.data().count),
+        // นับเฉพาะการแลกเปลี่ยนที่สำเร็จใน 1 ปีล่าสุด (กรองข้อมูลเก่าค้าง)
+        db
+          .collection("exchanges")
+          .where("status", "==", "completed")
+          .where("updatedAt", ">=", oneYearAgo)
+          .count()
+          .get()
+          .then((s) => s.data().count)
+          .catch(() =>
+            // fallback: ถ้าไม่มี composite index (status, updatedAt) ให้นับทั้งหมด
+            db.collection("exchanges").where("status", "==", "completed").count().get().then((s) => s.data().count)
+          ),
+      ])
+      return NextResponse.json({
+        success: true,
+        data: {
+          items: itemsCount,
+          users: usersCount,
+          completedExchanges: completedExchangesCount,
+        },
+      })
+    } catch (error) {
+      console.error("[Public Stats] Error:", error)
+      return NextResponse.json(
+        { success: false, error: "Failed to fetch stats" },
+        { status: 500 }
+      )
+    }
   }
+}
+
+const controller = new PublicStatsController()
+
+export async function GET() {
+  return controller.get()
 }

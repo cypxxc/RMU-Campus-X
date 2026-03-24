@@ -21,7 +21,7 @@ import { createNotification } from "./notifications";
 const isClient = typeof window !== "undefined";
 
 // Exchanges – บน client ใช้ API ทั้งหมด
-export const createExchange = async (
+const createExchangeImpl = async (
   exchangeData: Omit<Exchange, "id" | "createdAt" | "updatedAt">
 ) => {
   if (isClient) {
@@ -80,7 +80,7 @@ export const createExchange = async (
 };
 
 // Pagination support for exchanges – บน client ใช้ GET /api/exchanges
-export const getExchangesByUser = async (
+const getExchangesByUserImpl = async (
   userId: string,
   pageSize: number = 20,
   lastDoc: any = null
@@ -125,7 +125,7 @@ export const getExchangesByUser = async (
   );
 };
 
-export const getExchangeById = async (
+const getExchangeByIdImpl = async (
   id: string
 ): Promise<ApiResponse<Exchange | null>> => {
   if (isClient) {
@@ -158,7 +158,7 @@ export const getExchangeById = async (
   );
 };
 
-export const updateExchange = async (id: string, data: Partial<Exchange>) => {
+const updateExchangeImpl = async (id: string, data: Partial<Exchange>) => {
   const db = getFirebaseDb();
   const docRef = doc(db, "exchanges", id);
 
@@ -175,7 +175,7 @@ export const updateExchange = async (id: string, data: Partial<Exchange>) => {
   });
 };
 
-export const respondToExchange = async (
+const respondToExchangeImpl = async (
   exchangeId: string,
   action: "accept" | "reject",
   userId: string
@@ -198,7 +198,7 @@ export const respondToExchange = async (
  * can be updated regardless of who confirms (avoids Firestore permission
  * error when requester confirms second).
  */
-export const confirmExchange = async (
+const confirmExchangeImpl = async (
   exchangeId: string,
   role: "owner" | "requester"
 ): Promise<ApiResponse<{ status: ExchangeStatus }>> => {
@@ -308,7 +308,7 @@ export const confirmExchange = async (
   );
 };
 
-export const cancelExchange = async (
+const cancelExchangeImpl = async (
   exchangeId: string,
   _itemId: string, // Kept for signature compatibility
   userId: string,
@@ -327,7 +327,7 @@ export const cancelExchange = async (
 };
 
 /** ซ่อนแชทจากรายการของฉัน — อีกฝ่ายยังเห็นแชทได้ */
-export const hideExchange = async (exchangeId: string) => {
+const hideExchangeImpl = async (exchangeId: string) => {
   if (isClient) {
     return apiCall(
       async () => {
@@ -341,7 +341,7 @@ export const hideExchange = async (exchangeId: string) => {
 };
 
 /** ลบ exchange และข้อความแชทจริง (หายทั้งสองฝ่าย) — ใช้เมื่อต้องการลบถาวร */
-export const deleteExchange = async (exchangeId: string) => {
+const deleteExchangeImpl = async (exchangeId: string) => {
   if (isClient) {
     return apiCall(
       async () => {
@@ -353,3 +353,59 @@ export const deleteExchange = async (exchangeId: string) => {
   }
   throw new Error("deleteExchange is only supported on the client via API");
 };
+
+class ExchangesService {
+  createExchange = createExchangeImpl
+  getExchangesByUser = getExchangesByUserImpl
+  getExchangeById = getExchangeByIdImpl
+  updateExchange = updateExchangeImpl
+  respondToExchange = respondToExchangeImpl
+  confirmExchange = confirmExchangeImpl
+  cancelExchange = cancelExchangeImpl
+  hideExchange = hideExchangeImpl
+  deleteExchange = deleteExchangeImpl
+}
+
+const exchangesService = new ExchangesService()
+
+export const createExchange = (
+  exchangeData: Omit<Exchange, "id" | "createdAt" | "updatedAt">
+) => exchangesService.createExchange(exchangeData)
+
+export const getExchangesByUser = (
+  userId: string,
+  pageSize: number = 20,
+  lastDoc: any = null
+): Promise<ApiResponse<{ exchanges: Exchange[]; lastDoc: any; hasMore: boolean }>> =>
+  exchangesService.getExchangesByUser(userId, pageSize, lastDoc)
+
+export const getExchangeById = (id: string): Promise<ApiResponse<Exchange | null>> =>
+  exchangesService.getExchangeById(id)
+
+export const updateExchange = (id: string, data: Partial<Exchange>) =>
+  exchangesService.updateExchange(id, data)
+
+export const respondToExchange = (
+  exchangeId: string,
+  action: "accept" | "reject",
+  userId: string
+) => exchangesService.respondToExchange(exchangeId, action, userId)
+
+export const confirmExchange = (
+  exchangeId: string,
+  role: "owner" | "requester"
+): Promise<ApiResponse<{ status: ExchangeStatus }>> =>
+  exchangesService.confirmExchange(exchangeId, role)
+
+export const cancelExchange = (
+  exchangeId: string,
+  _itemId: string,
+  userId: string,
+  reason?: string
+) => exchangesService.cancelExchange(exchangeId, _itemId, userId, reason)
+
+export const hideExchange = (exchangeId: string) =>
+  exchangesService.hideExchange(exchangeId)
+
+export const deleteExchange = (exchangeId: string) =>
+  exchangesService.deleteExchange(exchangeId)

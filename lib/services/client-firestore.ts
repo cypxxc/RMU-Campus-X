@@ -21,36 +21,6 @@ import { getFirebaseDb } from "@/lib/firebase"
 import type { AppNotification, ChatMessage, Exchange } from "@/types"
 import { log } from "@/lib/logger"
 
-// ============ Admin ============
-
-/**
- * ตรวจสอบว่า email นี้เป็นแอดมินหรือไม่ (จาก collection admins)
- */
-export async function checkIsAdmin(userEmail: string | null | undefined): Promise<boolean> {
-  if (!userEmail) return false
-  const db = getFirebaseDb()
-  const q = query(collection(db, "admins"), where("email", "==", userEmail))
-  const snapshot = await getDocs(q)
-  return !snapshot.empty
-}
-
-// ============ Get document by ID (for admin reports etc.) ============
-
-/**
- * ดึง document เดียวตาม collection และ id
- * คืนค่า data ของ document หรือ null ถ้าไม่มี
- */
-export async function getDocById(
-  collectionName: "users" | "items" | "exchanges" | "support_tickets" | "reports",
-  id: string
-): Promise<Record<string, unknown> | null> {
-  const db = getFirebaseDb()
-  const snap = await getDoc(doc(db, collectionName, id))
-  if (!snap.exists()) return null
-  const data = snap.data()
-  return data as Record<string, unknown>
-}
-
 // ============ Chat (real-time) ============
 
 function toIso(v: unknown): string | undefined {
@@ -130,172 +100,254 @@ function subscribeWithOnlineGuard(
   }
 }
 
-/**
- * Subscribe exchange details real-time
- * @returns unsubscribe function
- */
+export class ClientFirestoreService {
+  async checkIsAdmin(userEmail: string | null | undefined): Promise<boolean> {
+    if (!userEmail) return false
+    const db = getFirebaseDb()
+    const q = query(collection(db, "admins"), where("email", "==", userEmail))
+    const snapshot = await getDocs(q)
+    return !snapshot.empty
+  }
+
+  async getDocById(
+    collectionName: "users" | "items" | "exchanges" | "support_tickets" | "reports",
+    id: string
+  ): Promise<Record<string, unknown> | null> {
+    const db = getFirebaseDb()
+    const snap = await getDoc(doc(db, collectionName, id))
+    if (!snap.exists()) return null
+    const data = snap.data()
+    return data as Record<string, unknown>
+  }
+
+  subscribeToExchange(
+    exchangeId: string,
+    onUpdate: (exchange: Exchange | null) => void,
+    onError?: () => void
+  ): () => void {
+    const db = getFirebaseDb()
+    return subscribeWithOnlineGuard(() =>
+      onSnapshot(
+        doc(db, "exchanges", exchangeId),
+        (snap) => {
+          if (!snap.exists()) {
+            onUpdate(null)
+            return
+          }
+          const data = snap.data() as Record<string, unknown>
+          onUpdate(toExchange(data, snap.id))
+        },
+        () => {
+          onError?.()
+        }
+      )
+    )
+  }
+
+  subscribeToChatMessages(
+    exchangeId: string,
+    pageSize: number,
+    onUpdate: (messages: ChatMessage[]) => void,
+    onError?: () => void
+  ): () => void {
+    const db = getFirebaseDb()
+    const q = query(
+      collection(db, "chatMessages"),
+      where("exchangeId", "==", exchangeId),
+      orderBy("createdAt", "desc"),
+      limit(pageSize)
+    )
+    return subscribeWithOnlineGuard(() =>
+      onSnapshot(
+        q,
+        (snapshot) => {
+          const list: ChatMessage[] = snapshot.docs.map((d) => {
+            const data = d.data()
+            return {
+              id: d.id,
+              exchangeId: data.exchangeId as string,
+              senderId: data.senderId as string,
+              senderEmail: (data.senderEmail ?? "") as string,
+              message: (data.message ?? "") as string,
+              createdAt: (toIso(data.createdAt) ?? new Date().toISOString()) as unknown as ChatMessage["createdAt"],
+              imageUrl: (data.imageUrl ?? null) as ChatMessage["imageUrl"],
+              imageType: (data.imageType ?? null) as ChatMessage["imageType"],
+              readAt: data.readAt != null ? (toIso(data.readAt) as unknown as ChatMessage["readAt"]) : undefined,
+              updatedAt: data.updatedAt != null ? (toIso(data.updatedAt) as unknown as ChatMessage["updatedAt"]) : undefined,
+            }
+          })
+          const ordered = [...list].reverse()
+          onUpdate(ordered)
+        },
+        () => {
+          onError?.()
+        }
+      )
+    )
+  }
+
+  setChatTyping(
+    exchangeId: string,
+    key: "ownerTypingAt" | "requesterTypingAt",
+    value: boolean
+  ): void {
+    const db = getFirebaseDb()
+    setDoc(
+      doc(db, "chatTyping", exchangeId),
+      { [key]: value ? serverTimestamp() : null },
+      { merge: true }
+    ).catch(() => {})
+  }
+
+  subscribeToNotifications(
+    userId: string,
+    pageSize: number,
+    onUpdate: (notifications: AppNotification[]) => void,
+    onError?: () => void
+  ): () => void {
+    const db = getFirebaseDb()
+    const subscribedAt = Date.now()
+    let firstSnapshot = true
+    let lastSize = -1
+
+    return subscribeWithOnlineGuard(
+      () =>
+        onSnapshot(
+          query(
+            collection(db, "notifications"),
+            where("userId", "==", userId),
+            orderBy("createdAt", "desc"),
+            limit(pageSize)
+          ),
+          (snapshot) => {
+            const list: AppNotification[] = snapshot.docs.map((d) => {
+              const data = d.data()
+              return {
+                id: d.id,
+                userId: data.userId as string,
+                title: data.title as string,
+                message: data.message as string,
+                type: data.type as AppNotification["type"],
+                relatedId: data.relatedId as string | undefined,
+                isRead: Boolean(data.isRead),
+                createdAt: data.createdAt,
+                senderId: data.senderId as string | undefined,
+              }
+            })
+
+            if (firstSnapshot) {
+              firstSnapshot = false
+              log.performance("notifications.realtime.initial_snapshot", Date.now() - subscribedAt, {
+                userId,
+                pageSize,
+                size: snapshot.size,
+              })
+            } else if (snapshot.size !== lastSize) {
+              log.debug("notifications.realtime.size_changed", {
+                userId,
+                previousSize: lastSize,
+                nextSize: snapshot.size,
+              })
+            }
+            lastSize = snapshot.size
+
+            onUpdate(list)
+          },
+          (error) => {
+            log.warn("notifications.realtime.error", {
+              userId,
+              error: error?.message ?? String(error),
+            })
+            onError?.()
+          }
+        ),
+      () => {
+        log.info("notifications.realtime.offline", { userId })
+        onError?.()
+      }
+    )
+  }
+
+  subscribeToChatTyping(
+    exchangeId: string,
+    otherKey: "ownerTypingAt" | "requesterTypingAt",
+    onTypingChange: (typing: boolean) => void,
+    onError?: () => void
+  ): () => void {
+    const db = getFirebaseDb()
+    return subscribeWithOnlineGuard(
+      () =>
+        onSnapshot(
+          doc(db, "chatTyping", exchangeId),
+          (snap) => {
+            if (!snap.exists()) {
+              onTypingChange(false)
+              return
+            }
+            const data = snap.data()
+            const t = data?.[otherKey]
+            const millis =
+              t && typeof (t as { toMillis?: () => number }).toMillis === "function"
+                ? (t as { toMillis: () => number }).toMillis()
+                : 0
+            onTypingChange(millis > 0 && Date.now() - millis < 5000)
+          },
+          () => {
+            onError?.()
+          }
+        ),
+      () => {
+        onTypingChange(false)
+      }
+    )
+  }
+}
+
+const clientFirestoreService = new ClientFirestoreService()
+
+export async function checkIsAdmin(userEmail: string | null | undefined): Promise<boolean> {
+  return clientFirestoreService.checkIsAdmin(userEmail)
+}
+
+export async function getDocById(
+  collectionName: "users" | "items" | "exchanges" | "support_tickets" | "reports",
+  id: string
+): Promise<Record<string, unknown> | null> {
+  return clientFirestoreService.getDocById(collectionName, id)
+}
+
 export function subscribeToExchange(
   exchangeId: string,
   onUpdate: (exchange: Exchange | null) => void,
   onError?: () => void
 ): () => void {
-  const db = getFirebaseDb()
-  return subscribeWithOnlineGuard(() =>
-    onSnapshot(
-      doc(db, "exchanges", exchangeId),
-      (snap) => {
-        if (!snap.exists()) {
-          onUpdate(null)
-          return
-        }
-        const data = snap.data() as Record<string, unknown>
-        onUpdate(toExchange(data, snap.id))
-      },
-      () => {
-        onError?.()
-      }
-    )
-  )
+  return clientFirestoreService.subscribeToExchange(exchangeId, onUpdate, onError)
 }
 
-/**
- * Subscribe ข้อความแชท real-time
- * @returns ฟังก์ชันยกเลิกการ subscribe
- */
 export function subscribeToChatMessages(
   exchangeId: string,
   pageSize: number,
   onUpdate: (messages: ChatMessage[]) => void,
   onError?: () => void
 ): () => void {
-  const db = getFirebaseDb()
-  const q = query(
-    collection(db, "chatMessages"),
-    where("exchangeId", "==", exchangeId),
-    orderBy("createdAt", "desc"),
-    limit(pageSize)
-  )
-  return subscribeWithOnlineGuard(() =>
-    onSnapshot(
-      q,
-      (snapshot) => {
-        const list: ChatMessage[] = snapshot.docs.map((d) => {
-          const data = d.data()
-          return {
-            id: d.id,
-            exchangeId: data.exchangeId as string,
-            senderId: data.senderId as string,
-            senderEmail: (data.senderEmail ?? "") as string,
-            message: (data.message ?? "") as string,
-            createdAt: (toIso(data.createdAt) ?? new Date().toISOString()) as unknown as ChatMessage["createdAt"],
-            imageUrl: (data.imageUrl ?? null) as ChatMessage["imageUrl"],
-            imageType: (data.imageType ?? null) as ChatMessage["imageType"],
-            readAt: data.readAt != null ? (toIso(data.readAt) as unknown as ChatMessage["readAt"]) : undefined,
-            updatedAt: data.updatedAt != null ? (toIso(data.updatedAt) as unknown as ChatMessage["updatedAt"]) : undefined,
-          }
-        })
-        const ordered = [...list].reverse()
-        onUpdate(ordered)
-      },
-      () => {
-        onError?.()
-      }
-    )
-  )
+  return clientFirestoreService.subscribeToChatMessages(exchangeId, pageSize, onUpdate, onError)
 }
 
-/**
- * อัปเดตสถานะกำลังพิมพ์ (typing) ในแชท
- */
 export function setChatTyping(
   exchangeId: string,
   key: "ownerTypingAt" | "requesterTypingAt",
   value: boolean
 ): void {
-  const db = getFirebaseDb()
-  setDoc(
-    doc(db, "chatTyping", exchangeId),
-    { [key]: value ? serverTimestamp() : null },
-    { merge: true }
-  ).catch(() => {})
+  clientFirestoreService.setChatTyping(exchangeId, key, value)
 }
 
-/**
- * Subscribe สถานะกำลังพิมพ์ของอีกฝั่ง
- * @param otherKey คีย์ของอีกฝั่ง (ownerTypingAt หรือ requesterTypingAt)
- * @returns ฟังก์ชันยกเลิกการ subscribe
- */
-/**
- * Subscribe notifications real-time
- * @returns unsubscribe function
- */
 export function subscribeToNotifications(
   userId: string,
   pageSize: number,
   onUpdate: (notifications: AppNotification[]) => void,
   onError?: () => void
 ): () => void {
-  const db = getFirebaseDb()
-  const subscribedAt = Date.now()
-  let firstSnapshot = true
-  let lastSize = -1
-
-  return subscribeWithOnlineGuard(
-    () =>
-      onSnapshot(
-        query(
-          collection(db, "notifications"),
-          where("userId", "==", userId),
-          orderBy("createdAt", "desc"),
-          limit(pageSize)
-        ),
-        (snapshot) => {
-          const list: AppNotification[] = snapshot.docs.map((d) => {
-            const data = d.data()
-            return {
-              id: d.id,
-              userId: data.userId as string,
-              title: data.title as string,
-              message: data.message as string,
-              type: data.type as AppNotification["type"],
-              relatedId: data.relatedId as string | undefined,
-              isRead: Boolean(data.isRead),
-              createdAt: data.createdAt,
-              senderId: data.senderId as string | undefined,
-            }
-          })
-
-          if (firstSnapshot) {
-            firstSnapshot = false
-            log.performance("notifications.realtime.initial_snapshot", Date.now() - subscribedAt, {
-              userId,
-              pageSize,
-              size: snapshot.size,
-            })
-          } else if (snapshot.size !== lastSize) {
-            log.debug("notifications.realtime.size_changed", {
-              userId,
-              previousSize: lastSize,
-              nextSize: snapshot.size,
-            })
-          }
-          lastSize = snapshot.size
-
-          onUpdate(list)
-        },
-        (error) => {
-          log.warn("notifications.realtime.error", {
-            userId,
-            error: error?.message ?? String(error),
-          })
-          onError?.()
-        }
-      ),
-    () => {
-      log.info("notifications.realtime.offline", { userId })
-      onError?.()
-    }
-  )
+  return clientFirestoreService.subscribeToNotifications(userId, pageSize, onUpdate, onError)
 }
 
 export function subscribeToChatTyping(
@@ -304,30 +356,5 @@ export function subscribeToChatTyping(
   onTypingChange: (typing: boolean) => void,
   onError?: () => void
 ): () => void {
-  const db = getFirebaseDb()
-  return subscribeWithOnlineGuard(
-    () =>
-      onSnapshot(
-        doc(db, "chatTyping", exchangeId),
-        (snap) => {
-          if (!snap.exists()) {
-            onTypingChange(false)
-            return
-          }
-          const data = snap.data()
-          const t = data?.[otherKey]
-          const millis =
-            t && typeof (t as { toMillis?: () => number }).toMillis === "function"
-              ? (t as { toMillis: () => number }).toMillis()
-              : 0
-          onTypingChange(millis > 0 && Date.now() - millis < 5000)
-        },
-        () => {
-          onError?.()
-        }
-      ),
-    () => {
-      onTypingChange(false)
-    }
-  )
+  return clientFirestoreService.subscribeToChatTyping(exchangeId, otherKey, onTypingChange, onError)
 }

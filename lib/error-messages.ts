@@ -45,45 +45,83 @@ const GENERAL_ERROR_MESSAGES: Record<string, string> = {
   "unknown": "เกิดข้อผิดพลาดที่ไม่คาดคิด",
 }
 
+class ErrorMessageService {
+  getErrorMessage(error: unknown): string {
+    // Error เป็น string
+    if (typeof error === "string") {
+      return error
+    }
+
+    // Error object
+    if (error instanceof Error) {
+      const message = error.message
+
+      // Firebase Auth error
+      const authMatch = message.match(/auth\/[\w-]+/)
+      if (authMatch) {
+        return AUTH_ERROR_MESSAGES[authMatch[0]] || message
+      }
+
+      // Firestore error
+      for (const [code, msg] of Object.entries(FIRESTORE_ERROR_MESSAGES)) {
+        if (message.toLowerCase().includes(code)) {
+          return msg
+        }
+      }
+
+      // Network error
+      if (message.includes("network") || message.includes("fetch")) {
+        return GENERAL_ERROR_MESSAGES["network-error"] || "เกิดข้อผิดพลาดในการเชื่อมต่อ"
+      }
+
+      // ใช้ message เดิมถ้าสั้นพอ (ไม่ใช่ stack trace)
+      if (message.length < 100 && !message.includes("\n")) {
+        return message
+      }
+    }
+
+    // Default
+    return GENERAL_ERROR_MESSAGES["unknown"] || "เกิดข้อผิดพลาดที่ไม่คาดคิด"
+  }
+
+  createUserError(
+    error: unknown,
+    fallbackMessage = "เกิดข้อผิดพลาด"
+  ): { message: string; code?: string } {
+    const message = this.getErrorMessage(error)
+
+    let code: string | undefined
+    if (error instanceof Error && "code" in error) {
+      code = (error as any).code
+    }
+
+    return {
+      message: message || fallbackMessage,
+      code,
+    }
+  }
+
+  logError(context: string, error: unknown): void {
+    if (typeof window !== "undefined") {
+      console.error(`[${context}]`, error)
+      return
+    }
+    import("@/lib/services/logger").then(({ SystemLogger }) => {
+      SystemLogger.logError(error, context, "ERROR").catch((err) => {
+        console.error(`[${context}] Original Error:`, error)
+        console.error(`[${context}] Logger Error:`, err)
+      })
+    })
+  }
+}
+
+const errorMessageService = new ErrorMessageService()
+
 /**
  * แปลง error เป็นข้อความที่เข้าใจง่าย
  */
 export function getErrorMessage(error: unknown): string {
-  // Error เป็น string
-  if (typeof error === "string") {
-    return error
-  }
-
-  // Error object
-  if (error instanceof Error) {
-    const message = error.message
-
-    // Firebase Auth error
-    const authMatch = message.match(/auth\/[\w-]+/)
-    if (authMatch) {
-      return AUTH_ERROR_MESSAGES[authMatch[0]] || message
-    }
-
-    // Firestore error
-    for (const [code, msg] of Object.entries(FIRESTORE_ERROR_MESSAGES)) {
-      if (message.toLowerCase().includes(code)) {
-        return msg
-      }
-    }
-
-    // Network error
-    if (message.includes("network") || message.includes("fetch")) {
-      return GENERAL_ERROR_MESSAGES["network-error"] || "เกิดข้อผิดพลาดในการเชื่อมต่อ"
-    }
-
-    // ใช้ message เดิมถ้าสั้นพอ (ไม่ใช่ stack trace)
-    if (message.length < 100 && !message.includes("\n")) {
-      return message
-    }
-  }
-
-  // Default
-  return GENERAL_ERROR_MESSAGES["unknown"] || "เกิดข้อผิดพลาดที่ไม่คาดคิด"
+  return errorMessageService.getErrorMessage(error)
 }
 
 /**
@@ -93,17 +131,7 @@ export function createUserError(
   error: unknown,
   fallbackMessage = "เกิดข้อผิดพลาด"
 ): { message: string; code?: string } {
-  const message = getErrorMessage(error)
-  
-  let code: string | undefined
-  if (error instanceof Error && "code" in error) {
-    code = (error as any).code
-  }
-
-  return {
-    message: message || fallbackMessage,
-    code,
-  }
+  return errorMessageService.createUserError(error, fallbackMessage)
 }
 
 /**
@@ -112,14 +140,5 @@ export function createUserError(
  * บน server ใช้ dynamic import SystemLogger เพื่อเขียน log ลง Firestore
  */
 export function logError(context: string, error: unknown): void {
-  if (typeof window !== "undefined") {
-    console.error(`[${context}]`, error)
-    return
-  }
-  import("@/lib/services/logger").then(({ SystemLogger }) => {
-    SystemLogger.logError(error, context, "ERROR").catch((err) => {
-      console.error(`[${context}] Original Error:`, error)
-      console.error(`[${context}] Logger Error:`, err)
-    })
-  })
+  errorMessageService.logError(context, error)
 }

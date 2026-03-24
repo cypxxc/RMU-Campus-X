@@ -5,7 +5,7 @@
  * ✅ Uses withValidation wrapper for consistent validation and auth
  */
 
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { withValidation, type ValidationContext } from "@/lib/api-validation"
 import { createReport } from "@/lib/services/reports/create-report"
@@ -40,7 +40,7 @@ type CreateReportInput = z.infer<typeof createReportSchema>
  * POST /api/reports
  * Create a new report
  */
-export const POST = withValidation(
+const postHandler = withValidation(
   createReportSchema as z.ZodType<CreateReportInput>,
   async (_request, data: CreateReportInput, ctx: ValidationContext | null) => {
     if (!ctx) {
@@ -94,3 +94,15 @@ export const POST = withValidation(
   },
   { requireAuth: true, requireTermsAccepted: true }
 )
+
+class ReportsController {
+  async post(request: NextRequest) {
+    return postHandler(request)
+  }
+}
+
+const controller = new ReportsController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
+}

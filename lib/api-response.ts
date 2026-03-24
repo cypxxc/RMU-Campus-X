@@ -21,147 +21,160 @@ export interface ApiErrorResponse {
 
 export type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse
 
-// ============ Response Helpers ============
+class ApiResponseService {
+  successResponse<T>(data: T, status = 200): NextResponse<ApiSuccessResponse<T>> {
+    return NextResponse.json({ success: true, data }, { status })
+  }
 
-/**
- * Create a success response
- */
-export function successResponse<T>(data: T, status = 200): NextResponse<ApiSuccessResponse<T>> {
-  return NextResponse.json({ success: true, data }, { status })
-}
+  errorResponse(
+    message: string,
+    status = 400,
+    code?: string,
+    details?: unknown
+  ): NextResponse<ApiErrorResponse> {
+    const response: ApiErrorResponse = { success: false, error: message }
+    if (code) response.code = code
+    if (details) response.details = details
+    return NextResponse.json(response, { status })
+  }
 
-/**
- * Create an error response
- */
-export function errorResponse(
-  message: string, 
-  status = 400, 
-  code?: string,
-  details?: unknown
-): NextResponse<ApiErrorResponse> {
-  const response: ApiErrorResponse = { success: false, error: message }
-  if (code) response.code = code
-  if (details) response.details = details
-  return NextResponse.json(response, { status })
-}
+  readonly apiErrors = {
+    unauthorized: (message = "Unauthorized") =>
+      this.errorResponse(message, 401, "UNAUTHORIZED"),
 
-/**
- * Common error responses
- */
-export const ApiErrors = {
-  unauthorized: (message = "Unauthorized") => 
-    errorResponse(message, 401, "UNAUTHORIZED"),
-  
-  forbidden: (message = "Forbidden") => 
-    errorResponse(message, 403, "FORBIDDEN"),
-  
-  notFound: (message = "Not found") => 
-    errorResponse(message, 404, "NOT_FOUND"),
-  
-  badRequest: (message = "Bad request") => 
-    errorResponse(message, 400, "BAD_REQUEST"),
-  
-  methodNotAllowed: (method: string) => 
-    errorResponse(`Method ${method} not allowed`, 405, "METHOD_NOT_ALLOWED"),
-  
-  internalError: (message = "Internal server error") => 
-    errorResponse(message, 500, "INTERNAL_ERROR"),
-  
-  rateLimited: (message = "Too many requests") => 
-    errorResponse(message, 429, "RATE_LIMITED"),
-  
-  validationError: (message: string, details?: unknown) => 
-    errorResponse(message, 400, "VALIDATION_ERROR", details),
+    forbidden: (message = "Forbidden") =>
+      this.errorResponse(message, 403, "FORBIDDEN"),
 
-  missingFields: (fields: string[]) =>
-    errorResponse(`Missing required fields: ${fields.join(", ")}`, 400, "MISSING_FIELDS"),
+    notFound: (message = "Not found") =>
+      this.errorResponse(message, 404, "NOT_FOUND"),
 
-  invalidToken: (message = "Invalid or expired token") =>
-    errorResponse(message, 401, "INVALID_TOKEN"),
-    
-  conflict: (message = "Conflict") =>
-    errorResponse(message, 409, "CONFLICT"),
-}
+    badRequest: (message = "Bad request") =>
+      this.errorResponse(message, 400, "BAD_REQUEST"),
 
-// ============ Error Handler Wrapper ============
+    methodNotAllowed: (method: string) =>
+      this.errorResponse(`Method ${method} not allowed`, 405, "METHOD_NOT_ALLOWED"),
 
-/**
- * Wrap an API handler with error handling
- */
-export function withErrorHandler<T>(
-  handler: (req: Request) => Promise<NextResponse<T>>
-) {
-  return async (req: Request): Promise<NextResponse<T | ApiErrorResponse>> => {
-    try {
-      return await handler(req)
-    } catch (error) {
-      console.error("[API Error]:", error)
-      
-      if (error instanceof Error) {
-        // Check for specific error types
-        if (error.message.includes("Unauthorized")) {
-          return ApiErrors.unauthorized(error.message)
+    internalError: (message = "Internal server error") =>
+      this.errorResponse(message, 500, "INTERNAL_ERROR"),
+
+    rateLimited: (message = "Too many requests") =>
+      this.errorResponse(message, 429, "RATE_LIMITED"),
+
+    validationError: (message: string, details?: unknown) =>
+      this.errorResponse(message, 400, "VALIDATION_ERROR", details),
+
+    missingFields: (fields: string[]) =>
+      this.errorResponse(`Missing required fields: ${fields.join(", ")}`, 400, "MISSING_FIELDS"),
+
+    invalidToken: (message = "Invalid or expired token") =>
+      this.errorResponse(message, 401, "INVALID_TOKEN"),
+
+    conflict: (message = "Conflict") =>
+      this.errorResponse(message, 409, "CONFLICT"),
+  }
+
+  withErrorHandler<T>(handler: (req: Request) => Promise<NextResponse<T>>) {
+    return async (req: Request): Promise<NextResponse<T | ApiErrorResponse>> => {
+      try {
+        return await handler(req)
+      } catch (error) {
+        console.error("[API Error]:", error)
+
+        if (error instanceof Error) {
+          if (error.message.includes("Unauthorized")) {
+            return this.apiErrors.unauthorized(error.message)
+          }
+          if (error.message.includes("Not found")) {
+            return this.apiErrors.notFound(error.message)
+          }
+
+          return this.errorResponse(error.message, 500, "INTERNAL_ERROR")
         }
-        if (error.message.includes("Not found")) {
-          return ApiErrors.notFound(error.message)
-        }
-        
-        return errorResponse(error.message, 500, "INTERNAL_ERROR")
+
+        return this.apiErrors.internalError()
       }
-      
-      return ApiErrors.internalError()
     }
+  }
+
+  validateRequiredFields<T extends object>(
+    body: T,
+    requiredFields: (keyof T)[]
+  ): { valid: boolean; missing: string[] } {
+    const missing = requiredFields.filter(field => {
+      const value = body[field]
+      return value === undefined || value === null || value === ""
+    }) as string[]
+
+    return {
+      valid: missing.length === 0,
+      missing,
+    }
+  }
+
+  async parseRequestBody<T>(req: Request): Promise<T | null> {
+    try {
+      return await req.json() as T
+    } catch {
+      return null
+    }
+  }
+
+  getAuthToken(req: Request): string | null {
+    const authHeader = req.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return null
+    }
+    return authHeader.slice(7)
+  }
+
+  hasValidContentType(req: Request, expectedType = "application/json"): boolean {
+    const contentType = req.headers.get("content-type")
+    return contentType?.includes(expectedType) ?? false
   }
 }
 
-// ============ Request Validation Helpers ============
+const apiResponseService = new ApiResponseService()
 
-/**
- * Validate required fields in request body
- */
+// ============ Response Helpers ============
+export function successResponse<T>(data: T, status = 200): NextResponse<ApiSuccessResponse<T>> {
+  return apiResponseService.successResponse(data, status)
+}
+
+export function errorResponse(
+  message: string,
+  status = 400,
+  code?: string,
+  details?: unknown
+): NextResponse<ApiErrorResponse> {
+  return apiResponseService.errorResponse(message, status, code, details)
+}
+
+export const ApiErrors = apiResponseService.apiErrors
+
+// ============ Error Handler Wrapper ============
+export function withErrorHandler<T>(
+  handler: (req: Request) => Promise<NextResponse<T>>
+) {
+  return apiResponseService.withErrorHandler(handler)
+}
+
+// ============ Request Validation Helpers ============
 export function validateRequiredFields<T extends object>(
   body: T,
   requiredFields: (keyof T)[]
 ): { valid: boolean; missing: string[] } {
-  const missing = requiredFields.filter(field => {
-    const value = body[field]
-    return value === undefined || value === null || value === ""
-  }) as string[]
-
-  return {
-    valid: missing.length === 0,
-    missing,
-  }
+  return apiResponseService.validateRequiredFields(body, requiredFields)
 }
 
-/**
- * Parse and validate JSON body from request
- */
 export async function parseRequestBody<T>(req: Request): Promise<T | null> {
-  try {
-    return await req.json() as T
-  } catch {
-    return null
-  }
+  return apiResponseService.parseRequestBody<T>(req)
 }
 
 // ============ Auth Helpers ============
-
-/**
- * Get authorization token from request headers
- */
 export function getAuthToken(req: Request): string | null {
-  const authHeader = req.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-  return authHeader.slice(7)
+  return apiResponseService.getAuthToken(req)
 }
 
-/**
- * Check if request has valid content type
- */
 export function hasValidContentType(req: Request, expectedType = "application/json"): boolean {
-  const contentType = req.headers.get("content-type")
-  return contentType?.includes(expectedType) ?? false
+  return apiResponseService.hasValidContentType(req, expectedType)
 }

@@ -35,7 +35,7 @@ function normalizeSupportTickets(tickets: SupportTicket[]): SupportTicket[] {
   return tickets
 }
 
-export const createSupportTicket = async (
+const createSupportTicketImpl = async (
   ticketData: Omit<SupportTicket, "id" | "createdAt" | "updatedAt" | "status">
 ) => {
   if (isClient) {
@@ -62,7 +62,7 @@ export const createSupportTicket = async (
   return docRef.id
 }
 
-export const getSupportTickets = async (
+const getSupportTicketsImpl = async (
   status?: SupportTicketStatus | SupportTicketStatus[],
   pageSize: number = 20,
   lastDoc: any = null
@@ -134,7 +134,7 @@ export const getSupportTickets = async (
   }
 }
 
-export const getUserSupportTickets = async (userId: string) => {
+const getUserSupportTicketsImpl = async (userId: string) => {
   if (isClient) {
     const res = await authFetchJson<{ tickets?: SupportTicket[] }>("/api/support", { method: "GET" })
     return normalizeSupportTickets(res?.data?.tickets ?? [])
@@ -150,7 +150,7 @@ export const getUserSupportTickets = async (userId: string) => {
 }
 
 /** ตรวจว่าผู้ใช้มีคำร้องหรือไม่ (ใช้ใน navbar เพื่อแสดง/ซ่อนปุ่ม คำร้องของฉัน) */
-export const userHasSupportTickets = async (userId: string): Promise<boolean> => {
+const userHasSupportTicketsImpl = async (userId: string): Promise<boolean> => {
   if (isClient) {
     try {
       const res = await authFetchJson<{ hasTickets?: boolean }>("/api/support?summary=hasTickets", { method: "GET" })
@@ -169,7 +169,7 @@ export const userHasSupportTickets = async (userId: string): Promise<boolean> =>
   return !snapshot.empty
 }
 
-export const updateTicketStatus = async (
+const updateTicketStatusImpl = async (
   ticketId: string,
   status: SupportTicketStatus,
   adminId?: string,
@@ -227,7 +227,7 @@ export const updateTicketStatus = async (
   }
 }
 
-export const replyToTicket = async (
+const replyToTicketImpl = async (
   ticketId: string,
   reply: string,
   adminId: string,
@@ -284,7 +284,7 @@ export const replyToTicket = async (
   })
 }
 
-export const userReplyToTicket = async (
+const userReplyToTicketImpl = async (
   ticketId: string,
   reply: string,
   userEmail: string
@@ -313,3 +313,52 @@ export const userReplyToTicket = async (
     updatedAt: serverTimestamp(),
   })
 }
+
+class SupportTicketsService {
+  createSupportTicket = createSupportTicketImpl
+  getSupportTickets = getSupportTicketsImpl
+  getUserSupportTickets = getUserSupportTicketsImpl
+  userHasSupportTickets = userHasSupportTicketsImpl
+  updateTicketStatus = updateTicketStatusImpl
+  replyToTicket = replyToTicketImpl
+  userReplyToTicket = userReplyToTicketImpl
+}
+
+const supportTicketsService = new SupportTicketsService()
+
+export const createSupportTicket = (
+  ticketData: Omit<SupportTicket, "id" | "createdAt" | "updatedAt" | "status">
+) => supportTicketsService.createSupportTicket(ticketData)
+
+export const getSupportTickets = (
+  status?: SupportTicketStatus | SupportTicketStatus[],
+  pageSize: number = 20,
+  lastDoc: any = null
+): Promise<{ tickets: SupportTicket[]; lastDoc: any; hasMore: boolean; totalCount: number }> =>
+  supportTicketsService.getSupportTickets(status, pageSize, lastDoc)
+
+export const getUserSupportTickets = (userId: string) =>
+  supportTicketsService.getUserSupportTickets(userId)
+
+export const userHasSupportTickets = (userId: string): Promise<boolean> =>
+  supportTicketsService.userHasSupportTickets(userId)
+
+export const updateTicketStatus = (
+  ticketId: string,
+  status: SupportTicketStatus,
+  adminId?: string,
+  adminEmail?: string
+) => supportTicketsService.updateTicketStatus(ticketId, status, adminId, adminEmail)
+
+export const replyToTicket = (
+  ticketId: string,
+  reply: string,
+  adminId: string,
+  adminEmail: string
+) => supportTicketsService.replyToTicket(ticketId, reply, adminId, adminEmail)
+
+export const userReplyToTicket = (
+  ticketId: string,
+  reply: string,
+  userEmail: string
+) => supportTicketsService.userReplyToTicket(ticketId, reply, userEmail)

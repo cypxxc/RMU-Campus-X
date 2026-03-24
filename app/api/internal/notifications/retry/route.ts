@@ -33,40 +33,47 @@ function parseLimit(value: unknown): number {
   return Math.min(Math.floor(parsed), MAX_LIMIT)
 }
 
-export async function POST(request: NextRequest) {
-  const secret = getInternalSecret()
-  if (!secret) {
-    return ApiErrors.internalError("Internal notification retry secret is not configured")
-  }
-
-  const requestToken = getRequestToken(request)
-  if (!requestToken || requestToken !== secret) {
-    return ApiErrors.unauthorized("Invalid internal token")
-  }
-
-  let limit = DEFAULT_LIMIT
-  try {
-    const body = await request.json()
-    if (body && typeof body === "object" && "limit" in body) {
-      limit = parseLimit((body as { limit?: unknown }).limit)
+class InternalNotificationsRetryController {
+  async post(request: NextRequest) {
+    const secret = getInternalSecret()
+    if (!secret) {
+      return ApiErrors.internalError("Internal notification retry secret is not configured")
     }
-  } catch {
-    // Empty body is acceptable.
-  }
 
-  try {
-    const result = await processNotificationRetryQueue({
-      limit,
-      source: "api.internal.notifications.retry",
-    })
-    return successResponse({
-      ...result,
-      limit,
-      processedAt: new Date().toISOString(),
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to process notification retry queue"
-    return ApiErrors.internalError(message)
+    const requestToken = getRequestToken(request)
+    if (!requestToken || requestToken !== secret) {
+      return ApiErrors.unauthorized("Invalid internal token")
+    }
+
+    let limit = DEFAULT_LIMIT
+    try {
+      const body = await request.json()
+      if (body && typeof body === "object" && "limit" in body) {
+        limit = parseLimit((body as { limit?: unknown }).limit)
+      }
+    } catch {
+      // Empty body is acceptable.
+    }
+
+    try {
+      const result = await processNotificationRetryQueue({
+        limit,
+        source: "api.internal.notifications.retry",
+      })
+      return successResponse({
+        ...result,
+        limit,
+        processedAt: new Date().toISOString(),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to process notification retry queue"
+      return ApiErrors.internalError(message)
+    }
   }
 }
 
+const controller = new InternalNotificationsRetryController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
+}

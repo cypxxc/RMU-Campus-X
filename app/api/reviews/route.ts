@@ -12,47 +12,6 @@ import { getAuthToken, successResponse } from "@/lib/api-response"
 import { createReviewSchema } from "@/lib/schemas"
 
 /** GET /api/reviews?targetUserId=xxx – list รีวิวที่ user ได้รับ */
-export async function GET(req: NextRequest) {
-  try {
-    const token = getAuthToken(req)
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-
-    const { searchParams } = new URL(req.url)
-    const targetUserId = searchParams.get("targetUserId")
-    if (!targetUserId) {
-      return NextResponse.json({ error: "Missing targetUserId" }, { status: 400 })
-    }
-
-    const limitCount = Math.min(Number(searchParams.get("limit")) || 20, 50)
-    const adminDb = getAdminDb()
-    const snapshot = await adminDb
-      .collection("reviews")
-      .where("targetUserId", "==", targetUserId)
-      .orderBy("createdAt", "desc")
-      .limit(limitCount)
-      .get()
-
-    type RawReview = { id: string; reviewerId?: string; [key: string]: unknown }
-    const rawReviews: RawReview[] = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as RawReview))
-    const reviewerIds = [...new Set(rawReviews.map((r) => r.reviewerId).filter((id): id is string => Boolean(id)))]
-    const existingReviewerIds = new Set<string>()
-    if (reviewerIds.length > 0) {
-      const refs = reviewerIds.map((uid) => adminDb.collection("users").doc(uid))
-      const userSnaps = await adminDb.getAll(...refs)
-      userSnaps.forEach((snap, i) => {
-        const id = reviewerIds[i]
-        if (snap.exists && id) existingReviewerIds.add(id)
-      })
-    }
-    const reviews = rawReviews.filter((r) => existingReviewerIds.has(r.reviewerId ?? ""))
-    return successResponse({ reviews })
-  } catch (e) {
-    console.error("[Reviews API] GET Error:", e)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
-}
 
 /** POST /api/reviews – สร้างรีวิว (ต้องยอมรับ terms แล้ว) */
 export const POST = withValidation(
@@ -142,3 +101,53 @@ export const POST = withValidation(
   },
   { requireAuth: true, requireTermsAccepted: true }
 )
+
+class ReviewsController {
+  async get(req: NextRequest) {
+    try {
+      const token = getAuthToken(req)
+      if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+
+      const { searchParams } = new URL(req.url)
+      const targetUserId = searchParams.get("targetUserId")
+      if (!targetUserId) {
+        return NextResponse.json({ error: "Missing targetUserId" }, { status: 400 })
+      }
+
+      const limitCount = Math.min(Number(searchParams.get("limit")) || 20, 50)
+      const adminDb = getAdminDb()
+      const snapshot = await adminDb
+        .collection("reviews")
+        .where("targetUserId", "==", targetUserId)
+        .orderBy("createdAt", "desc")
+        .limit(limitCount)
+        .get()
+
+      type RawReview = { id: string; reviewerId?: string; [key: string]: unknown }
+      const rawReviews: RawReview[] = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as RawReview))
+      const reviewerIds = [...new Set(rawReviews.map((r) => r.reviewerId).filter((id): id is string => Boolean(id)))]
+      const existingReviewerIds = new Set<string>()
+      if (reviewerIds.length > 0) {
+        const refs = reviewerIds.map((uid) => adminDb.collection("users").doc(uid))
+        const userSnaps = await adminDb.getAll(...refs)
+        userSnaps.forEach((snap, i) => {
+          const id = reviewerIds[i]
+          if (snap.exists && id) existingReviewerIds.add(id)
+        })
+      }
+      const reviews = rawReviews.filter((r) => existingReviewerIds.has(r.reviewerId ?? ""))
+      return successResponse({ reviews })
+    } catch (e) {
+      console.error("[Reviews API] GET Error:", e)
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    }
+  }
+}
+
+const controller = new ReviewsController()
+
+export async function GET(req: NextRequest) {
+  return controller.get(req)
+}

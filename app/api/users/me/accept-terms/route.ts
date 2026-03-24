@@ -7,28 +7,35 @@ import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { ApiErrors, getAuthToken } from "@/lib/api-response"
 
-export async function POST(request: NextRequest) {
-  try {
-    const token = getAuthToken(request)
-    if (!token) return ApiErrors.unauthorized("Missing authentication token")
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+class UsersMeAcceptTermsController {
+  async post(request: NextRequest) {
+    try {
+      const token = getAuthToken(request)
+      if (!token) return ApiErrors.unauthorized("Missing authentication token")
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
 
-    const db = getAdminDb()
-    const ref = db.collection("users").doc(decoded.uid)
-    await ref.set(
-      {
-        uid: decoded.uid,
-        email: decoded.email ?? "",
-        termsAccepted: true,
-        termsAcceptedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
-    return NextResponse.json({ success: true, message: "Terms accepted" })
-  } catch (e) {
-    console.error("[Users Me accept-terms] POST Error:", e)
-    return ApiErrors.internalError("Internal server error")
+      const db = getAdminDb()
+      const ref = db.collection("users").doc(decoded.uid)
+      await ref.set(
+        {
+          uid: decoded.uid,
+          email: decoded.email ?? "",
+          termsAccepted: true,
+          termsAcceptedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      return NextResponse.json({ success: true, message: "Terms accepted" })
+    } catch (e) {
+      console.error("[Users Me accept-terms] POST Error:", e)
+      return ApiErrors.internalError("Internal server error")
+    }
   }
+}
+
+const controller = new UsersMeAcceptTermsController()
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

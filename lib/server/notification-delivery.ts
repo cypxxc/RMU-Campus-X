@@ -237,7 +237,7 @@ function parseQueuePayload(data: QueueDocument): NotificationPayload | null {
   return normalizePayload(input)
 }
 
-export async function deliverInAppNotification(
+async function deliverInAppNotificationImpl(
   input: NotificationDeliveryInput,
   options: DeliverNotificationOptions = {}
 ): Promise<DeliverNotificationResult> {
@@ -308,7 +308,7 @@ export async function deliverInAppNotification(
   }
 }
 
-export async function processNotificationRetryQueue(
+async function processNotificationRetryQueueImpl(
   options: ProcessNotificationRetryOptions = {}
 ): Promise<ProcessNotificationRetryResult> {
   const db = options.db ?? getAdminDb()
@@ -399,7 +399,7 @@ export async function processNotificationRetryQueue(
   return result
 }
 
-export async function getNotificationDeliveryStats(
+async function getNotificationDeliveryStatsImpl(
   db: Firestore = getAdminDb()
 ): Promise<NotificationDeliveryStats> {
   const staleMinutes = Math.max(1, parseEnvInt("NOTIFICATION_STALE_MINUTES", DEFAULT_STALE_MINUTES))
@@ -451,10 +451,10 @@ export async function getNotificationDeliveryStats(
   }
 }
 
-export async function getNotificationDeliveryHealth(
+async function getNotificationDeliveryHealthImpl(
   db: Firestore = getAdminDb()
 ): Promise<NotificationDeliveryHealth> {
-  const stats = await getNotificationDeliveryStats(db)
+  const stats = await getNotificationDeliveryStatsImpl(db)
   const deadLetterThreshold = Math.max(
     0,
     parseEnvInt("NOTIFICATION_DEAD_LETTER_THRESHOLD", DEFAULT_DEAD_LETTER_THRESHOLD)
@@ -485,5 +485,39 @@ export async function getNotificationDeliveryHealth(
     reasons,
     stats,
   }
+}
+
+class NotificationDeliveryService {
+  deliverInAppNotification = deliverInAppNotificationImpl
+  processNotificationRetryQueue = processNotificationRetryQueueImpl
+  getNotificationDeliveryStats = getNotificationDeliveryStatsImpl
+  getNotificationDeliveryHealth = getNotificationDeliveryHealthImpl
+}
+
+const notificationDeliveryService = new NotificationDeliveryService()
+
+export async function deliverInAppNotification(
+  input: NotificationDeliveryInput,
+  options: DeliverNotificationOptions = {}
+): Promise<DeliverNotificationResult> {
+  return notificationDeliveryService.deliverInAppNotification(input, options)
+}
+
+export async function processNotificationRetryQueue(
+  options: ProcessNotificationRetryOptions = {}
+): Promise<ProcessNotificationRetryResult> {
+  return notificationDeliveryService.processNotificationRetryQueue(options)
+}
+
+export async function getNotificationDeliveryStats(
+  db: Firestore = getAdminDb()
+): Promise<NotificationDeliveryStats> {
+  return notificationDeliveryService.getNotificationDeliveryStats(db)
+}
+
+export async function getNotificationDeliveryHealth(
+  db: Firestore = getAdminDb()
+): Promise<NotificationDeliveryHealth> {
+  return notificationDeliveryService.getNotificationDeliveryHealth(db)
 }
 

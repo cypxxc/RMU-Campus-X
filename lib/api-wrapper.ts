@@ -23,6 +23,114 @@ export const TIMEOUT_CONFIG = {
   UPLOAD: 60000, // 60 seconds
 } as const
 
+class ApiWrapperService {
+  async withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    operationName: string = 'Operation'
+  ): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`${operationName} timeout after ${timeoutMs}ms`)),
+        timeoutMs
+      )
+    })
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      clearTimeout(timer!)
+    }
+  }
+
+  async apiCall<T>(
+    fn: () => Promise<T>,
+    context: string,
+    timeoutMs: number = TIMEOUT_CONFIG.STANDARD
+  ): Promise<ApiResponse<T>> {
+    const startTime = performance.now()
+
+    try {
+      const data = await this.withTimeout(fn(), timeoutMs, context)
+
+      if (process.env.NODE_ENV === 'development') {
+        const duration = performance.now() - startTime
+        console.log(`[${context}] Completed in ${duration.toFixed(2)}ms`)
+      }
+
+      return {
+        data,
+        error: null,
+        success: true,
+      }
+    } catch (error) {
+      logError(context, error)
+
+      if (process.env.NODE_ENV === 'development') {
+        const duration = performance.now() - startTime
+        console.log(`[${context}] Failed after ${duration.toFixed(2)}ms`)
+      }
+
+      return {
+        data: null,
+        error: getErrorMessage(error),
+        success: false,
+      }
+    }
+  }
+
+  async batchApiCalls<T>(
+    calls: Array<{
+      fn: () => Promise<T>
+      context: string
+      timeout?: number
+    }>
+  ): Promise<Array<ApiResponse<T>>> {
+    return Promise.all(
+      calls.map(({ fn, context, timeout }) =>
+        this.apiCall(fn, context, timeout)
+      )
+    )
+  }
+
+  async apiCallWithRetry<T>(
+    fn: () => Promise<T>,
+    context: string,
+    maxRetries: number = 2,
+    retryDelay: number = 1000,
+    timeoutMs: number = TIMEOUT_CONFIG.STANDARD
+  ): Promise<ApiResponse<T>> {
+    let lastError: string = ''
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (attempt > 0) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        console.log(`[${context}] Retry attempt ${attempt}/${maxRetries}`)
+      }
+
+      const result = await this.apiCall(fn, context, timeoutMs)
+
+      if (result.success) {
+        return result
+      }
+
+      lastError = result.error || 'Unknown error'
+
+      if (lastError.includes('permission') || lastError.includes('not found')) {
+        break
+      }
+    }
+
+    return {
+      data: null,
+      error: lastError,
+      success: false,
+    }
+  }
+}
+
+const apiWrapperService = new ApiWrapperService()
+
 /**
  * Wrapper for async operations with timeout support
  */
@@ -31,18 +139,7 @@ export async function withTimeout<T>(
   timeoutMs: number,
   operationName: string = 'Operation'
 ): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`${operationName} timeout after ${timeoutMs}ms`)),
-      timeoutMs
-    )
-  })
-  try {
-    return await Promise.race([promise, timeoutPromise])
-  } finally {
-    clearTimeout(timer!)
-  }
+  return apiWrapperService.withTimeout(promise, timeoutMs, operationName)
 }
 
 /**
@@ -76,39 +173,7 @@ export async function apiCall<T>(
   context: string,
   timeoutMs: number = TIMEOUT_CONFIG.STANDARD
 ): Promise<ApiResponse<T>> {
-  const startTime = performance.now()
-  
-  try {
-    // Execute function with timeout
-    const data = await withTimeout(fn(), timeoutMs, context)
-    
-    // Log performance in development
-    if (process.env.NODE_ENV === 'development') {
-      const duration = performance.now() - startTime
-      console.log(`[${context}] Completed in ${duration.toFixed(2)}ms`)
-    }
-    
-    return {
-      data,
-      error: null,
-      success: true,
-    }
-  } catch (error) {
-    // Log error
-    logError(context, error)
-    
-    // Log performance even on error
-    if (process.env.NODE_ENV === 'development') {
-      const duration = performance.now() - startTime
-      console.log(`[${context}] Failed after ${duration.toFixed(2)}ms`)
-    }
-    
-    return {
-      data: null,
-      error: getErrorMessage(error),
-      success: false,
-    }
-  }
+  return apiWrapperService.apiCall(fn, context, timeoutMs)
 }
 
 /**
@@ -133,11 +198,7 @@ export async function batchApiCalls<T>(
     timeout?: number
   }>
 ): Promise<Array<ApiResponse<T>>> {
-  return Promise.all(
-    calls.map(({ fn, context, timeout }) =>
-      apiCall(fn, context, timeout)
-    )
-  )
+  return apiWrapperService.batchApiCalls(calls)
 }
 
 /**
@@ -156,32 +217,5 @@ export async function apiCallWithRetry<T>(
   retryDelay: number = 1000,
   timeoutMs: number = TIMEOUT_CONFIG.STANDARD
 ): Promise<ApiResponse<T>> {
-  let lastError: string = ''
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0) {
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, retryDelay))
-      console.log(`[${context}] Retry attempt ${attempt}/${maxRetries}`)
-    }
-    
-    const result = await apiCall(fn, context, timeoutMs)
-    
-    if (result.success) {
-      return result
-    }
-    
-    lastError = result.error || 'Unknown error'
-    
-    // Don't retry on certain errors
-    if (lastError.includes('permission') || lastError.includes('not found')) {
-      break
-    }
-  }
-  
-  return {
-    data: null,
-    error: lastError,
-    success: false,
-  }
+  return apiWrapperService.apiCallWithRetry(fn, context, maxRetries, retryDelay, timeoutMs)
 }

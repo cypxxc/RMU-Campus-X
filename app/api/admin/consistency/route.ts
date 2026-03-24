@@ -88,68 +88,6 @@ async function updateDocsInBatches(
   }
 }
 
-export async function POST(request: NextRequest) {
-  const { authorized, user, error } = await verifyAdminAccess(request)
-  if (!authorized) return error!
-  if (!user?.uid) {
-    return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
-  }
-
-  const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "consistency", 8, 60_000)
-  if (rateLimited) return rateLimited
-
-  try {
-    const startTime = Date.now()
-    const body: ConsistencyRequest = await request.json()
-    const db = getAdminDb()
-
-    if (!body.operation) {
-      return NextResponse.json(
-        { success: false, error: "Operation is required" },
-        { status: 400 }
-      )
-    }
-
-    let result: ConsistencyResult
-
-    switch (body.operation) {
-      case "check-all":
-        result = await checkAllConsistency(db)
-        break
-      case "fix-orphaned":
-        result = await fixOrphanedRecords(db)
-        break
-      case "check-duplicates":
-        result = await checkDuplicates(db)
-        break
-      case "fix-references":
-        result = await fixBrokenReferences(db)
-        break
-      default:
-        return NextResponse.json(
-          { success: false, error: "Invalid operation" },
-          { status: 400 }
-        )
-    }
-
-    result.duration = Date.now() - startTime
-
-    return NextResponse.json({
-      success: true,
-      data: result,
-    })
-
-  } catch (error) {
-    console.error("[Admin Consistency API] Error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Consistency check failed",
-      },
-      { status: 500 }
-    )
-  }
-}
 
 async function checkAllConsistency(db: FirebaseFirestore.Firestore): Promise<ConsistencyResult> {
   const issues = []
@@ -411,4 +349,75 @@ async function findInvalidStatuses(db: FirebaseFirestore.Firestore): Promise<str
   }
 
   return invalidRecords
+}
+
+class AdminConsistencyController {
+  async post(request: NextRequest) {
+    const { authorized, user, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+    if (!user?.uid) {
+      return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
+    }
+
+    const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "consistency", 8, 60_000)
+    if (rateLimited) return rateLimited
+
+    try {
+      const startTime = Date.now()
+      const body: ConsistencyRequest = await request.json()
+      const db = getAdminDb()
+
+      if (!body.operation) {
+        return NextResponse.json(
+          { success: false, error: "Operation is required" },
+          { status: 400 }
+        )
+      }
+
+      let result: ConsistencyResult
+
+      switch (body.operation) {
+        case "check-all":
+          result = await checkAllConsistency(db)
+          break
+        case "fix-orphaned":
+          result = await fixOrphanedRecords(db)
+          break
+        case "check-duplicates":
+          result = await checkDuplicates(db)
+          break
+        case "fix-references":
+          result = await fixBrokenReferences(db)
+          break
+        default:
+          return NextResponse.json(
+            { success: false, error: "Invalid operation" },
+            { status: 400 }
+          )
+      }
+
+      result.duration = Date.now() - startTime
+
+      return NextResponse.json({
+        success: true,
+        data: result,
+      })
+
+    } catch (error) {
+      console.error("[Admin Consistency API] Error:", error)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Consistency check failed",
+        },
+        { status: 500 }
+      )
+    }
+  }
+}
+
+const controller = new AdminConsistencyController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

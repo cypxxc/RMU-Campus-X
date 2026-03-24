@@ -50,102 +50,110 @@ const notifyItemBodySchema = z
     }
   })
 
-export async function POST(request: NextRequest) {
-  try {
-    const token = extractBearerToken(request.headers.get("Authorization"))
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+class LineNotifyItemController {
+  async post(request: NextRequest) {
+    try {
+      const token = extractBearerToken(request.headers.get("Authorization"))
+      if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 })
 
-    const bodyRaw = await request.json().catch(() => null)
-    const parsed = notifyItemBodySchema.safeParse(bodyRaw)
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: parsed.error.errors.map((issue) => ({
-            field: issue.path.join(".") || "root",
-            message: issue.message,
-          })),
-        },
-        { status: 400 }
-      )
-    }
-
-    const { userId, itemTitle, itemId, action } = parsed.data
-    debugLog("[LINE Notify Item] Request accepted", {
-      action,
-      userId,
-      itemId,
-    })
-
-    // Only allow self notification, unless admin.
-    if (decoded.uid !== userId) {
-      if (!decoded.email) {
-        return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
+      const bodyRaw = await request.json().catch(() => null)
+      const parsed = notifyItemBodySchema.safeParse(bodyRaw)
+      if (!parsed.success) {
+        return NextResponse.json(
+          {
+            error: "Validation failed",
+            details: parsed.error.errors.map((issue) => ({
+              field: issue.path.join(".") || "root",
+              message: issue.message,
+            })),
+          },
+          { status: 400 }
+        )
       }
-      const allowed = await isAdmin(decoded.email)
-      if (!allowed) {
-        return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
-      }
-    }
 
-    const db = getAdminDb()
-    const userSnap = await db.collection("users").doc(userId).get()
+      const { userId, itemTitle, itemId, action } = parsed.data
+      debugLog("[LINE Notify Item] Request accepted", {
+        action,
+        userId,
+        itemId,
+      })
 
-    if (!userSnap.exists) {
-      debugLog("[LINE Notify Item] User not found")
-      return NextResponse.json({ sent: false, reason: "user not found" })
-    }
-
-    const userData = userSnap.data() as
-      | {
-          lineUserId?: string
-          lineNotifications?: {
-            enabled?: boolean
-            itemPosted?: boolean
-          }
+      // Only allow self notification, unless admin.
+      if (decoded.uid !== userId) {
+        if (!decoded.email) {
+          return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
         }
-      | undefined
-    const lineUserId = userData?.lineUserId
-    const notificationsEnabled = userData?.lineNotifications?.enabled !== false
-    const itemNotificationsEnabled = userData?.lineNotifications?.itemPosted !== false
+        const allowed = await isAdmin(decoded.email)
+        if (!allowed) {
+          return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
+        }
+      }
 
-    debugLog("[LINE Notify Item] User LINE status:", {
-      hasLineId: !!lineUserId,
-      notificationsEnabled,
-      itemNotificationsEnabled,
-    })
+      const db = getAdminDb()
+      const userSnap = await db.collection("users").doc(userId).get()
 
-    if (!lineUserId) {
-      debugLog("[LINE Notify Item] User has no LINE linked")
-      return NextResponse.json({ sent: false, reason: "no LINE linked" })
+      if (!userSnap.exists) {
+        debugLog("[LINE Notify Item] User not found")
+        return NextResponse.json({ sent: false, reason: "user not found" })
+      }
+
+      const userData = userSnap.data() as
+        | {
+            lineUserId?: string
+            lineNotifications?: {
+              enabled?: boolean
+              itemPosted?: boolean
+            }
+          }
+        | undefined
+      const lineUserId = userData?.lineUserId
+      const notificationsEnabled = userData?.lineNotifications?.enabled !== false
+      const itemNotificationsEnabled = userData?.lineNotifications?.itemPosted !== false
+
+      debugLog("[LINE Notify Item] User LINE status:", {
+        hasLineId: !!lineUserId,
+        notificationsEnabled,
+        itemNotificationsEnabled,
+      })
+
+      if (!lineUserId) {
+        debugLog("[LINE Notify Item] User has no LINE linked")
+        return NextResponse.json({ sent: false, reason: "no LINE linked" })
+      }
+
+      if (!notificationsEnabled) {
+        return NextResponse.json({ sent: false, reason: "notifications disabled" })
+      }
+      if (!itemNotificationsEnabled) {
+        return NextResponse.json({ sent: false, reason: "item notifications disabled" })
+      }
+
+      switch (action) {
+        case "posted":
+          await notifyItemPosted(lineUserId, itemTitle, itemId!, BASE_URL)
+          break
+        case "updated":
+          await notifyItemUpdated(lineUserId, itemTitle, itemId!, BASE_URL)
+          break
+        case "deleted":
+          await notifyItemDeleted(lineUserId, itemTitle)
+          break
+      }
+
+      debugLog("[LINE Notify Item] Sent successfully!")
+      return NextResponse.json({ sent: true })
+    } catch (error) {
+      errorLog("[LINE Notify Item] Error:", error)
+      return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
     }
-
-    if (!notificationsEnabled) {
-      return NextResponse.json({ sent: false, reason: "notifications disabled" })
-    }
-    if (!itemNotificationsEnabled) {
-      return NextResponse.json({ sent: false, reason: "item notifications disabled" })
-    }
-
-    switch (action) {
-      case "posted":
-        await notifyItemPosted(lineUserId, itemTitle, itemId!, BASE_URL)
-        break
-      case "updated":
-        await notifyItemUpdated(lineUserId, itemTitle, itemId!, BASE_URL)
-        break
-      case "deleted":
-        await notifyItemDeleted(lineUserId, itemTitle)
-        break
-    }
-
-    debugLog("[LINE Notify Item] Sent successfully!")
-    return NextResponse.json({ sent: true })
-  } catch (error) {
-    errorLog("[LINE Notify Item] Error:", error)
-    return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
   }
+}
+
+const controller = new LineNotifyItemController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

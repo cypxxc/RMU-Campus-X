@@ -29,85 +29,93 @@ function validateImageMagicBytes(buffer: Buffer): { valid: boolean; detectedMime
   return { valid: false }
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    // Verify Authentication
-    const token = extractBearerToken(request.headers.get("Authorization"))
-    if (!token) {
-      console.error('[Upload API] No token provided')
-      return NextResponse.json({ error: "กรุณาเข้าสู่ระบบก่อนอัปโหลดรูปภาพ" }, { status: 401 })
-    }
-    
-    // Only verify token, don't check Firestore status (user might be uploading during registration)
-    const decoded = await verifyIdToken(token, false)
-    if (!decoded) {
-      console.error('[Upload API] Token verification failed')
-      return NextResponse.json({ error: "Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่" }, { status: 401 })
-    }
+class UploadController {
+  async post(request: NextRequest) {
+    try {
+      // Verify Authentication
+      const token = extractBearerToken(request.headers.get("Authorization"))
+      if (!token) {
+        console.error('[Upload API] No token provided')
+        return NextResponse.json({ error: "กรุณาเข้าสู่ระบบก่อนอัปโหลดรูปภาพ" }, { status: 401 })
+      }
 
-    const formData = await request.formData()
-    const file = formData.get('file') as File | null
-    const preset = (formData.get('preset') as UploadPreset) || 'item'
+      // Only verify token, don't check Firestore status (user might be uploading during registration)
+      const decoded = await verifyIdToken(token, false)
+      if (!decoded) {
+        console.error('[Upload API] Token verification failed')
+        return NextResponse.json({ error: "Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่" }, { status: 401 })
+      }
 
-    if (!file) {
+      const formData = await request.formData()
+      const file = formData.get('file') as File | null
+      const preset = (formData.get('preset') as UploadPreset) || 'item'
+
+      if (!file) {
+        return NextResponse.json(
+          { error: 'ไม่พบไฟล์รูปภาพ' },
+          { status: 400 }
+        )
+      }
+
+      // Validate file size first (before reading full content)
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { error: 'ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 10MB)' },
+          { status: 400 }
+        )
+      }
+
+      // Convert file to buffer
+      const bytes = await file.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+
+      // Validate file type via magic bytes (more secure than Content-Type)
+      const validation = validateImageMagicBytes(buffer)
+      if (!validation.valid) {
+        console.warn('[Upload API] Invalid magic bytes, claimed type:', file.type)
+        return NextResponse.json(
+          { error: 'รูปแบบไฟล์ไม่ถูกต้อง รองรับเฉพาะ JPEG, PNG' },
+          { status: 400 }
+        )
+      }
+
+      // Get upload settings
+      const uploadConfig = UPLOAD_PRESETS[preset] || UPLOAD_PRESETS.item
+
+      // Upload to Cloudinary
+      const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder: uploadConfig.folder,
+            transformation: uploadConfig.transformation,
+            resource_type: 'image',
+            format: 'webp', // Convert all to WebP for better compression
+          },
+          (error, result) => {
+            if (error) reject(error)
+            else resolve(result as { secure_url: string; public_id: string })
+          }
+        ).end(buffer)
+      })
+
+      return NextResponse.json({
+        success: true,
+        url: result.secure_url,
+        publicId: result.public_id,
+      })
+    } catch (error) {
+      console.error('[Upload API] Error:', error)
       return NextResponse.json(
-        { error: 'ไม่พบไฟล์รูปภาพ' },
-        { status: 400 }
+        { error: 'เกิดข้อผิดพลาดในการอัปโหลด' },
+        { status: 500 }
       )
     }
-
-    // Validate file size first (before reading full content)
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: 'ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 10MB)' },
-        { status: 400 }
-      )
-    }
-
-    // Convert file to buffer
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-
-    // Validate file type via magic bytes (more secure than Content-Type)
-    const validation = validateImageMagicBytes(buffer)
-    if (!validation.valid) {
-      console.warn('[Upload API] Invalid magic bytes, claimed type:', file.type)
-      return NextResponse.json(
-        { error: 'รูปแบบไฟล์ไม่ถูกต้อง รองรับเฉพาะ JPEG, PNG' },
-        { status: 400 }
-      )
-    }
-
-    // Get upload settings
-    const uploadConfig = UPLOAD_PRESETS[preset] || UPLOAD_PRESETS.item
-
-    // Upload to Cloudinary
-    const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        {
-          folder: uploadConfig.folder,
-          transformation: uploadConfig.transformation,
-          resource_type: 'image',
-          format: 'webp', // Convert all to WebP for better compression
-        },
-        (error, result) => {
-          if (error) reject(error)
-          else resolve(result as { secure_url: string; public_id: string })
-        }
-      ).end(buffer)
-    })
-
-    return NextResponse.json({
-      success: true,
-      url: result.secure_url,
-      publicId: result.public_id,
-    })
-  } catch (error) {
-    console.error('[Upload API] Error:', error)
-    return NextResponse.json(
-      { error: 'เกิดข้อผิดพลาดในการอัปโหลด' },
-      { status: 500 }
-    )
   }
+}
+
+const controller = new UploadController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }
 

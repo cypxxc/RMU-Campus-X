@@ -23,7 +23,7 @@ export interface GetItemsResult {
   totalCount: number
 }
 
-export const createItem = async (
+const createItemImpl = async (
   itemData: Omit<Item, "id" | "postedAt" | "updatedAt">
 ): Promise<ApiResponse<string>> => {
   return apiCall(
@@ -48,7 +48,7 @@ export const createItem = async (
   )
 }
 
-export const getItems = async (
+const getItemsImpl = async (
   filters?: GetItemsFilters
 ): Promise<ApiResponse<GetItemsResult>> => {
   return apiCall(
@@ -84,7 +84,7 @@ export const getItems = async (
   )
 }
 
-export const getItemById = async (id: string): Promise<ApiResponse<Item | null>> => {
+const getItemByIdImpl = async (id: string): Promise<ApiResponse<Item | null>> => {
   const timeoutMs =
     process.env.NODE_ENV === "development"
       ? TIMEOUT_CONFIG.HEAVY
@@ -106,7 +106,7 @@ export const getItemById = async (id: string): Promise<ApiResponse<Item | null>>
   )
 }
 
-export const updateItem = async (
+const updateItemImpl = async (
   id: string,
   data: Partial<Pick<Item, "title" | "description" | "category" | "location" | "locationDetail" | "status" | "imagePublicIds" | "imageUrls">>
 ): Promise<ApiResponse<void>> => {
@@ -133,7 +133,7 @@ export const updateItem = async (
   )
 }
 
-export const deleteItem = async (id: string): Promise<ApiResponse<void>> => {
+const deleteItemImpl = async (id: string): Promise<ApiResponse<void>> => {
   return apiCall(
     async () => {
       const { authFetch } = await import("@/lib/api-client")
@@ -147,3 +147,32 @@ export const deleteItem = async (id: string): Promise<ApiResponse<void>> => {
     TIMEOUT_CONFIG.STANDARD
   )
 }
+
+class ItemsService {
+  createItem = createItemImpl
+  getItems = getItemsImpl
+  getItemById = getItemByIdImpl
+  updateItem = updateItemImpl
+  deleteItem = deleteItemImpl
+}
+
+const itemsService = new ItemsService()
+
+export const createItem = (
+  itemData: Omit<Item, "id" | "postedAt" | "updatedAt">
+): Promise<ApiResponse<string>> => itemsService.createItem(itemData)
+
+export const getItems = (
+  filters?: GetItemsFilters
+): Promise<ApiResponse<GetItemsResult>> => itemsService.getItems(filters)
+
+export const getItemById = (id: string): Promise<ApiResponse<Item | null>> =>
+  itemsService.getItemById(id)
+
+export const updateItem = (
+  id: string,
+  data: Partial<Pick<Item, "title" | "description" | "category" | "location" | "locationDetail" | "status" | "imagePublicIds" | "imageUrls">>
+): Promise<ApiResponse<void>> => itemsService.updateItem(id, data)
+
+export const deleteItem = (id: string): Promise<ApiResponse<void>> =>
+  itemsService.deleteItem(id)

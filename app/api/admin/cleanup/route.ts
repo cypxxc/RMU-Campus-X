@@ -34,68 +34,6 @@ async function deleteRefsInBatches(
   }
 }
 
-export async function POST(request: NextRequest) {
-  const { authorized, user, error } = await verifyAdminAccess(request)
-  if (!authorized) return error!
-  if (!user?.uid) {
-    return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
-  }
-
-  const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "cleanup", 10, 60_000)
-  if (rateLimited) return rateLimited
-
-  try {
-    const startTime = Date.now()
-    const body: CleanupRequest = await request.json()
-    const db = getAdminDb()
-
-    if (!body.operation) {
-      return NextResponse.json(
-        { success: false, error: "Operation is required" },
-        { status: 400 }
-      )
-    }
-
-    let result: CleanupResult
-
-    switch (body.operation) {
-      case "orphaned-files":
-        result = await cleanupOrphanedFiles(db)
-        break
-      case "expired-sessions":
-        result = await cleanupExpiredSessions(db)
-        break
-      case "old-notifications":
-        result = await cleanupOldNotifications(db)
-        break
-      case "temp-data":
-        result = await cleanupTempData(db)
-        break
-      default:
-        return NextResponse.json(
-          { success: false, error: "Invalid operation" },
-          { status: 400 }
-        )
-    }
-
-    result.duration = Date.now() - startTime
-
-    return NextResponse.json({
-      success: true,
-      data: result,
-    })
-
-  } catch (error) {
-    console.error("[Admin Cleanup API] Error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Cleanup operation failed",
-      },
-      { status: 500 }
-    )
-  }
-}
 
 async function cleanupOrphanedFiles(db: FirebaseFirestore.Firestore): Promise<CleanupResult> {
   // Find items that reference non-existent users
@@ -195,4 +133,75 @@ async function cleanupTempData(db: FirebaseFirestore.Firestore): Promise<Cleanup
     duration: 0, // Will be set by caller
     details: { cutoffDate: twentyFourHoursAgo.toISOString() },
   }
+}
+
+class AdminCleanupController {
+  async post(request: NextRequest) {
+    const { authorized, user, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+    if (!user?.uid) {
+      return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
+    }
+
+    const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "cleanup", 10, 60_000)
+    if (rateLimited) return rateLimited
+
+    try {
+      const startTime = Date.now()
+      const body: CleanupRequest = await request.json()
+      const db = getAdminDb()
+
+      if (!body.operation) {
+        return NextResponse.json(
+          { success: false, error: "Operation is required" },
+          { status: 400 }
+        )
+      }
+
+      let result: CleanupResult
+
+      switch (body.operation) {
+        case "orphaned-files":
+          result = await cleanupOrphanedFiles(db)
+          break
+        case "expired-sessions":
+          result = await cleanupExpiredSessions(db)
+          break
+        case "old-notifications":
+          result = await cleanupOldNotifications(db)
+          break
+        case "temp-data":
+          result = await cleanupTempData(db)
+          break
+        default:
+          return NextResponse.json(
+            { success: false, error: "Invalid operation" },
+            { status: 400 }
+          )
+      }
+
+      result.duration = Date.now() - startTime
+
+      return NextResponse.json({
+        success: true,
+        data: result,
+      })
+
+    } catch (error) {
+      console.error("[Admin Cleanup API] Error:", error)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Cleanup operation failed",
+        },
+        { status: 500 }
+      )
+    }
+  }
+}
+
+const controller = new AdminCleanupController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

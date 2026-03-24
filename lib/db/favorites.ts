@@ -16,54 +16,71 @@ export interface FavoriteItem {
   createdAt: unknown
 }
 
-export const checkIsFavorite = async (_userId: string, itemId: string): Promise<boolean> => {
-  try {
-    const j = await authFetchJson<{ isFavorite?: boolean }>(`/api/favorites/check?itemId=${encodeURIComponent(itemId)}`, { method: "GET" })
-    return j.data?.isFavorite === true
-  } catch {
-    return false
+class FavoritesApi {
+  async checkIsFavorite(_userId: string, itemId: string): Promise<boolean> {
+    try {
+      const j = await authFetchJson<{ isFavorite?: boolean }>(`/api/favorites/check?itemId=${encodeURIComponent(itemId)}`, { method: "GET" })
+      return j.data?.isFavorite === true
+    } catch {
+      return false
+    }
+  }
+
+  async toggleFavorite(
+    userId: string,
+    item: Item,
+    currentFavoriteState?: boolean
+  ): Promise<boolean> {
+    try {
+      const isFav = typeof currentFavoriteState === "boolean"
+        ? currentFavoriteState
+        : await this.checkIsFavorite(userId, item.id)
+      if (isFav) {
+        await authFetchJson(`/api/favorites/${encodeURIComponent(item.id)}`, { method: "DELETE" })
+        return false
+      }
+      await authFetchJson("/api/favorites", {
+        method: "POST",
+        body: {
+          itemId: item.id,
+          itemTitle: item.title,
+          itemImage: getItemPrimaryImageUrl(item) || undefined,
+        },
+      })
+      return true
+    } catch {
+      throw new Error("ไม่สามารถเปลี่ยนสถานะรายการโปรดได้")
+    }
+  }
+
+  async getFavoriteItems(_userId: string): Promise<Item[]> {
+    try {
+      const j = await authFetchJson<{ favorites?: FavoriteItem[] }>("/api/favorites", { method: "GET" })
+      const list = j.data?.favorites ?? []
+      if (list.length === 0) return []
+      const results = await Promise.all(list.map((fav) => getItemById(fav.itemId)))
+      const items = results
+        .map((r) => r.data)
+        .filter((item): item is Item => item != null)
+        .map((item) => ({ ...item, isFavorite: true }))
+      return items
+    } catch {
+      return []
+    }
   }
 }
+
+const favoritesApi = new FavoritesApi()
+
+export const checkIsFavorite = async (_userId: string, itemId: string): Promise<boolean> =>
+  favoritesApi.checkIsFavorite(_userId, itemId)
 
 export const toggleFavorite = async (
   userId: string,
   item: Item,
   currentFavoriteState?: boolean
-): Promise<boolean> => {
-  try {
-    const isFav = typeof currentFavoriteState === "boolean"
-      ? currentFavoriteState
-      : await checkIsFavorite(userId, item.id)
-    if (isFav) {
-      await authFetchJson(`/api/favorites/${encodeURIComponent(item.id)}`, { method: "DELETE" })
-      return false
-    }
-    await authFetchJson("/api/favorites", {
-      method: "POST",
-      body: {
-        itemId: item.id,
-        itemTitle: item.title,
-        itemImage: getItemPrimaryImageUrl(item) || undefined,
-      },
-    })
-    return true
-  } catch {
-    throw new Error("ไม่สามารถเปลี่ยนสถานะรายการโปรดได้")
-  }
-}
+): Promise<boolean> =>
+  favoritesApi.toggleFavorite(userId, item, currentFavoriteState)
 
-export const getFavoriteItems = async (_userId: string): Promise<Item[]> => {
-  try {
-    const j = await authFetchJson<{ favorites?: FavoriteItem[] }>("/api/favorites", { method: "GET" })
-    const list = j.data?.favorites ?? []
-    if (list.length === 0) return []
-    const results = await Promise.all(list.map((fav) => getItemById(fav.itemId)))
-    const items = results
-      .map((r) => r.data)
-      .filter((item): item is Item => item != null)
-      .map((item) => ({ ...item, isFavorite: true }))
-    return items
-  } catch {
-    return []
-  }
-}
+export const getFavoriteItems = async (_userId: string): Promise<Item[]> =>
+  favoritesApi.getFavoriteItems(_userId)

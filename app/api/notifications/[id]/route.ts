@@ -7,63 +7,74 @@ import { getAdminDb, verifyIdToken } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { ApiErrors, getAuthToken } from "@/lib/api-response"
 
+class NotificationController {
+  async patch(request: NextRequest, params: Promise<{ id: string }>) {
+    try {
+      const token = getAuthToken(request)
+      if (!token) return ApiErrors.unauthorized("Missing authentication token")
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+
+      const { id: notificationId } = await params
+      if (!notificationId) return NextResponse.json({ error: "Missing notification ID" }, { status: 400 })
+
+      const db = getAdminDb()
+      const ref = db.collection("notifications").doc(notificationId)
+      const snap = await ref.get()
+      // ข้อมูลเก่าหรือถูกลบไปแล้ว → ถือว่าสำเร็จ (idempotent)
+      if (!snap.exists) return NextResponse.json({ success: true, message: "Already removed" })
+
+      const data = snap.data()
+      if (data?.userId !== decoded.uid) return ApiErrors.forbidden("Not your notification")
+
+      await ref.update({ isRead: true, updatedAt: FieldValue.serverTimestamp() })
+      return NextResponse.json({ success: true, message: "Marked as read" })
+    } catch (e) {
+      console.error("[Notifications API] PATCH Error:", e)
+      return ApiErrors.internalError("Internal server error")
+    }
+  }
+
+  /** DELETE /api/notifications/[id] – ลบการแจ้งเตือน */
+  async delete(request: NextRequest, params: Promise<{ id: string }>) {
+    try {
+      const token = getAuthToken(request)
+      if (!token) return ApiErrors.unauthorized("Missing authentication token")
+      const decoded = await verifyIdToken(token, true)
+      if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
+
+      const { id: notificationId } = await params
+      if (!notificationId) return NextResponse.json({ error: "Missing notification ID" }, { status: 400 })
+
+      const db = getAdminDb()
+      const ref = db.collection("notifications").doc(notificationId)
+      const snap = await ref.get()
+      // ข้อมูลเก่าหรือถูกลบไปแล้ว → ถือว่าสำเร็จ (idempotent)
+      if (!snap.exists) return NextResponse.json({ success: true, message: "Already deleted" })
+
+      const data = snap.data()
+      if (data?.userId !== decoded.uid) return ApiErrors.forbidden("Not your notification")
+
+      await ref.delete()
+      return NextResponse.json({ success: true, message: "Deleted" })
+    } catch (e) {
+      console.error("[Notifications API] DELETE Error:", e)
+      return ApiErrors.internalError("Internal server error")
+    }
+  }
+}
+
+const controller = new NotificationController()
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const token = getAuthToken(request)
-    if (!token) return ApiErrors.unauthorized("Missing authentication token")
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
-
-    const { id: notificationId } = await params
-    if (!notificationId) return NextResponse.json({ error: "Missing notification ID" }, { status: 400 })
-
-    const db = getAdminDb()
-    const ref = db.collection("notifications").doc(notificationId)
-    const snap = await ref.get()
-    // ข้อมูลเก่าหรือถูกลบไปแล้ว → ถือว่าสำเร็จ (idempotent)
-    if (!snap.exists) return NextResponse.json({ success: true, message: "Already removed" })
-
-    const data = snap.data()
-    if (data?.userId !== decoded.uid) return ApiErrors.forbidden("Not your notification")
-
-    await ref.update({ isRead: true, updatedAt: FieldValue.serverTimestamp() })
-    return NextResponse.json({ success: true, message: "Marked as read" })
-  } catch (e) {
-    console.error("[Notifications API] PATCH Error:", e)
-    return ApiErrors.internalError("Internal server error")
-  }
+  return controller.patch(request, params)
 }
 
-/** DELETE /api/notifications/[id] – ลบการแจ้งเตือน */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const token = getAuthToken(_request)
-    if (!token) return ApiErrors.unauthorized("Missing authentication token")
-    const decoded = await verifyIdToken(token, true)
-    if (!decoded) return ApiErrors.unauthorized("Invalid or expired session")
-
-    const { id: notificationId } = await params
-    if (!notificationId) return NextResponse.json({ error: "Missing notification ID" }, { status: 400 })
-
-    const db = getAdminDb()
-    const ref = db.collection("notifications").doc(notificationId)
-    const snap = await ref.get()
-    // ข้อมูลเก่าหรือถูกลบไปแล้ว → ถือว่าสำเร็จ (idempotent)
-    if (!snap.exists) return NextResponse.json({ success: true, message: "Already deleted" })
-
-    const data = snap.data()
-    if (data?.userId !== decoded.uid) return ApiErrors.forbidden("Not your notification")
-
-    await ref.delete()
-    return NextResponse.json({ success: true, message: "Deleted" })
-  } catch (e) {
-    console.error("[Notifications API] DELETE Error:", e)
-    return ApiErrors.internalError("Internal server error")
-  }
+  return controller.delete(request, params)
 }

@@ -14,18 +14,26 @@ import {
   AdminErrorCode,
 } from '@/lib/admin-api'
 
-export async function GET(request: NextRequest) {
-  try {
-    const { authorized, user, error } = await verifyAdminAccess(request)
-    if (!authorized) return error!
+class AdminVerifyController {
+  async get(request: NextRequest) {
+    try {
+      const { authorized, user, error } = await verifyAdminAccess(request)
+      if (!authorized) return error!
 
-    return successResponse({
-      isAdmin: true,
-      uid: user?.uid,
-      email: user?.email,
-    })
-  } catch (error) {
-    console.error('[Admin Verify] Error:', error)
-    return errorResponse(AdminErrorCode.INTERNAL_ERROR, 'Internal server error', 500)
+      return successResponse({
+        isAdmin: true,
+        uid: user?.uid,
+        email: user?.email,
+      })
+    } catch (error) {
+      console.error('[Admin Verify] Error:', error)
+      return errorResponse(AdminErrorCode.INTERNAL_ERROR, 'Internal server error', 500)
+    }
   }
+}
+
+const controller = new AdminVerifyController()
+
+export async function GET(request: NextRequest) {
+  return controller.get(request)
 }

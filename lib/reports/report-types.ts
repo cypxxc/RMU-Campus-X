@@ -8,12 +8,24 @@ export const REPORT_TYPE_CONFIG = {
 
 export type ReportTypeKey = keyof typeof REPORT_TYPE_CONFIG
 
+class ReportTypeService {
+  getReportTypeConfig(reportType: string) {
+    const config = REPORT_TYPE_CONFIG[reportType as ReportTypeKey]
+    if (config) return config
+    return { targetType: "unknown", label: reportType }
+  }
+
+  getReportTypeLabel(reportType: string): string {
+    return this.getReportTypeConfig(reportType).label
+  }
+}
+
+const reportTypeService = new ReportTypeService()
+
 export function getReportTypeConfig(reportType: string) {
-  const config = REPORT_TYPE_CONFIG[reportType as ReportTypeKey]
-  if (config) return config
-  return { targetType: "unknown", label: reportType }
+  return reportTypeService.getReportTypeConfig(reportType)
 }
 
 export function getReportTypeLabel(reportType: string): string {
-  return getReportTypeConfig(reportType).label
+  return reportTypeService.getReportTypeLabel(reportType)
 }

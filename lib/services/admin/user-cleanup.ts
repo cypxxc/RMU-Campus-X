@@ -16,18 +16,19 @@ export interface CollectUserResourcesResult {
   ratingRecalcUserIds: string[]
 }
 
-/**
- * Collect all user resources (document references and image IDs)
- */
-export async function collectUserResources(userId: string): Promise<CollectUserResourcesResult> {
-  const db = getAdminDb()
-  const refsToDelete: FirebaseFirestore.DocumentReference[] = []
-  const cloudinaryPublicIds: string[] = []
-  const ratingRecalcUserIds: string[] = []
+export class UserCleanupService {
+  /**
+   * Collect all user resources (document references and image IDs)
+   */
+  async collectUserResources(userId: string): Promise<CollectUserResourcesResult> {
+    const db = getAdminDb()
+    const refsToDelete: FirebaseFirestore.DocumentReference[] = []
+    const cloudinaryPublicIds: string[] = []
+    const ratingRecalcUserIds: string[] = []
 
-  // Helpers
-  const addRef = (ref: FirebaseFirestore.DocumentReference) => refsToDelete.push(ref)
-  const addImage = (id: string | null) => { if (id) cloudinaryPublicIds.push(id) }
+    // Helpers
+    const addRef = (ref: FirebaseFirestore.DocumentReference) => refsToDelete.push(ref)
+    const addImage = (id: string | null) => { if (id) cloudinaryPublicIds.push(id) }
 
   // 1. User Profile
   const userDoc = await db.collection("users").doc(userId).get()
@@ -119,38 +120,38 @@ export async function collectUserResources(userId: string): Promise<CollectUserR
     if (targetId && targetId !== userId) ratingRecalcUserIds.push(targetId)
   })
 
-  return { refsToDelete, cloudinaryPublicIds, userDoc, ratingRecalcUserIds }
-}
-
-/**
- * Recalculate and update a user's aggregate rating from remaining reviews (server-side).
- * Call after deleting reviews that targeted this user (e.g. when reviewer was deleted).
- */
-export async function recalculateUserRating(targetUserId: string): Promise<void> {
-  const db = getAdminDb()
-  const snapshot = await db
-    .collection("reviews")
-    .where("targetUserId", "==", targetUserId)
-    .get()
-  const totalReviews = snapshot.size
-  const userRef = db.collection("users").doc(targetUserId)
-  if (totalReviews === 0) {
-    await userRef.update({ rating: { average: 0, count: 0 } })
-    return
+    return { refsToDelete, cloudinaryPublicIds, userDoc, ratingRecalcUserIds }
   }
-  const totalScore = snapshot.docs.reduce((sum, d) => sum + (d.data().rating || 0), 0)
-  const average = Number((totalScore / totalReviews).toFixed(1))
-  await userRef.update({ rating: { average, count: totalReviews } })
-}
 
-/**
- * Execute cleanup (Delete docs and images)
- */
-export async function executeCleanup(
+  /**
+   * Recalculate and update a user's aggregate rating from remaining reviews (server-side).
+   * Call after deleting reviews that targeted this user (e.g. when reviewer was deleted).
+   */
+  async recalculateUserRating(targetUserId: string): Promise<void> {
+    const db = getAdminDb()
+    const snapshot = await db
+      .collection("reviews")
+      .where("targetUserId", "==", targetUserId)
+      .get()
+    const totalReviews = snapshot.size
+    const userRef = db.collection("users").doc(targetUserId)
+    if (totalReviews === 0) {
+      await userRef.update({ rating: { average: 0, count: 0 } })
+      return
+    }
+    const totalScore = snapshot.docs.reduce((sum, d) => sum + (d.data().rating || 0), 0)
+    const average = Number((totalScore / totalReviews).toFixed(1))
+    await userRef.update({ rating: { average, count: totalReviews } })
+  }
+
+  /**
+   * Execute cleanup (Delete docs and images)
+   */
+  async executeCleanup(
     refsToDelete: FirebaseFirestore.DocumentReference[], 
     cloudinaryPublicIds: string[]
-): Promise<void> {
-  const db = getAdminDb()
+  ): Promise<void> {
+    const db = getAdminDb()
 
   // 1. Cloudinary
   if (cloudinaryPublicIds.length > 0) {
@@ -176,52 +177,78 @@ export async function executeCleanup(
       chunk.forEach(ref => batch.delete(ref))
       await batch.commit()
   }
-}
-
-/**
- * Delete User Auth
- */
-export async function deleteUserAuth(userId: string) {
-  try {
-      const auth = getAdminAuth()
-      await auth.deleteUser(userId)
-  } catch (error: any) {
-      if (error.code !== 'auth/user-not-found') {
-          throw error
-      }
   }
-}
 
-/**
- * Delete Firestore user documents that no longer have a Firebase Auth user.
- * Use when accounts were removed from Auth (e.g. Firebase Console) but docs remain.
- */
-export async function deleteOrphanUserDocs(): Promise<{ deleted: number }> {
-  const db = getAdminDb()
-  const auth = getAdminAuth()
-  const usersSnap = await db.collection("users").get()
-  const toDelete: string[] = []
-
-  for (const doc of usersSnap.docs) {
-    const uid = doc.id
+  /**
+   * Delete User Auth
+   */
+  async deleteUserAuth(userId: string): Promise<void> {
     try {
-      await auth.getUser(uid)
-    } catch (err: any) {
-      if (err?.code === "auth/user-not-found") {
-        toDelete.push(uid)
-      } else {
-        throw err
-      }
+        const auth = getAdminAuth()
+        await auth.deleteUser(userId)
+    } catch (error: any) {
+        if (error.code !== 'auth/user-not-found') {
+            throw error
+        }
     }
   }
 
-  const batchSize = 500
-  for (let i = 0; i < toDelete.length; i += batchSize) {
-    const batch = db.batch()
-    const chunk = toDelete.slice(i, i + batchSize)
-    chunk.forEach((uid) => batch.delete(db.collection("users").doc(uid)))
-    await batch.commit()
-  }
+  /**
+   * Delete Firestore user documents that no longer have a Firebase Auth user.
+   * Use when accounts were removed from Auth (e.g. Firebase Console) but docs remain.
+   */
+  async deleteOrphanUserDocs(): Promise<{ deleted: number }> {
+    const db = getAdminDb()
+    const auth = getAdminAuth()
+    const usersSnap = await db.collection("users").get()
+    const toDelete: string[] = []
 
-  return { deleted: toDelete.length }
+    for (const doc of usersSnap.docs) {
+      const uid = doc.id
+      try {
+        await auth.getUser(uid)
+      } catch (err: any) {
+        if (err?.code === "auth/user-not-found") {
+          toDelete.push(uid)
+        } else {
+          throw err
+        }
+      }
+    }
+
+    const batchSize = 500
+    for (let i = 0; i < toDelete.length; i += batchSize) {
+      const batch = db.batch()
+      const chunk = toDelete.slice(i, i + batchSize)
+      chunk.forEach((uid) => batch.delete(db.collection("users").doc(uid)))
+      await batch.commit()
+    }
+
+    return { deleted: toDelete.length }
+  }
+}
+
+const userCleanupService = new UserCleanupService()
+
+export async function collectUserResources(userId: string): Promise<CollectUserResourcesResult> {
+  return userCleanupService.collectUserResources(userId)
+}
+
+export async function recalculateUserRating(targetUserId: string): Promise<void> {
+  await userCleanupService.recalculateUserRating(targetUserId)
+}
+
+export async function executeCleanup(
+  refsToDelete: FirebaseFirestore.DocumentReference[], 
+  cloudinaryPublicIds: string[]
+): Promise<void> {
+  await userCleanupService.executeCleanup(refsToDelete, cloudinaryPublicIds)
+}
+
+export async function deleteUserAuth(userId: string): Promise<void> {
+  await userCleanupService.deleteUserAuth(userId)
+}
+
+export async function deleteOrphanUserDocs(): Promise<{ deleted: number }> {
+  return userCleanupService.deleteOrphanUserDocs()
 }

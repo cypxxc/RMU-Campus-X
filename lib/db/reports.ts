@@ -18,7 +18,7 @@ import { createNotification } from "./notifications"
 import { createAdminLog } from "./logs"
 
 // Reports - บน client ใช้ POST /api/reports
-export const createReport = async (
+const createReportImpl = async (
   reportData: Omit<Report, "id" | "createdAt" | "updatedAt" | "status">
 ) => {
   if (typeof window !== "undefined") {
@@ -52,7 +52,7 @@ export const createReport = async (
   return docRef.id
 }
 
-export const updateReportStatus = async (
+const updateReportStatusImpl = async (
   reportId: string,
   status: ReportStatus,
   adminId: string,
@@ -120,7 +120,7 @@ export const updateReportStatus = async (
   })
 }
 
-export const getReportsByStatus = async (status?: ReportStatus) => {
+const getReportsByStatusImpl = async (status?: ReportStatus) => {
   if (typeof window !== "undefined") {
     try {
       const { authFetchJson } = await import("@/lib/api-client")
@@ -143,7 +143,7 @@ export const getReportsByStatus = async (status?: ReportStatus) => {
   return snapshot.docs.map((reportDoc) => ({ id: reportDoc.id, ...reportDoc.data() }) as Report)
 }
 
-export const getReportStatistics = async (): Promise<
+const getReportStatisticsImpl = async (): Promise<
   ApiResponse<{
     total: number
     new: number
@@ -234,7 +234,7 @@ export const getReportStatistics = async (): Promise<
   )
 }
 
-export const getReports = async (maxResults: number = 200) => {
+const getReportsImpl = async (maxResults: number = 200) => {
   if (typeof window !== "undefined") {
     try {
       const { authFetchJson } = await import("@/lib/api-client")
@@ -252,3 +252,49 @@ export const getReports = async (maxResults: number = 200) => {
   const snapshot = await getDocs(q)
   return snapshot.docs.map((reportDoc) => ({ id: reportDoc.id, ...reportDoc.data() }) as Report)
 }
+
+class ReportsDbService {
+  createReport = createReportImpl
+  updateReportStatus = updateReportStatusImpl
+  getReportsByStatus = getReportsByStatusImpl
+  getReportStatistics = getReportStatisticsImpl
+  getReports = getReportsImpl
+}
+
+const reportsDbService = new ReportsDbService()
+
+export const createReport = (
+  reportData: Omit<Report, "id" | "createdAt" | "updatedAt" | "status">
+) => reportsDbService.createReport(reportData)
+
+export const updateReportStatus = (
+  reportId: string,
+  status: ReportStatus,
+  adminId: string,
+  adminEmail: string,
+  note?: string
+) => reportsDbService.updateReportStatus(reportId, status, adminId, adminEmail, note)
+
+export const getReportsByStatus = (status?: ReportStatus) =>
+  reportsDbService.getReportsByStatus(status)
+
+export const getReportStatistics = (): Promise<
+  ApiResponse<{
+    total: number
+    new: number
+    under_review: number
+    waiting_user: number
+    action_taken: number
+    resolved: number
+    closed: number
+    rejected: number
+    byType: {
+      item_report: number
+      exchange_report: number
+      user_report: number
+    }
+  }>
+> => reportsDbService.getReportStatistics()
+
+export const getReports = (maxResults: number = 200) =>
+  reportsDbService.getReports(maxResults)

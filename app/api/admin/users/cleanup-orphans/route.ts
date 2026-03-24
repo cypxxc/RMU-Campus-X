@@ -10,19 +10,27 @@ import { deleteOrphanUserDocs } from "@/lib/services/admin/user-cleanup"
 
 export const runtime = "nodejs"
 
-export async function POST(request: NextRequest) {
-  const { authorized, error } = await verifyAdminAccess(request)
-  if (!authorized) return error!
+class AdminUsersCleanupOrphansController {
+  async post(request: NextRequest) {
+    const { authorized, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
 
-  try {
-    const { deleted } = await deleteOrphanUserDocs()
-    return successResponse({ deleted })
-  } catch (e) {
-    console.error("[cleanup-orphans]", e)
-    return errorResponse(
-      AdminErrorCode.INTERNAL_ERROR,
-      e instanceof Error ? e.message : "Cleanup failed",
-      500
-    )
+    try {
+      const { deleted } = await deleteOrphanUserDocs()
+      return successResponse({ deleted })
+    } catch (e) {
+      console.error("[cleanup-orphans]", e)
+      return errorResponse(
+        AdminErrorCode.INTERNAL_ERROR,
+        e instanceof Error ? e.message : "Cleanup failed",
+        500
+      )
+    }
   }
+}
+
+const controller = new AdminUsersCleanupOrphansController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

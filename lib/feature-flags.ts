@@ -94,63 +94,137 @@ const defaultFlags: Record<string, FeatureFlag> = {
 // Runtime flag overrides (can be loaded from database/API)
 let runtimeFlags: Record<string, Partial<FeatureFlag>> = {}
 
+class FeatureFlagService {
+  async loadFlags(): Promise<void> {
+    try {
+      if (process.env.NODE_ENV === "production") {
+        const { getAdminDb } = await import("@/lib/firebase-admin")
+        const db = getAdminDb()
+        const snapshot = await db.collection("featureFlags").get()
+
+        runtimeFlags = snapshot.docs.reduce((acc, doc) => {
+          const data = doc.data()
+          acc[doc.id] = {
+            enabled: data.enabled ?? false,
+            description: data.description ?? "",
+            rolloutPercentage: data.rolloutPercentage,
+            allowedUsers: data.allowedUsers,
+            startDate: data.startDate ? new Date(data.startDate) : undefined,
+            endDate: data.endDate ? new Date(data.endDate) : undefined,
+          }
+          return acc
+        }, {} as Record<string, Partial<FeatureFlag>>)
+
+        console.log(`[FeatureFlags] Loaded ${snapshot.docs.length} flags from database`)
+        return
+      }
+    } catch (error) {
+      console.warn("[FeatureFlags] Failed to load from database:", error)
+    }
+
+    if (process.env.FEATURE_FLAGS) {
+      try {
+        runtimeFlags = JSON.parse(process.env.FEATURE_FLAGS)
+      } catch {
+        console.warn('[FeatureFlags] Invalid FEATURE_FLAGS env var')
+      }
+    }
+  }
+
+  getFlag(key: string): FeatureFlag | undefined {
+    const defaultFlag = defaultFlags[key]
+    const runtimeOverride = runtimeFlags[key]
+
+    if (!defaultFlag) {
+      console.warn(`[FeatureFlags] Unknown flag: ${key}`)
+      return undefined
+    }
+
+    return {
+      ...defaultFlag,
+      ...runtimeOverride,
+    }
+  }
+
+  isEnabled(
+    key: string,
+    context?: { userId?: string; userEmail?: string }
+  ): boolean {
+    const flag = this.getFlag(key)
+
+    if (!flag) return false
+    if (!flag.enabled) return false
+
+    const now = new Date()
+    if (flag.startDate && now < flag.startDate) return false
+    if (flag.endDate && now > flag.endDate) return false
+
+    if (flag.allowedUsers && context?.userId) {
+      if (!flag.allowedUsers.includes(context.userId)) {
+        return false
+      }
+    }
+
+    if (flag.rolloutPercentage !== undefined && context?.userId) {
+      const hash = this.simpleHash(context.userId + key)
+      const userPercentage = hash % 100
+      if (userPercentage >= flag.rolloutPercentage) {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  getAllFlags(): Record<string, FeatureFlag> {
+    const combined: Record<string, FeatureFlag> = {}
+
+    for (const key of Object.keys(defaultFlags)) {
+      const flag = this.getFlag(key)
+      if (flag) {
+        combined[key] = flag
+      }
+    }
+
+    return combined
+  }
+
+  setFlag(key: string, value: Partial<FeatureFlag>): void {
+    runtimeFlags[key] = value
+  }
+
+  simpleHash(str: string): number {
+    let hash = 0
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i)
+      hash = (hash << 5) - hash + char
+      hash = hash & hash
+    }
+    return Math.abs(hash)
+  }
+
+  useFeatureFlag(
+    key: string,
+    context?: { userId?: string }
+  ): boolean {
+    return this.isEnabled(key, context)
+  }
+}
+
+const featureFlagService = new FeatureFlagService()
+
 /**
  * Load flags from external source (database, API, etc.)
  */
 export async function loadFlags(): Promise<void> {
-  try {
-    // Load from Firestore in production
-    if (process.env.NODE_ENV === "production") {
-      const { getAdminDb } = await import("@/lib/firebase-admin")
-      const db = getAdminDb()
-      const snapshot = await db.collection("featureFlags").get()
-      
-      runtimeFlags = snapshot.docs.reduce((acc, doc) => {
-        const data = doc.data()
-        acc[doc.id] = {
-          enabled: data.enabled ?? false,
-          description: data.description ?? "",
-          rolloutPercentage: data.rolloutPercentage,
-          allowedUsers: data.allowedUsers,
-          startDate: data.startDate ? new Date(data.startDate) : undefined,
-          endDate: data.endDate ? new Date(data.endDate) : undefined,
-        }
-        return acc
-      }, {} as Record<string, Partial<FeatureFlag>>)
-      
-      console.log(`[FeatureFlags] Loaded ${snapshot.docs.length} flags from database`)
-      return
-    }
-  } catch (error) {
-    console.warn("[FeatureFlags] Failed to load from database:", error)
-  }
-  
-  // Fallback to environment variables
-  if (process.env.FEATURE_FLAGS) {
-    try {
-      runtimeFlags = JSON.parse(process.env.FEATURE_FLAGS)
-    } catch {
-      console.warn('[FeatureFlags] Invalid FEATURE_FLAGS env var')
-    }
-  }
+  return featureFlagService.loadFlags()
 }
 
 /**
  * Get a feature flag value
  */
 export function getFlag(key: string): FeatureFlag | undefined {
-  const defaultFlag = defaultFlags[key]
-  const runtimeOverride = runtimeFlags[key]
-
-  if (!defaultFlag) {
-    console.warn(`[FeatureFlags] Unknown flag: ${key}`)
-    return undefined
-  }
-
-  return {
-    ...defaultFlag,
-    ...runtimeOverride,
-  }
+  return featureFlagService.getFlag(key)
 }
 
 /**
@@ -160,70 +234,21 @@ export function isEnabled(
   key: string,
   context?: { userId?: string; userEmail?: string }
 ): boolean {
-  const flag = getFlag(key)
-  
-  if (!flag) return false
-  if (!flag.enabled) return false
-
-  const now = new Date()
-
-  // Check date range
-  if (flag.startDate && now < flag.startDate) return false
-  if (flag.endDate && now > flag.endDate) return false
-
-  // Check allowed users
-  if (flag.allowedUsers && context?.userId) {
-    if (!flag.allowedUsers.includes(context.userId)) {
-      return false
-    }
-  }
-
-  // Check rollout percentage
-  if (flag.rolloutPercentage !== undefined && context?.userId) {
-    const hash = simpleHash(context.userId + key)
-    const userPercentage = hash % 100
-    if (userPercentage >= flag.rolloutPercentage) {
-      return false
-    }
-  }
-
-  return true
+  return featureFlagService.isEnabled(key, context)
 }
 
 /**
  * Get all flags
  */
 export function getAllFlags(): Record<string, FeatureFlag> {
-  const combined: Record<string, FeatureFlag> = {}
-
-  for (const key of Object.keys(defaultFlags)) {
-    const flag = getFlag(key)
-    if (flag) {
-      combined[key] = flag
-    }
-  }
-
-  return combined
+  return featureFlagService.getAllFlags()
 }
 
 /**
  * Set a runtime flag override
  */
 export function setFlag(key: string, value: Partial<FeatureFlag>): void {
-  runtimeFlags[key] = value
-}
-
-/**
- * Simple hash function for consistent user bucketing
- */
-function simpleHash(str: string): number {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash = hash & hash // Convert to 32bit integer
-  }
-  return Math.abs(hash)
+  featureFlagService.setFlag(key, value)
 }
 
 // React hook for feature flags
@@ -231,7 +256,7 @@ export function useFeatureFlag(
   key: string,
   context?: { userId?: string }
 ): boolean {
-  return isEnabled(key, context)
+  return featureFlagService.useFeatureFlag(key, context)
 }
 
 // Export flag keys as constants

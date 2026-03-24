@@ -46,81 +46,6 @@ async function processItemsInChunks(
   }
 }
 
-export async function POST(request: NextRequest) {
-  const { authorized, user, error } = await verifyAdminAccess(request)
-  if (!authorized) return error!
-  if (!user?.uid) {
-    return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
-  }
-
-  const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "reindex-items", 6, 60_000)
-  if (rateLimited) return rateLimited
-
-  try {
-    const startTime = Date.now()
-    const body: ReindexRequest = await request.json()
-    const db = getAdminDb()
-    const batchSize = Math.min(Math.max(body.batchSize ?? 100, 1), 500)
-
-    if (!body.operation) {
-      return NextResponse.json(
-        { success: false, error: "Operation is required" },
-        { status: 400 }
-      )
-    }
-
-    let result: ReindexResult
-
-    switch (body.operation) {
-      case "all":
-        result = await reindexAllItems(db, batchSize)
-        break
-      case "by-category":
-        if (!body.categoryId) {
-          return NextResponse.json(
-            { success: false, error: "categoryId is required for by-category operation" },
-            { status: 400 }
-          )
-        }
-        result = await reindexByCategory(db, body.categoryId, batchSize)
-        break
-      case "by-user":
-        if (!body.userId) {
-          return NextResponse.json(
-            { success: false, error: "userId is required for by-user operation" },
-            { status: 400 }
-          )
-        }
-        result = await reindexByUser(db, body.userId, batchSize)
-        break
-      case "missing-search":
-        result = await reindexMissingSearchData(db, batchSize)
-        break
-      default:
-        return NextResponse.json(
-          { success: false, error: "Invalid operation" },
-          { status: 400 }
-        )
-    }
-
-    result.duration = Date.now() - startTime
-
-    return NextResponse.json({
-      success: true,
-      data: result,
-    })
-
-  } catch (error) {
-    console.error("[Admin Reindex Items API] Error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Reindex operation failed",
-      },
-      { status: 500 }
-    )
-  }
-}
 
 async function reindexAllItems(
   db: FirebaseFirestore.Firestore, 
@@ -321,4 +246,88 @@ function generateSearchIndex(data: FirebaseFirestore.DocumentData) {
     // Add category for filtering
     categoryLower: category,
   }
+}
+
+class AdminReindexItemsController {
+  async post(request: NextRequest) {
+    const { authorized, user, error } = await verifyAdminAccess(request)
+    if (!authorized) return error!
+    if (!user?.uid) {
+      return NextResponse.json({ success: false, error: "Admin identity missing" }, { status: 403 })
+    }
+
+    const rateLimited = await enforceAdminMutationRateLimit(request, user.uid, "reindex-items", 6, 60_000)
+    if (rateLimited) return rateLimited
+
+    try {
+      const startTime = Date.now()
+      const body: ReindexRequest = await request.json()
+      const db = getAdminDb()
+      const batchSize = Math.min(Math.max(body.batchSize ?? 100, 1), 500)
+
+      if (!body.operation) {
+        return NextResponse.json(
+          { success: false, error: "Operation is required" },
+          { status: 400 }
+        )
+      }
+
+      let result: ReindexResult
+
+      switch (body.operation) {
+        case "all":
+          result = await reindexAllItems(db, batchSize)
+          break
+        case "by-category":
+          if (!body.categoryId) {
+            return NextResponse.json(
+              { success: false, error: "categoryId is required for by-category operation" },
+              { status: 400 }
+            )
+          }
+          result = await reindexByCategory(db, body.categoryId, batchSize)
+          break
+        case "by-user":
+          if (!body.userId) {
+            return NextResponse.json(
+              { success: false, error: "userId is required for by-user operation" },
+              { status: 400 }
+            )
+          }
+          result = await reindexByUser(db, body.userId, batchSize)
+          break
+        case "missing-search":
+          result = await reindexMissingSearchData(db, batchSize)
+          break
+        default:
+          return NextResponse.json(
+            { success: false, error: "Invalid operation" },
+            { status: 400 }
+          )
+      }
+
+      result.duration = Date.now() - startTime
+
+      return NextResponse.json({
+        success: true,
+        data: result,
+      })
+
+    } catch (error) {
+      console.error("[Admin Reindex Items API] Error:", error)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Reindex operation failed",
+        },
+        { status: 500 }
+      )
+    }
+  }
+}
+
+const controller = new AdminReindexItemsController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

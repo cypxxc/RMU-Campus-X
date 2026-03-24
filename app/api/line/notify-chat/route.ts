@@ -80,143 +80,151 @@ const notifyChatBodySchema = z
     }
   })
 
-export async function POST(request: NextRequest) {
-  try {
-    const token = extractBearerToken(request.headers.get("Authorization"))
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+class LineNotifyChatController {
+  async post(request: NextRequest) {
+    try {
+      const token = extractBearerToken(request.headers.get("Authorization"))
+      if (!token) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
 
-    const decoded = await verifyIdToken(token)
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
+      const decoded = await verifyIdToken(token)
+      if (!decoded) {
+        return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+      }
 
-    const bodyRaw = await request.json().catch(() => null)
-    const parsed = notifyChatBodySchema.safeParse(bodyRaw)
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: parsed.error.errors.map((issue) => ({
-            field: issue.path.join(".") || "root",
-            message: issue.message,
-          })),
-        },
-        { status: 400 }
-      )
-    }
+      const bodyRaw = await request.json().catch(() => null)
+      const parsed = notifyChatBodySchema.safeParse(bodyRaw)
+      if (!parsed.success) {
+        return NextResponse.json(
+          {
+            error: "Validation failed",
+            details: parsed.error.errors.map((issue) => ({
+              field: issue.path.join(".") || "root",
+              message: issue.message,
+            })),
+          },
+          { status: 400 }
+        )
+      }
 
-    const body = parsed.data
-    const recipientId = body.recipientId || body.recipientUserId
-    const notificationType = body.type || "chat"
-    debugLog("[LINE Notify Chat] Request accepted", {
-      type: notificationType,
-      exchangeId: body.exchangeId,
-    })
+      const body = parsed.data
+      const recipientId = body.recipientId || body.recipientUserId
+      const notificationType = body.type || "chat"
+      debugLog("[LINE Notify Chat] Request accepted", {
+        type: notificationType,
+        exchangeId: body.exchangeId,
+      })
 
-    const db = getAdminDb()
-    const exchangeSnap = await db.collection("exchanges").doc(body.exchangeId).get()
-    if (!exchangeSnap.exists) {
-      return NextResponse.json({ sent: false, reason: "exchange not found" })
-    }
+      const db = getAdminDb()
+      const exchangeSnap = await db.collection("exchanges").doc(body.exchangeId).get()
+      if (!exchangeSnap.exists) {
+        return NextResponse.json({ sent: false, reason: "exchange not found" })
+      }
 
-    const exchange = exchangeSnap.data() as
-      | {
-          ownerId?: string
-          requesterId?: string
-        }
-      | undefined
-    const ownerId = exchange?.ownerId
-    const requesterId = exchange?.requesterId
-
-    if (!ownerId || !requesterId) {
-      return NextResponse.json({ sent: false, reason: "invalid exchange" }, { status: 400 })
-    }
-
-    // Caller must be a participant.
-    if (decoded.uid !== ownerId && decoded.uid !== requesterId) {
-      return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
-    }
-
-    // Recipient must be the other party.
-    const allowedRecipient = decoded.uid === ownerId ? requesterId : ownerId
-    if (recipientId !== allowedRecipient) {
-      return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
-    }
-
-    const userSnap = await db.collection("users").doc(recipientId).get()
-    if (!userSnap.exists) {
-      debugLog("[LINE Notify Chat] User not found")
-      return NextResponse.json({ sent: false, reason: "user not found" })
-    }
-
-    const userData = userSnap.data() as
-      | {
-          lineUserId?: string
-          lineNotifications?: {
-            enabled?: boolean
-            statusChange?: boolean
-            exchangeStatus?: boolean
-            chatMessage?: boolean
+      const exchange = exchangeSnap.data() as
+        | {
+            ownerId?: string
+            requesterId?: string
           }
+        | undefined
+      const ownerId = exchange?.ownerId
+      const requesterId = exchange?.requesterId
+
+      if (!ownerId || !requesterId) {
+        return NextResponse.json({ sent: false, reason: "invalid exchange" }, { status: 400 })
+      }
+
+      // Caller must be a participant.
+      if (decoded.uid !== ownerId && decoded.uid !== requesterId) {
+        return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
+      }
+
+      // Recipient must be the other party.
+      const allowedRecipient = decoded.uid === ownerId ? requesterId : ownerId
+      if (recipientId !== allowedRecipient) {
+        return NextResponse.json({ sent: false, reason: "forbidden" }, { status: 403 })
+      }
+
+      const userSnap = await db.collection("users").doc(recipientId).get()
+      if (!userSnap.exists) {
+        debugLog("[LINE Notify Chat] User not found")
+        return NextResponse.json({ sent: false, reason: "user not found" })
+      }
+
+      const userData = userSnap.data() as
+        | {
+            lineUserId?: string
+            lineNotifications?: {
+              enabled?: boolean
+              statusChange?: boolean
+              exchangeStatus?: boolean
+              chatMessage?: boolean
+            }
+          }
+        | undefined
+      const lineUserId = userData?.lineUserId
+      const notificationsEnabled = userData?.lineNotifications?.enabled !== false
+
+      debugLog("[LINE Notify Chat] User LINE status:", {
+        hasLineId: !!lineUserId,
+        notificationsEnabled,
+        type: notificationType,
+      })
+
+      if (!lineUserId) {
+        debugLog("[LINE Notify Chat] User has no LINE linked")
+        return NextResponse.json({ sent: false, reason: "no LINE linked" })
+      }
+
+      if (!notificationsEnabled) {
+        return NextResponse.json({ sent: false, reason: "notifications disabled" })
+      }
+
+      if (notificationType === "status_change") {
+        const statusChangeEnabled =
+          userData?.lineNotifications?.statusChange ??
+          userData?.lineNotifications?.exchangeStatus ??
+          true
+
+        if (!statusChangeEnabled) {
+          return NextResponse.json({ sent: false, reason: "status change notifications disabled" })
         }
-      | undefined
-    const lineUserId = userData?.lineUserId
-    const notificationsEnabled = userData?.lineNotifications?.enabled !== false
 
-    debugLog("[LINE Notify Chat] User LINE status:", {
-      hasLineId: !!lineUserId,
-      notificationsEnabled,
-      type: notificationType,
-    })
+        await notifyExchangeStatusChange(
+          lineUserId,
+          body.itemTitle!,
+          body.status!,
+          body.exchangeId,
+          BASE_URL
+        )
+      } else {
+        const chatNotificationsEnabled = userData?.lineNotifications?.chatMessage ?? true
+        if (!chatNotificationsEnabled) {
+          return NextResponse.json({ sent: false, reason: "chat notifications disabled" })
+        }
 
-    if (!lineUserId) {
-      debugLog("[LINE Notify Chat] User has no LINE linked")
-      return NextResponse.json({ sent: false, reason: "no LINE linked" })
-    }
-
-    if (!notificationsEnabled) {
-      return NextResponse.json({ sent: false, reason: "notifications disabled" })
-    }
-
-    if (notificationType === "status_change") {
-      const statusChangeEnabled =
-        userData?.lineNotifications?.statusChange ??
-        userData?.lineNotifications?.exchangeStatus ??
-        true
-
-      if (!statusChangeEnabled) {
-        return NextResponse.json({ sent: false, reason: "status change notifications disabled" })
+        await notifyNewChatMessage(
+          lineUserId,
+          body.senderName || "ผู้ใช้",
+          body.itemTitle || "การแลกเปลี่ยน",
+          body.messagePreview || "",
+          body.exchangeId,
+          BASE_URL
+        )
       }
 
-      await notifyExchangeStatusChange(
-        lineUserId,
-        body.itemTitle!,
-        body.status!,
-        body.exchangeId,
-        BASE_URL
-      )
-    } else {
-      const chatNotificationsEnabled = userData?.lineNotifications?.chatMessage ?? true
-      if (!chatNotificationsEnabled) {
-        return NextResponse.json({ sent: false, reason: "chat notifications disabled" })
-      }
-
-      await notifyNewChatMessage(
-        lineUserId,
-        body.senderName || "ผู้ใช้",
-        body.itemTitle || "การแลกเปลี่ยน",
-        body.messagePreview || "",
-        body.exchangeId,
-        BASE_URL
-      )
+      debugLog("[LINE Notify Chat] Sent successfully!")
+      return NextResponse.json({ sent: true })
+    } catch (error) {
+      errorLog("[LINE Notify Chat] Error:", error)
+      return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
     }
-
-    debugLog("[LINE Notify Chat] Sent successfully!")
-    return NextResponse.json({ sent: true })
-  } catch (error) {
-    errorLog("[LINE Notify Chat] Error:", error)
-    return NextResponse.json({ sent: false, error: "Internal Server Error" }, { status: 500 })
   }
+}
+
+const controller = new LineNotifyChatController()
+
+export async function POST(request: NextRequest) {
+  return controller.post(request)
 }

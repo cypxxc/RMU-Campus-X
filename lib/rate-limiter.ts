@@ -8,59 +8,63 @@ interface RateLimitEntry {
   resetTime: number
 }
 
-// In-memory store (resets on server restart)
-const rateLimitStore = new Map<string, RateLimitEntry>()
-
-// Cleanup old entries periodically
 const CLEANUP_INTERVAL = 60 * 1000 // 1 minute
-let lastCleanup = Date.now()
 
-function cleanup() {
-  const now = Date.now()
-  if (now - lastCleanup < CLEANUP_INTERVAL) return
-  
-  lastCleanup = now
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (now > entry.resetTime) {
-      rateLimitStore.delete(key)
+class RateLimiterService {
+  // In-memory store (resets on server restart)
+  private readonly rateLimitStore = new Map<string, RateLimitEntry>()
+  private lastCleanup = Date.now()
+
+  private cleanup(): void {
+    const now = Date.now()
+    if (now - this.lastCleanup < CLEANUP_INTERVAL) return
+
+    this.lastCleanup = now
+    for (const [key, entry] of this.rateLimitStore.entries()) {
+      if (now > entry.resetTime) {
+        this.rateLimitStore.delete(key)
+      }
     }
+  }
+
+  checkRateLimit(
+    key: string,
+    limit: number,
+    windowMs: number
+  ): { allowed: boolean; remaining: number; resetTime: number } {
+    this.cleanup()
+
+    const now = Date.now()
+    const entry = this.rateLimitStore.get(key)
+
+    // No existing entry or expired entry
+    if (!entry || now > entry.resetTime) {
+      this.rateLimitStore.set(key, {
+        count: 1,
+        resetTime: now + windowMs
+      })
+      return { allowed: true, remaining: limit - 1, resetTime: now + windowMs }
+    }
+
+    // Check if limit exceeded
+    if (entry.count >= limit) {
+      return { allowed: false, remaining: 0, resetTime: entry.resetTime }
+    }
+
+    // Increment count
+    entry.count++
+    return { allowed: true, remaining: limit - entry.count, resetTime: entry.resetTime }
   }
 }
 
-/**
- * Check if a request should be rate limited
- * @param key - Unique identifier (usually IP address or user ID)
- * @param limit - Maximum number of requests allowed
- * @param windowMs - Time window in milliseconds
- * @returns Object with allowed status and remaining requests
- */
+const rateLimiterService = new RateLimiterService()
+
 export function checkRateLimit(
   key: string,
   limit: number,
   windowMs: number
 ): { allowed: boolean; remaining: number; resetTime: number } {
-  cleanup()
-  
-  const now = Date.now()
-  const entry = rateLimitStore.get(key)
-  
-  // No existing entry or expired entry
-  if (!entry || now > entry.resetTime) {
-    rateLimitStore.set(key, {
-      count: 1,
-      resetTime: now + windowMs
-    })
-    return { allowed: true, remaining: limit - 1, resetTime: now + windowMs }
-  }
-  
-  // Check if limit exceeded
-  if (entry.count >= limit) {
-    return { allowed: false, remaining: 0, resetTime: entry.resetTime }
-  }
-  
-  // Increment count
-  entry.count++
-  return { allowed: true, remaining: limit - entry.count, resetTime: entry.resetTime }
+  return rateLimiterService.checkRateLimit(key, limit, windowMs)
 }
 
 /**
