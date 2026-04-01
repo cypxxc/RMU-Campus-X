@@ -83,23 +83,48 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect E2E test files
+        id: detect-e2e
+        shell: bash
+        run: |
+          shopt -s nullglob globstar
+          files=(
+            e2e/**/*.spec.ts
+            e2e/**/*.spec.tsx
+            e2e/**/*.test.ts
+            e2e/**/*.test.tsx
+          )
+
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+            echo "Found ${#files[@]} E2E test files."
+          else
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+            echo "No E2E test files found. Skipping Playwright run."
+          fi
+
       - name: Setup Node.js
+        if: steps.detect-e2e.outputs.has_tests == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup Bun
+        if: steps.detect-e2e.outputs.has_tests == 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
+        if: steps.detect-e2e.outputs.has_tests == 'true'
         run: bun install --frozen-lockfile
 
       - name: Install Playwright browsers
+        if: steps.detect-e2e.outputs.has_tests == 'true'
         run: bunx playwright install --with-deps chromium
 
       - name: Run E2E tests
+        if: steps.detect-e2e.outputs.has_tests == 'true'
         run: bunx playwright test --project=chromium
         env:
           CI: true
@@ -113,12 +138,16 @@ jobs:
           E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD || 'Passw0rd!E2E' }}
 
       - name: Upload Playwright report
+        if: always() && steps.detect-e2e.outputs.has_tests == 'true'
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+      - name: Skip E2E tests
+        if: steps.detect-e2e.outputs.has_tests != 'true'
+        run: echo "No E2E test files found. Job completed without running Playwright."
 
   # ================================================
   # Build Check
@@ -176,8 +205,11 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run bun audit
-        run: bun audit --audit-level=high
-        continue-on-error: true
+        shell: bash
+        run: |
+          if ! bun audit --audit-level=high; then
+            echo "::warning::bun audit reported high or critical vulnerabilities. See job log for details."
+          fi
 
   # ================================================
   # Deploy to Vercel (on main branch)
