@@ -9,18 +9,15 @@
 import * as admin from 'firebase-admin'
 import * as fs from 'fs'
 import * as path from 'path'
+import {
+  getFirebaseAdminCredentials,
+  validateFirebaseAdminPrivateKey,
+} from '../lib/firebase-admin-credentials'
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
-  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n')
-
-  if (!projectId || !clientEmail || !privateKey) {
-    console.error('❌ Missing Firebase Admin credentials')
-    console.error('Required: FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, FIREBASE_ADMIN_PRIVATE_KEY')
-    process.exit(1)
-  }
+  const { projectId, clientEmail, privateKey } = getFirebaseAdminCredentials()
+  validateFirebaseAdminPrivateKey(privateKey)
 
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -38,7 +35,12 @@ interface BackupData {
     createdAt: string
     collections: string[]
   }
-  collections: {
+  collections?: {
+    [collectionName: string]: {
+      [docId: string]: Record<string, unknown>
+    }
+  }
+  data?: {
     [collectionName: string]: {
       [docId: string]: Record<string, unknown>
     }
@@ -130,9 +132,14 @@ async function main() {
     console.log(`   Created: ${backup.metadata.createdAt}`)
     console.log(`   Collections: ${backup.metadata.collections.join(', ')}`)
 
+    const collections = backup.collections ?? backup.data
+    if (!collections) {
+      throw new Error('Backup file is missing collections data')
+    }
+
     let totalRestored = 0
 
-    for (const [collectionName, documents] of Object.entries(backup.collections)) {
+    for (const [collectionName, documents] of Object.entries(collections)) {
       const restored = await restoreCollection(collectionName, documents, dryRun)
       totalRestored += restored
     }

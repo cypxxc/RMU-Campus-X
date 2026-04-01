@@ -14,6 +14,10 @@ import { createHash } from 'crypto'
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { getAuth, type Auth, type DecodedIdToken } from 'firebase-admin/auth'
+import {
+  getFirebaseAdminCredentials,
+  validateFirebaseAdminPrivateKey,
+} from '@/lib/firebase-admin-credentials'
 import { upstashCache } from '@/lib/upstash-cache'
 
 class FirebaseAdminService {
@@ -41,24 +45,8 @@ class FirebaseAdminService {
         this.adminApp = existingApps[0]!
       } else {
         // Initialize with service account credentials
-        const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
-        const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
-        const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n')
-
-        if (!projectId || !clientEmail || !privateKey) {
-          throw new Error(
-            'Firebase Admin SDK credentials not found. ' +
-            'Please set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY in .env'
-          )
-        }
-
-        // Sanity check key format
-        if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
-          console.error('FIREBASE_ADMIN_PRIVATE_KEY is missing standard header. Check .env formatting.')
-        }
-        if (privateKey.length < 100) {
-          console.error('FIREBASE_ADMIN_PRIVATE_KEY is suspiciously short.')
-        }
+        const { projectId, clientEmail, privateKey } = getFirebaseAdminCredentials()
+        validateFirebaseAdminPrivateKey(privateKey)
 
         this.adminApp = initializeApp({
           credential: cert({

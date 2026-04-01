@@ -10,6 +10,10 @@
  */
 
 import * as admin from 'firebase-admin'
+import {
+  getFirebaseAdminCredentials,
+  validateFirebaseAdminPrivateKey,
+} from '../lib/firebase-admin-credentials'
 
 interface Migration {
   id: string
@@ -127,13 +131,8 @@ function initializeFirebase() {
     return admin.app()
   }
 
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
-  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n')
-
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error('Missing Firebase Admin credentials')
-  }
+  const { projectId, clientEmail, privateKey } = getFirebaseAdminCredentials()
+  validateFirebaseAdminPrivateKey(privateKey)
 
   return admin.initializeApp({
     credential: admin.credential.cert({

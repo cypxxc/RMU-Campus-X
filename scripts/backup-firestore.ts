@@ -11,8 +11,12 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
-import { Timestamp } from 'firebase-admin/firestore'
-import { getAdminDb } from '../lib/firebase-admin'
+import { cert, getApps, initializeApp } from 'firebase-admin/app'
+import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore'
+import {
+  getFirebaseAdminCredentials,
+  validateFirebaseAdminPrivateKey,
+} from '../lib/firebase-admin-credentials'
 
 // Collections to backup
 const COLLECTIONS_TO_BACKUP = [
@@ -27,6 +31,26 @@ const COLLECTIONS_TO_BACKUP = [
   'favorites',
   'adminLogs',
 ]
+
+function getBackupDb(): Firestore {
+  const existingApp = getApps()[0]
+  if (existingApp) {
+    return getFirestore(existingApp)
+  }
+
+  const { projectId, clientEmail, privateKey } = getFirebaseAdminCredentials()
+  validateFirebaseAdminPrivateKey(privateKey)
+
+  const app = initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
+  })
+
+  return getFirestore(app)
+}
 
 // Backup a single collection
 async function backupCollection(
@@ -81,8 +105,7 @@ async function backup() {
   const startTime = Date.now()
   
   try {
-    // Initialize Firebase Admin using shared lib
-    const db = getAdminDb()
+    const db = getBackupDb()
 
     const backup: Record<string, unknown[]> = {}
     let totalDocuments = 0
@@ -117,6 +140,7 @@ async function backup() {
         collections: COLLECTIONS_TO_BACKUP,
         totalDocuments,
       },
+      collections: backup,
       data: backup,
     }
 
