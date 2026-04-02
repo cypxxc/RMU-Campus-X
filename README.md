@@ -11,6 +11,14 @@
 
 ---
 
+## Project Notes
+
+- Primary project documentation now lives in this `README.md` and `.env.example`.
+- Client-side data flows should go through Next.js API routes via `lib/api-client` / `authFetchJson`, not direct Firestore writes from browser code.
+- Shared security helpers remain in `lib/security.ts`, including `sanitizeText`, `sanitizeUrl`, `sanitizeFilename`, `generateSafeId`, and related validation helpers used by schemas and route handlers.
+
+---
+
 ## 🌐 Multilingual Support (TH/EN)
 
 - รองรับ 2 ภาษา: **ไทย (`th`)** และ **อังกฤษ (`en`)**
@@ -134,9 +142,9 @@ User Action → Component → lib/db/* (authFetchJson) → API Route → Firesto
 
 | เทคโนโลยี | เวอร์ชัน | การใช้งาน |
 |-----------|----------|-----------|
-| **Vitest** | 4.0.17 | White-box Testing (130 unit/integration tests) |
-| **Playwright** | 1.57.0 | Black-box Testing (84 E2E scenarios, 4 browsers; WebKit บางชุด skip) |
-| **ESLint** | 8.57.1 | Code Linting |
+| **Vitest** | 4.0.17 | Unit / integration testing |
+| **Playwright** | 1.57.0 | End-to-end testing |
+| **ESLint** | 9.39.2 | Code linting |
 | **Zod** | 3.25.76 | Schema Validation |
 | **GitHub Actions** | - | CI/CD Pipeline |
 
@@ -230,22 +238,24 @@ rmu-campus-x/
 │   │   │   └── user-cleanup.ts       # User Deletion Logic
 │   │   ├── client-line-service.ts    # Client-side LINE Notifications
 │   │   ├── report-service.ts         # Report Submission Logic
-│   │   └── logger.ts                 # Logger Service
+│   │   └── logging/                  # Logging services and sinks
 │   │
 │   ├── firebase.ts                   # Firebase Client Config
 │   ├── firebase-admin.ts             # Firebase Admin Config
 │   ├── cloudinary.ts                 # Cloudinary Config (server)
 │   ├── cloudinary-url.ts             # URL helpers (public_id → URL, f_auto/q_auto)
-│   ├── line.ts                       # LINE API Integration
+│   ├── line/                         # LINE API integration modules
 │   ├── rate-limiter.ts               # API Rate Limiting
 │   ├── image-utils.ts                # Image Compression
 │   ├── storage.ts                    # uploadToCloudinary (Signed Upload → Cloudinary)
 │   └── api-wrapper.ts                # API Response Wrapper
 │
 ├── hooks/                            # Custom React Hooks
-│   ├── use-auth.ts                   # Authentication Hook
+│   ├── use-account-status.ts         # Account status hook
+│   ├── use-admin-guard.ts            # Admin access guard
+│   ├── use-items.ts                  # Items data hook
 │   ├── use-refresh-on-focus.ts       # Refresh data เมื่อกลับมาโฟกัสหน้า
-│   └── use-mobile.ts                 # Responsive Hook
+│   └── use-toast.ts                  # Toast hook
 │
 ├── types/                            # TypeScript Types
 │   └── index.ts                      # Type Definitions
@@ -253,11 +263,11 @@ rmu-campus-x/
 ├── e2e/                              # End-to-End Tests
 │   └── dashboard.spec.ts             # Dashboard Tests
 │
-├── middleware.ts                     # Next.js Middleware (Rate Limiting)
+├── proxy.ts                          # Edge proxy / request handling
 ├── playwright.config.ts              # Playwright Config
 ├── jest.config.js                    # Jest Config
 ├── next.config.mjs                   # Next.js Config
-├── tailwind.config.ts                # Tailwind Config
+├── postcss.config.mjs                # PostCSS / Tailwind v4 config
 └── package.json                      # Dependencies
 ```
 
@@ -476,10 +486,10 @@ endTimer() // logs duration
 git clone https://github.com/cypxxc/RMU-Campus-X.git
 cd RMU-Campus-X
 
-# 2. ติดตั้ง dependencies
+# 2. ติดตั้ง dependencies (เลือกอย่างใดอย่างหนึ่ง)
 bun install
 
-# 2b. npm/pnpm/yarn alternative
+# or
 npm install
 
 # 3. ตั้งค่า environment variables (ดูหัวข้อถัดไป)
