@@ -1,7 +1,7 @@
 # OOP Architecture Migration Guide
 
 ## Overview
-This guide outlines a strategic migration from functional programming patterns to Object-Oriented Programming (OOP) principles in the RMU Campus X project. The migration maintains backward compatibility while establishing scalable, maintainable architecture.
+This guide outlines an incremental migration toward clearer OOP boundaries in the RMU Campus X project. The goal is not to replace every module with classes, but to introduce explicit domain services, server-side use cases, and composable infrastructure while preserving the existing API-first enforcement model, backward compatibility, and operational behavior.
 
 ---
 
@@ -20,23 +20,44 @@ This guide outlines a strategic migration from functional programming patterns t
 ### 1.2 Current Architecture Issues
 
 ```typescript
-// ❌ Current: Functional utilities with singleton pattern
+// Legacy singleton logger still exists in lib/logger.ts
 class Logger {
   private static instance: Logger
-  // Mixing concerns: logging format + external service integration
+  // Mixing concerns: formatting + console output + optional external hook
   private log(level, message, context, source) { /* ... */ }
 }
 export const logger = Logger.getInstance()
 export const log = { debug, info, warn, error } // Function wrappers
 
+// Newer logging modules are already more composable
+type LogSink = { write(event: LogEvent): Promise<void> }
+type AdminNotifier = { notify(event: LogEvent): Promise<void> }
+function createSystemLogger(deps: {
+  consoleSink: LogSink
+  firestoreSink?: LogSink
+  adminNotifier?: AdminNotifier
+}) { /* ... */ }
+
 class SecurityService {
-  // All security concerns in one class (200+ lines)
+  // Multiple concerns already live behind one facade for compatibility
   sanitizeHtml() { /* ... */ }
+  sanitizeText() { /* ... */ }
   sanitizeEmail() { /* ... */ }
-  validateRMUEmail() { /* ... */ }
-  // Mixed responsibilities: sanitization, validation, XSS detection
+  sanitizeUrl() { /* ... */ }
+  sanitizeFilename() { /* ... */ }
+  generateSafeId() { /* ... */ }
+  isValidIntegerInRange() { /* ... */ }
+  // Mixed responsibilities: sanitization, validation, XSS detection, utility helpers
 }
 ```
+
+### 1.3 Architectural Constraints To Preserve
+
+- Client-side create/update/delete flows must continue to go through authenticated API routes or server-only use cases. Do not move browser code to direct Firestore writes.
+- Repositories are infrastructure adapters, not a replacement for API-layer authorization, terms checks, posting restrictions, timestamp generation, or search keyword generation.
+- Prefer request-scoped composition roots or module factories over one global singleton container in Next.js handlers.
+- Logging must preserve console output, optional Firestore persistence, and CRITICAL admin notification paths.
+- Security refactors must preserve the current public helper surface used by schemas and route handlers.
 
 ---
 
@@ -86,102 +107,105 @@ class ItemService extends BaseService implements IItemService {
 }
 ```
 
-### 2.2 Repository Pattern
+### 2.2 Repository Pattern (Server-side Adapters)
 
 ```typescript
-// Abstract repository with common CRUD operations
-abstract class BaseRepository<T, ID> implements IRepository<T, ID> {
-  protected db: IDatabase
-  protected mapper: IEntityMapper<T>
-
-  async create(entity: T): Promise<T> {
-    const data = this.mapper.toPersistence(entity)
-    const ref = await this.db.collection(this.getCollectionName()).add(data)
-    return this.mapper.toDomain({ id: ref.id, ...data })
-  }
-
-  async findById(id: ID): Promise<T | null> {
-    const doc = await this.db.collection(this.getCollectionName()).doc(id).get()
-    return doc.exists ? this.mapper.toDomain({ id: doc.id, ...doc.data() }) : null
-  }
-
-  protected abstract getCollectionName(): string
+// Repository remains server-only and is used by route handlers / use cases
+interface IItemRepository {
+  create(data: CreateItemRecord): Promise<string>
+  findById(id: string): Promise<ItemRecord | null>
+  update(id: string, data: Partial<ItemRecord>): Promise<void>
 }
 
-// Domain repository
-class ItemRepository extends BaseRepository<Item, string> implements IItemRepository {
-  protected getCollectionName(): string {
-    return 'items'
+class FirestoreItemRepository implements IItemRepository {
+  constructor(
+    private db: FirebaseFirestore.Firestore,
+    private collectionName: string = 'items'
+  ) {}
+
+  async create(data: CreateItemRecord): Promise<string> {
+    const ref = await this.db.collection(this.collectionName).add(data)
+    return ref.id
   }
 
-  async findByUserId(userId: string): Promise<Item[]> {
-    const snapshot = await this.db
-      .collection(this.getCollectionName())
-      .where('owner', '==', userId)
-      .get()
-    
-    return snapshot.docs.map(doc => 
-      this.mapper.toDomain({ id: doc.id, ...doc.data() })
-    )
+  async findById(id: string): Promise<ItemRecord | null> {
+    const doc = await this.db.collection(this.collectionName).doc(id).get()
+    return doc.exists ? ({ id: doc.id, ...doc.data() } as ItemRecord) : null
+  }
+
+  async update(id: string, data: Partial<ItemRecord>): Promise<void> {
+    await this.db.collection(this.collectionName).doc(id).update(data)
+  }
+}
+
+// Use case keeps business rules and server-enforced invariants
+class CreateItemUseCase {
+  constructor(
+    private items: IItemRepository,
+    private users: IUserRepository,
+    private policy: PostingPolicy,
+    private keywordService: SearchKeywordService
+  ) {}
+
+  async execute(input: CreateItemInput, actor: AuthContext): Promise<string> {
+    await this.policy.assertCanPost(actor.userId)
+    const profile = await this.users.getProfileSummary(actor.userId)
+    const searchKeywords = this.keywordService.generate(input.title, input.description)
+
+    return this.items.create({
+      ...input,
+      postedBy: actor.userId,
+      postedByEmail: actor.email,
+      postedByName: profile.displayName,
+      status: 'available',
+      searchKeywords,
+      postedAt: new Date(),
+      updatedAt: new Date(),
+    })
   }
 }
 ```
 
-### 2.3 Dependency Injection Container
+**Important:** browser-facing modules such as `lib/db/items.ts` should continue to call `/api/items`. Repositories are for server handlers and server-only services, not for bypassing API enforcement from the client.
+
+### 2.3 Composition Root / Request-scoped Wiring
 
 ```typescript
-interface ContainerConfig {
-  environment: 'development' | 'production'
-  firebaseConfig: FirebaseConfig
-  logLevel: LogLevel
+interface RequestServices {
+  items: IItemRepository
+  users: IUserRepository
+  logger: SystemLogger
+  createItem: CreateItemUseCase
 }
 
-class DIContainer {
-  private singletons: Map<string, any> = new Map()
+export function createRequestServices(): RequestServices {
+  const db = getAdminDb()
+  const logger = createSystemLogger({
+    consoleSink: createConsoleSink(),
+    firestoreSink: process.env.NODE_ENV === 'production' ? createFirestoreSink() : undefined,
+    adminNotifier: createAdminNotifier(),
+  })
 
-  constructor(private config: ContainerConfig) {}
+  const items = new FirestoreItemRepository(db)
+  const users = new FirestoreUserRepository(db)
+  const policy = new PostingPolicy(users)
+  const keywordService = new SearchKeywordService()
 
-  // Register singleton services
-  registerSingleton<T>(key: string, factory: () => T): void {
-    this.singletons.set(key, factory())
+  return {
+    items,
+    users,
+    logger,
+    createItem: new CreateItemUseCase(items, users, policy, keywordService),
   }
+}
 
-  // Retrieve services
-  get<T>(key: string): T {
-    return this.singletons.get(key)
-  }
-
-  // Setup method called during app initialization
-  static async setup(config: ContainerConfig): Promise<DIContainer> {
-    const container = new DIContainer(config)
-
-    // Register core services
-    container.registerSingleton('logger', () => 
-      new Logger(config.logLevel, config.environment)
-    )
-
-    container.registerSingleton('securityService', () =>
-      new SecurityService(container.get('logger'))
-    )
-
-    container.registerSingleton('itemRepository', () =>
-      new ItemRepository(firebase.firestore(), container.get('logger'))
-    )
-
-    container.registerSingleton('validationService', () =>
-      new ValidationService(container.get('logger'))
-    )
-
-    container.registerSingleton('itemService', () =>
-      new ItemService({
-        repository: container.get('itemRepository'),
-        validationService: container.get('validationService'),
-        logger: container.get('logger'),
-      })
-    )
-
-    return container
-  }
+// Route handler stays as the enforcement boundary
+export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request)
+  const body = await parseCreateItemBody(request)
+  const services = createRequestServices()
+  const itemId = await services.createItem.execute(body, auth)
+  return NextResponse.json({ success: true, data: { id: itemId } }, { status: 201 })
 }
 ```
 
@@ -189,102 +213,99 @@ class DIContainer {
 
 ## 3. Refactored Core Services
 
-### 3.1 Logger Service (Segregated)
+### 3.1 Logger Service (Preserve Sink-based Logging)
 
 **Interface Layer:**
 ```typescript
-// lib/logger/ILogger.ts
-export interface ILogger {
-  debug(message: string, context?: Context, source?: string): void
-  info(message: string, context?: Context, source?: string): void
-  warn(message: string, context?: Context, source?: string): void
-  error(message: string, context?: Context, source?: string): void
-  fatal(message: string, context?: Context, source?: string): void
+// lib/services/logging/types.ts
+export type LogSeverity = 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL'
+
+export interface LogEvent {
+  category: LogCategory
+  eventName: string
+  data: unknown
+  severity: LogSeverity
 }
 
-export interface IExternalLogService {
-  send(entry: LogEntry): Promise<void>
+export interface LogSink {
+  write(event: LogEvent): Promise<void>
 }
 
-export interface ILogFormatter {
-  format(entry: LogEntry): string
+export interface AdminNotifier {
+  notify(event: LogEvent): Promise<void>
+}
+
+export interface SystemLogger {
+  logEvent(
+    category: LogCategory,
+    eventName: string,
+    data?: unknown,
+    severity?: LogSeverity
+  ): Promise<void>
+
+  logError(error: unknown, context: string, severity?: LogSeverity): Promise<void>
 }
 ```
 
 **Implementation:**
 ```typescript
-// lib/logger/Logger.ts
-export class Logger implements ILogger {
-  private logLevel: LogLevel
-  private formatters: ILogFormatter[]
-  private externalService?: IExternalLogService
+// lib/services/logging/system-logger.ts
+export function createSystemLogger(deps: {
+  consoleSink: LogSink
+  firestoreSink?: LogSink
+  adminNotifier?: AdminNotifier
+  shouldPersist?: (severity: LogSeverity) => boolean
+}): SystemLogger {
+  const shouldPersist =
+    deps.shouldPersist ||
+    ((severity) =>
+      process.env.NODE_ENV === 'production' ||
+      severity === 'ERROR' ||
+      severity === 'CRITICAL')
 
-  constructor(
-    logLevel: LogLevel | undefined,
-    private environment: 'development' | 'production',
-    config?: LoggerConfig
-  ) {
-    this.logLevel =
-      logLevel ?? (environment === 'production' ? LogLevel.WARN : LogLevel.DEBUG)
-    this.formatters = config?.formatters ?? [new DefaultLogFormatter()]
-    this.externalService = config?.externalService
-  }
-
-  debug(message: string, context?: Context, source?: string): void {
-    this.log(LogLevel.DEBUG, message, context, source)
-  }
-
-  private async log(
-    level: LogLevel,
-    message: string,
-    context?: Context,
-    source?: string
+  async function logEvent(
+    category: LogCategory,
+    eventName: string,
+    data: unknown = {},
+    severity: LogSeverity = 'INFO'
   ): Promise<void> {
-    if (!this.shouldLog(level)) return
+    const event = { category, eventName, data, severity }
 
-    const entry: LogEntry = { level, message, context, timestamp: new Date(), source }
-    const formatted = this.formatters.map(f => f.format(entry))
+    await deps.consoleSink.write(event)
 
-    // Log to console
-    this.writeToConsole(level, formatted.join('\n'))
+    if (deps.firestoreSink && shouldPersist(severity)) {
+      await deps.firestoreSink.write(event)
+    }
 
-    // Log to external service if in production
-    if (this.environment === 'production' && this.externalService) {
-      await this.externalService.send(entry).catch(err =>
-        console.error('Failed to send log to external service:', err)
-      )
+    if (deps.adminNotifier && severity === 'CRITICAL') {
+      await deps.adminNotifier.notify(event)
     }
   }
 
-  private shouldLog(level: LogLevel): boolean {
-    return level >= this.logLevel
+  async function logError(error: unknown, context: string, severity: LogSeverity = 'ERROR') {
+    return logEvent(
+      'SYSTEM',
+      'ERROR_OCCURRED',
+      {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        context,
+      },
+      severity
+    )
   }
 
-  private writeToConsole(level: LogLevel, message: string): void {
-    switch (level) {
-      case LogLevel.DEBUG:
-        console.debug(message)
-        break
-      case LogLevel.INFO:
-        console.info(message)
-        break
-      case LogLevel.WARN:
-        console.warn(message)
-        break
-      case LogLevel.ERROR:
-      case LogLevel.FATAL:
-        console.error(message)
-        break
-    }
-  }
+  return { logEvent, logError }
 }
 ```
 
-### 3.2 Security Service (Segregated into Strategies)
+**Migration note:** keep `lib/logger.ts` as a compatibility facade while gradually moving server code to `lib/services/logging/*`. The target is better composition, not reduced operational coverage.
+
+### 3.2 Security Service (Segregated but Backward Compatible)
 
 **Interfaces:**
 ```typescript
-// lib/security/ISanitizer.ts
+// lib/security/contracts.ts
 export interface ISanitizer {
   sanitize(input: string): string
 }
@@ -295,6 +316,22 @@ export interface IValidator {
 
 export interface IXSSDetector {
   hasPatterns(input: string): boolean
+}
+
+export interface ITextSanitizer {
+  sanitizeText(input: string): string
+}
+
+export interface IUrlSanitizer {
+  sanitizeUrl(input: string): string | null
+}
+
+export interface IFilenameSanitizer {
+  sanitizeFilename(input: string): string
+}
+
+export interface IIdGenerator {
+  generate(length?: number): string
 }
 ```
 
@@ -331,57 +368,64 @@ export class RMUEmailValidator implements IValidator {
   }
 }
 
-// lib/security/SecurityContextBuilder.ts
-export class SecurityContextBuilder {
-  private sanitizers: Map<string, ISanitizer> = new Map()
-  private validators: Map<string, IValidator> = new Map()
-  private detectors: IXSSDetector[] = []
-
-  addSanitizer(type: string, sanitizer: ISanitizer): this {
-    this.sanitizers.set(type, sanitizer)
-    return this
-  }
-
-  addValidator(type: string, validator: IValidator): this {
-    this.validators.set(type, validator)
-    return this
-  }
-
-  addDetector(detector: IXSSDetector): this {
-    this.detectors.push(detector)
-    return this
-  }
-
-  build(): ISecurityContext {
-    return new SecurityContext(this.sanitizers, this.validators, this.detectors)
+export class TextSanitizer implements ITextSanitizer {
+  sanitizeText(input: string): string {
+    if (!input || typeof input !== 'string') return ''
+    return input
+      .trim()
+      .replace(/\0/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
   }
 }
 
-// lib/security/SecurityContext.ts
-export class SecurityContext implements ISecurityContext {
+// Compatibility facade remains the public entrypoint
+export class SecurityFacade {
   constructor(
-    private sanitizers: Map<string, ISanitizer>,
-    private validators: Map<string, IValidator>,
-    private detectors: IXSSDetector[]
+    private htmlSanitizer: ISanitizer,
+    private textSanitizer: ITextSanitizer,
+    private emailSanitizer: ISanitizer,
+    private emailValidator: IValidator,
+    private xssDetector: IXSSDetector,
+    private urlSanitizer: IUrlSanitizer,
+    private filenameSanitizer: IFilenameSanitizer,
+    private idGenerator: IIdGenerator
   ) {}
 
-  sanitize(type: string, input: string): string {
-    const sanitizer = this.sanitizers.get(type)
-    if (!sanitizer) throw new Error(`Unknown sanitizer type: ${type}`)
-    return sanitizer.sanitize(input)
+  sanitizeHtml(input: string): string {
+    return this.htmlSanitizer.sanitize(input)
   }
 
-  validate(type: string, input: string): boolean {
-    const validator = this.validators.get(type)
-    if (!validator) throw new Error(`Unknown validator type: ${type}`)
-    return validator.validate(input)
+  sanitizeText(input: string): string {
+    return this.textSanitizer.sanitizeText(input)
+  }
+
+  sanitizeEmail(input: string): string {
+    return this.emailSanitizer.sanitize(input)
+  }
+
+  isValidRMUEmail(input: string): boolean {
+    return this.emailValidator.validate(input)
   }
 
   hasXSSPatterns(input: string): boolean {
-    return this.detectors.some(detector => detector.hasPatterns(input))
+    return this.xssDetector.hasPatterns(input)
+  }
+
+  sanitizeUrl(input: string): string | null {
+    return this.urlSanitizer.sanitizeUrl(input)
+  }
+
+  sanitizeFilename(input: string): string {
+    return this.filenameSanitizer.sanitizeFilename(input)
+  }
+
+  generateSafeId(length: number = 16): string {
+    return this.idGenerator.generate(length)
   }
 }
 ```
+
+**Migration note:** preserve the current public exports from `lib/security.ts` (`sanitizeText`, `sanitizeObject`, `sanitizeUrl`, `sanitizeFilename`, `generateSafeId`, `isValidIntegerInRange`, etc.) while moving internal behavior behind smaller strategy classes. Existing schemas and route handlers should not need a flag day rewrite.
 
 ---
 
@@ -543,22 +587,22 @@ export class Item {
 
 #### Phase 1: Foundation (Week 1-2)
 - [ ] Create base classes and interfaces
-- [ ] Set up DI container
-- [ ] Refactor Logger service
-- [ ] Refactor Security service
+- [ ] Set up request-scoped composition root for server handlers
+- [ ] Refactor Logger service without removing sinks / persistence / admin alerting
+- [ ] Refactor Security service while preserving current helper exports
 - [ ] Maintain backward compatibility with exports
 
 #### Phase 2: Repository Layer (Week 2-3)
 - [ ] Create domain entities
-- [ ] Implement repository pattern
+- [ ] Implement server-only repository pattern
 - [ ] Create data mappers
-- [ ] Migrate database layer
+- [ ] Migrate database access inside API routes and server-only services only
 
 #### Phase 3: Application Services (Week 3-4)
-- [ ] Implement ItemService
+- [ ] Implement Create/Update Item use cases behind API handlers
 - [ ] Implement UserService
 - [ ] Implement ExchangeService
-- [ ] Add dependency injection
+- [ ] Move shared business rules into use-case classes
 
 #### Phase 4: Integration (Week 4-5)
 - [ ] Wire up API routes
@@ -575,8 +619,8 @@ export class Item {
 ### 5.2 Backward Compatibility Layer
 
 ```typescript
-// lib/logger/index.ts - Backward Compatibility
-const loggerInstance = new Logger(LogLevel.DEBUG, process.env.NODE_ENV)
+// lib/logger.ts - Backward Compatibility facade
+const loggerInstance = new LegacyLogger(LogLevel.DEBUG, process.env.NODE_ENV)
 
 // Export singleton (old style)
 export const logger = loggerInstance
@@ -587,10 +631,29 @@ export const log = {
   info: (msg: string, ctx?: Context) => logger.info(msg, ctx),
   warn: (msg: string, ctx?: Context) => logger.warn(msg, ctx),
   error: (msg: string, ctx?: Context) => logger.error(msg, ctx),
+  fatal: (msg: string, ctx?: Context) => logger.fatal(msg, ctx),
 }
 
-// Export OOP interface (new style)
-export { Logger, type ILogger }
+// Server code can gradually adopt sink-based logging
+export { createSystemLogger, createFirestoreSink, createAdminNotifier }
+```
+
+```typescript
+// lib/security.ts - Keep stable exports during migration
+export {
+  sanitizeHtml,
+  sanitizeText,
+  sanitizeEmail,
+  isValidRMUEmail,
+  isValidEmail,
+  truncateString,
+  sanitizeUrl,
+  hasSuspiciousPatterns,
+  sanitizeFilename,
+  generateSafeId,
+  isValidIntegerInRange,
+  sanitizeObject,
+} from './security/facade'
 ```
 
 ---
@@ -778,18 +841,20 @@ describe('ItemService', () => {
 ## 8. Implementation Checklist
 
 ### Core Services
-- [ ] Logger (completed: Logger class)
-- [ ] SecurityService (refactor with strategy pattern)
+- [ ] Logger compatibility facade
+- [ ] System logger with sinks, persistence, and escalation
+- [ ] Security facade (keep public helpers stable)
+- [ ] Security strategies for text, email, URL, filename, and ID generation
 - [ ] ErrorHandler (create base error class)
 - [ ] ValidationService (create validators)
 
 ### Infrastructure
 - [ ] Database connection management
-- [ ] Repository implementations
+- [ ] Server-only repository implementations
 - [ ] External service adapters
 
 ### Application Layer
-- [ ] ItemService
+- [ ] Item use cases for API handlers
 - [ ] UserService
 - [ ] ExchangeService
 - [ ] ReportService
@@ -836,24 +901,24 @@ class ItemMapper {
 }
 ```
 
-### 9.2 Dependency Injection Best Practices
+### 9.2 Composition and Dependency Injection Best Practices
 ```typescript
-// ✅ Constructor injection (preferred)
-class ItemService {
+// ✅ Constructor injection inside use cases / services
+class CreateItemUseCase {
   constructor(
     private repository: IItemRepository,
     private logger: ILogger
   ) {}
 }
 
-// ❌ Property injection (avoid)
-class ItemService {
-  @Inject
-  private repository: IItemRepository
+// ✅ Request-scoped composition in route handlers
+export async function POST(request: NextRequest) {
+  const services = createRequestServices()
+  return services.createItem.execute(await request.json(), await requireAuth(request))
 }
 
-// ❌ Service locator pattern (avoid unless necessary)
-const service = container.get('ItemService')
+// ❌ Global singleton container for request-specific dependencies
+const service = globalContainer.get('CreateItemUseCase')
 ```
 
 ### 9.3 SOLID Principles Checklist
@@ -888,45 +953,34 @@ class ItemService {
 
 ## 10. Performance Considerations
 
-### 10.1 Memory Management
+### 10.1 Practical Performance Priorities
 ```typescript
-// Use object pooling for frequently created instances
-class ObjectPool<T> {
-  private available: T[] = []
-  private inUse: Set<T> = new Set()
+// Prefer preserving query constraints, server-side filtering, and caches
+class PosterProfileCache {
+  private cache = new Map<string, { profile: PosterProfileSummary; at: number }>()
 
-  constructor(private factory: () => T, initialSize: number) {
-    for (let i = 0; i < initialSize; i++) {
-      this.available.push(factory())
+  get(userId: string): PosterProfileSummary | null {
+    const entry = this.cache.get(userId)
+    if (!entry) return null
+    if (Date.now() - entry.at > 5 * 60_000) {
+      this.cache.delete(userId)
+      return null
     }
-  }
-
-  acquire(): T {
-    const obj = this.available.pop() || this.factory()
-    this.inUse.add(obj)
-    return obj
-  }
-
-  release(obj: T): void {
-    this.inUse.delete(obj)
-    this.available.push(obj)
+    return entry.profile
   }
 }
 ```
 
 ### 10.2 Lazy Loading
 ```typescript
-// Lazy load heavy dependencies
-class LazyDependency<T> {
-  private instance: T | null = null
-
-  constructor(private factory: () => Promise<T>) {}
-
-  async get(): Promise<T> {
-    if (!this.instance) {
-      this.instance = await this.factory()
-    }
-    return this.instance
+// Lazy load optional integrations where it reduces cold path cost
+class AdminNotifierAdapter {
+  async notify(event: LogEvent): Promise<void> {
+    const { getAuth } = await import('firebase/auth')
+    const auth = getAuth()
+    const token = await auth.currentUser?.getIdToken()
+    if (!token) return
+    await fetch('/api/line/notify-admin', { method: 'POST', body: JSON.stringify(event) })
   }
 }
 ```
@@ -950,33 +1004,44 @@ class LazyDependency<T> {
 ```
 lib/
 ├── core/
-│   ├── BaseService.ts
-│   ├── BaseRepository.ts
-│   ├── BaseEntity.ts
-│   ├── ApplicationError.ts
-│   └── ErrorHandler.ts
-├── logger/
-│   ├── ILogger.ts
-│   ├── Logger.ts
-│   ├── LogFormatter.ts
-│   └── index.ts
+│   ├── use-cases/
+│   │   ├── CreateItemUseCase.ts
+│   │   ├── UpdateItemUseCase.ts
+│   │   └── ConfirmExchangeUseCase.ts
+│   ├── policies/
+│   │   └── PostingPolicy.ts
+│   ├── errors/
+│   │   ├── ApplicationError.ts
+│   │   └── ErrorHandler.ts
+│   └── services/
+│       └── SearchKeywordService.ts
+├── services/
+│   └── logging/
+│       ├── types.ts
+│       ├── system-logger.ts
+│       ├── console-sink.ts
+│       ├── firestore-sink.ts
+│       └── admin-notifier.ts
 ├── security/
-│   ├── ISecurityContext.ts
-│   ├── SecurityContext.ts
+│   ├── contracts.ts
+│   ├── facade.ts
 │   ├── sanitizers/
-│   └── validators/
-├── container/
-│   ├── DIContainer.ts
-│   └── ContainerConfig.ts
+│   ├── validators/
+│   └── detectors/
+├── repositories/
+│   ├── FirestoreItemRepository.ts
+│   └── FirestoreUserRepository.ts
+├── composition/
+│   └── createRequestServices.ts
 └── ...
 
 __tests__/
 ├── unit/
-│   ├── Logger.test.ts
-│   ├── SecurityContext.test.ts
-│   └── ItemService.test.ts
+│   ├── system-logger.test.ts
+│   ├── security-facade.test.ts
+│   └── create-item-use-case.test.ts
 └── integration/
-    └── DIContainer.test.ts
+    └── create-request-services.test.ts
 ```
 
 ---
